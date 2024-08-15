@@ -5,6 +5,10 @@ name = "pypi"
 
 [packages]
 openleadr = "*"
+asyncio = "*"
+black = "*"
+pylint = "*"
+pytest = "*"
 
 [dev-packages]
 
