@@ -1,9 +1,11 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Union, Tuple
 
 from openleadr import OpenADRServer, enable_default_logging
+from openleadr.objects import Interval, Target
 from openleadr.utils import generate_id
 
 from ..sqlite.sqlite import Database
@@ -46,7 +48,9 @@ class OpenLeADRServer:
 
         self.db_conn = Database(db_name)
 
-    async def on_create_party_registration(self, registration_info: dict) -> Union[Tuple[str, str], bool]:
+    async def on_create_party_registration(
+        self, registration_info: dict
+    ) -> Union[Tuple[str, str], bool]:
         """
         Handles the creation of party registrations, assigning VEN IDs and registration IDs as needed.
 
@@ -67,8 +71,10 @@ class OpenLeADRServer:
         if result is not None:
             ven_id = generate_id()
             registration_id = generate_id()
+
             self.db_conn.update_ven(ven_name, ven_id, registration_id)
             logger.info(f"Registered new VEN: {ven_name} with ID: {ven_id}")
+
             return ven_id, registration_id
         else:
             logger.info(f"VEN {ven_name} already exists.")
@@ -115,8 +121,12 @@ class OpenLeADRServer:
             resource_id=resource_id,
             measurement=measurement,
         )
+
         sampling_interval = min_sampling_interval
         return callback, sampling_interval
+
+    async def store_voltage(self, data):
+        pass
 
     async def on_update_report(
         self, data: list, ven_id: str, resource_id: str, measurement: str
@@ -139,3 +149,23 @@ class OpenLeADRServer:
             print(
                 f"VEN {ven_id} reported {measurement} = {value} at {time} for resource {resource_id}"
             )
+
+            self.db_conn.store_values(ven_id, time, value)
+
+            if value < 200:
+                self.server.add_event(
+                    ven_id=ven_id,
+                    signal_name="simple",
+                    signal_type="level",
+                    intervals=[
+                        Interval(
+                            dtstart = datetime.now(tz=timezone.utc),
+                            duration = timedelta(minutes=10),
+                            signal_payload = 1
+                        ),
+                    ],
+                    callback=self.event_callback,
+                )
+
+    async def event_callback(self, ven_id: str, event_id: str, opt_type: str):
+        print(f"The VEN decided to {opt_type}")

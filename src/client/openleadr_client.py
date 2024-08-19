@@ -28,4 +28,8 @@ class OpenLeADRClient:
     async def handle_event(self, event):
         # This callback receives an Event dict.
         # You should include code here that sends control signals to your resources.
+        event_descriptor = event['event_descriptor']
+        active_period = event['active_period']
+        event_signals = event['event_signals']
+        targets = event['targets']
         return "optIn"

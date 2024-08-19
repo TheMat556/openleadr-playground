@@ -69,6 +69,17 @@ class Database:
                 """
             )
 
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS metervalues (
+                    id INTEGER PRIMARY KEY,
+                    ven_id TEXT,
+                    time TEXT,
+                    value TEXT
+                )
+                """
+            )
+
     def insert_ven(self, ven_name, ven_id=None, registration_id=None):
         """
         Inserts a new VEN entry into the 'vens' table.
@@ -153,6 +164,17 @@ class Database:
         else:
             return None
         return cursor.fetchone()
+
+    def store_values(self, ven_id: str, time: str, value: str):
+        with self.conn:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO metervalues (ven_id, time, value)
+                VALUES (?, ?, ?)
+                """,
+                (ven_id, time, value),
+            )
 
     def close(self):
         """
