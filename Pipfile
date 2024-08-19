@@ -9,8 +9,16 @@ asyncio = "*"
 black = "*"
 pylint = "*"
 pytest = "*"
+ruff = "*"
+sphinx = "*"
 
 [dev-packages]
 
 [requires]
 python_version = "3.12"
+
+[scripts]
+start-client = "sh -c 'echo Starting client... && python -m src.server'"
+start-server = "sh -c 'pipenv run init-db && echo Starting server... && python -m src.server'"
+init-db = "python -m src.sqlite"
+test = "pytest"

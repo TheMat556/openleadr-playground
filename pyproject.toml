@@ -1,0 +1,51 @@
+[tool.black]
+line-length = 88
+target-version = ['py312']  # Adjust this if necessary for Python 3.12
+skip-string-normalization = false
+exclude = '''
+/(
+  tests|
+  .git|
+  .tox|
+)/
+'''
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+
+select = [
+    "E",  # Pycodestyle errors
+    "F",  # Pyflakes errors
+    "W",  # Pycodestyle warnings
+    "C90", # Various complexity checks
+    "I",  # Import ordering (isort)
+    "N",  # PEP8 Naming conventions
+    "Q",  # Black compatibility
+    "A",  # Anti-patterns detection
+    "B",  # Bugbear plugin for code complexity and potential errors
+]
+
+ignore = [
+    "E501",  # Ignore line length check (if black is used)
+    "W503",  # Allow line breaks before binary operators
+]
+
+fix = ["E", "F", "W", "I"]
+
+extend-select = [
+    "B",  # Enable flake8-bugbear
+    "Q",  # Ensure compatibility with black
+    "C4", # Enable McCabe for complexity checks
+]
+
+exclude = [
+    "migrations/",
+    "__pycache__/",
+]
+
+[tool.ruff.isort]
+profile = "black"
+
+[tool.ruff.flake8-naming]
+ignore-names = ["_"]  # Ignore names starting with an underscore
