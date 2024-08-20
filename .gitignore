@@ -2,3 +2,4 @@
 .DS_Store
 
 /database/openleadr.db
+/src/database/openleadr.db

@@ -2,9 +2,10 @@
 
 from .sqlite import Database
 
+
 # Example usage
 def main():
-    db_path = "./database/openleadr.db"
+    db_path = './src/database/openleadr.db'
     db = Database(db_path)
 
     if not db.fetch_ven(ven_name="ven123"):

@@ -11,6 +11,7 @@ pylint = "*"
 pytest = "*"
 ruff = "*"
 sphinx = "*"
+tzdata = "*"
 
 [dev-packages]
 
@@ -19,6 +20,6 @@ python_version = "3.12"
 
 [scripts]
 start-client = "sh -c 'echo Starting client... && python -m src.client'"
-start-server = "sh -c 'pipenv run init-db && echo Starting server... && python -m src.server'"
+start-server = "python ./src/util/start_server.py"
 init-db = "python -m src.sqlite"
 test = "pytest"

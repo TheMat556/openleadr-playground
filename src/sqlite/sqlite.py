@@ -44,6 +44,10 @@ class Database:
         sqlite3.Connection
             A connection object to the SQLite database.
         """
+
+        db_directory = os.path.dirname(self.db_name)
+        os.makedirs(db_directory, exist_ok=True)
+
         return sqlite3.connect(self.db_name)
 
     def create_table(self):
