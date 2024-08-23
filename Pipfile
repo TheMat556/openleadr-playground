@@ -12,6 +12,9 @@ pytest = "*"
 ruff = "*"
 sphinx = "*"
 tzdata = "*"
+pandas = "*"
+dash = "*"
+plotly = "*"
 
 [dev-packages]
 
@@ -19,7 +22,8 @@ tzdata = "*"
 python_version = "3.12"
 
 [scripts]
-start-client = "sh -c 'echo Starting client... && python -m src.client'"
+start-client = "python ./src/util/start_client.py"
 start-server = "python ./src/util/start_server.py"
+start-charts = "python -m src.live_charting"
 init-db = "python -m src.sqlite"
 test = "pytest"
