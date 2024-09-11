@@ -1,0 +1,23 @@
+exclude = [
+    ".idea/", "src/**/__pycache__/", "database/"
+]
+
+# Same as Black.
+line-length = 88
+indent-width = 2
+
+# Assume Python 3.8
+target-version = "py312"
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[format]
+# Prefer single quotes for strings.
+quote-style = "single"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"

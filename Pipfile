@@ -9,7 +9,6 @@ asyncio = "*"
 black = "*"
 pylint = "*"
 pytest = "*"
-ruff = "*"
 sphinx = "*"
 tzdata = "*"
 pandas = "*"
@@ -17,6 +16,7 @@ dash = "*"
 plotly = "*"
 
 [dev-packages]
+ruff = "*"
 
 [requires]
 python_version = "3.12"
