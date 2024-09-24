@@ -14,6 +14,7 @@ tzdata = "*"
 pandas = "*"
 dash = "*"
 plotly = "*"
+python-dotenv = "*"
 
 [dev-packages]
 ruff = "*"
@@ -24,6 +25,7 @@ python_version = "3.12"
 [scripts]
 start-client = "python ./src/util/start_client.py"
 start-server = "python ./src/util/start_server.py"
+start-node = "python ./src/util/start_node.py"
 start-charts = "python -m src.live_charting"
 init-db = "python -m src.sqlite"
 test = "pytest"
