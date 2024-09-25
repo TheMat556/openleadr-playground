@@ -1,3 +1,4 @@
+import random
 from datetime import timedelta
 import logging
 
@@ -23,7 +24,7 @@ class OpenLeADRClient:
 
   async def collect_report_value(self):
     # This callback is called when you need to collect a value for your Report
-    return 1.23
+    return random.uniform(1.0, 100.0)
 
   async def handle_event(self, event):
     # This callback receives an Event dict.
