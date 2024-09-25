@@ -15,6 +15,7 @@ pandas = "*"
 dash = "*"
 plotly = "*"
 python-dotenv = "*"
+dependency-injector = "*"
 
 [dev-packages]
 ruff = "*"

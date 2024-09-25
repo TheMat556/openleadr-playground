@@ -4,6 +4,8 @@ import dash.dependencies as dd
 import sqlite3
 import pandas as pd
 
+from src.openleadr_node.config1.config import Config
+
 
 class LiveCharting:
     """
@@ -24,7 +26,7 @@ class LiveCharting:
         Registers the callback functions for updating the live graph.
     """
 
-    def __init__(self, db_name, table_name):
+    def __init__(self, db_name, table_name, config: Config):
         """
         Initializes the LiveCharting class, setting up the Dash application,
         layout, and callback functions.
@@ -35,6 +37,7 @@ class LiveCharting:
         self.app = dash.Dash(__name__)
         self.initAppLayout()
         self.register_callbacks()
+        self.config = config
 
     def initAppLayout(self):
         """
@@ -69,7 +72,7 @@ class LiveCharting:
             DataFrame containing the data from the database.
         """
         conn = sqlite3.connect(self.db_name)
-        query = f"SELECT * FROM {self.table_name}"
+        query = f"SELECT * FROM {self.table_name} WHERE ven_id = '{self.config.get_ven_id()}'"
         df = pd.read_sql_query(query, conn)
         conn.close()
         return df
