@@ -17,4 +17,4 @@ class Config:
 
 
 class Container(containers.DeclarativeContainer):
-  config = providers.Singleton(Config, initial_ven_id=100)
+  config = providers.Singleton(Config, initial_ven_id='ven_123')
