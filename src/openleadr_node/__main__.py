@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from src.client import OpenLeADRClient
 from src.live_charting import LiveCharting, DataGenerator
 from src.openleadr_node.config.config import Container, Config
+from src.openleadr_node.dependencies.venInterface import VenDependencyInterface
+from src.openleadr_node.dependencies.ven_dependency import VenDependency
 from src.server import OpenLeADRServer
 
 current_path = Path.cwd()
@@ -17,8 +19,8 @@ def get_leadr_server(config: Config):
   return OpenLeADRServer(os.getenv('SERVER_NAME'), os.getenv('DB_NAME'), config)
 
 
-def get_leadr_client(config: Config):
-  return OpenLeADRClient(os.getenv('VEN_NAME'), os.getenv('VTN_URL'))
+def get_leadr_client(config: Config, controller: VenDependencyInterface):
+  return OpenLeADRClient(os.getenv('VEN_NAME'), os.getenv('VTN_URL'), controller)
 
 
 def get_dash_app(config: Config):
@@ -39,9 +41,10 @@ def main():
 
   container = Container()
   config = container.config()
+  client_controller = VenDependency()
   loop = asyncio.get_event_loop()
   loop.create_task(get_leadr_server(config).server.run())
-  loop.create_task(get_leadr_client(config).client.run())
+  loop.create_task(get_leadr_client(config, client_controller).client.run())
 
   # Start the Dash app in a separate thread
   threading.Thread(target=run_dash_app, args=(config,), daemon=True).start()
