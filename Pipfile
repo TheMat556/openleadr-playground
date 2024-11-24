@@ -16,6 +16,7 @@ dash = "*"
 plotly = "*"
 python-dotenv = "*"
 dependency-injector = "*"
+reflex = "*"
 
 [dev-packages]
 ruff = "*"
