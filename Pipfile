@@ -16,6 +16,9 @@ dash = "*"
 plotly = "*"
 python-dotenv = "*"
 dependency-injector = "*"
+streamlit = "*"
+streamlit-vertical-slider = "*"
+streamlit-toggle = "*"
 
 [dev-packages]
 ruff = "*"
