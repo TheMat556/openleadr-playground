@@ -7,8 +7,8 @@ from openleadr import OpenADRServer, enable_default_logging
 from openleadr.objects import Interval
 from openleadr.utils import generate_id
 
-from ..openleadr_node.config.config import Config
-from ..sqlite.sqlite import Database
+from src.legacy.openleadr_node.config.config import Config
+from src.legacy.sqlite import Database
 
 # Setup logging
 enable_default_logging()

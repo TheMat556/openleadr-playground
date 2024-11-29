@@ -1,6 +1,6 @@
 import random
 
-from src.openleadr_node.dependencies.venInterface import VenDependencyInterface
+from src.legacy.openleadr_node.dependencies.venInterface import VenDependencyInterface
 
 
 class VenDependency(VenDependencyInterface):

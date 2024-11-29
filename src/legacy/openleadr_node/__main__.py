@@ -4,12 +4,12 @@ import threading
 from pathlib import Path
 from dotenv import load_dotenv
 
-from src.client import OpenLeADRClient
-from src.live_charting import LiveCharting, DataGenerator
-from src.openleadr_node.config.config import Container, Config
-from src.openleadr_node.dependencies.venInterface import VenDependencyInterface
-from src.openleadr_node.dependencies.ven_dependency import VenDependency
-from src.server import OpenLeADRServer
+from src.legacy.client import OpenLeADRClient
+from src.legacy.live_charting import LiveCharting, DataGenerator
+from src.legacy.openleadr_node.config.config import Container, Config
+from src.legacy.openleadr_node.dependencies.venInterface import VenDependencyInterface
+from src.legacy.openleadr_node.dependencies.ven_dependency import VenDependency
+from src.legacy.server import OpenLeADRServer
 
 current_path = Path.cwd()
 shutdown_event = threading.Event()

@@ -4,7 +4,7 @@ import logging
 
 from openleadr import OpenADRClient, enable_default_logging
 
-from src.openleadr_node.dependencies.venInterface import VenDependencyInterface
+from src.legacy.openleadr_node import VenDependencyInterface
 
 enable_default_logging()
 logger = logging.getLogger(__name__)
