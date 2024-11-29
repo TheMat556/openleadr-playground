@@ -19,12 +19,17 @@ dependency-injector = "*"
 streamlit = "*"
 streamlit-vertical-slider = "*"
 streamlit-toggle = "*"
+pyopenssl = "24.2.1" #Important! verify is legacy in latest version, signxml not updated yet
+pydispatcher = "*"
+pyee = "*"
+kafka-python = "*"
+gradio = "*"
 
 [dev-packages]
 ruff = "*"
 
 [requires]
-python_version = "3.12"
+python_version = "3.13"
 
 [scripts]
 start-client = "python ./src/util/start_client.py"

@@ -4,7 +4,7 @@ import dash.dependencies as dd
 import sqlite3
 import pandas as pd
 
-from src.openleadr_node.config.config import Config
+from src.legacy.openleadr_node import Config
 
 
 class LiveCharting:
