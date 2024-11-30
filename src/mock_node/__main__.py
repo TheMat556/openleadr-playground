@@ -1,25 +1,18 @@
-import asyncio
 import os
+import threading
 
 from dotenv import load_dotenv
 
+from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.openadr_node.node_manager import NodeManager
 
-from src.openadr_node.async_event_bus import dispatcher
 
-
-async def run_node_frontend():
-  """Run Streamlit frontend as a subprocess."""
-  current_dir = os.getcwd()
-  script_path = os.path.join(current_dir, 'fe.py')
-
-  process = await asyncio.create_subprocess_exec('streamlit', 'run', script_path)
-  await process.wait()
+def run_gradio_thread(interface):
+  """Run Gradio in a separate thread"""
+  interface.launch(server_port=7862, server_name='0.0.0.0')
 
 
 def main():
-  """Main function to set up and run the node manager."""
-  print(id(dispatcher))
   load_dotenv()
 
   node_manager = NodeManager(
@@ -27,7 +20,13 @@ def main():
     # ven_name=os.getenv('VEN_NAME'),
     # vtn_url=os.getenv('VTN_URL'),
   )
-  node_manager.add_task(run_node_frontend)
+  app = AsyncGradioApp()
+  interface = app.create_interface()
+  gradio_thread = threading.Thread(
+    target=run_gradio_thread, args=(interface,), daemon=True
+  )
+
+  gradio_thread.start()
   node_manager.run_node()
 
 

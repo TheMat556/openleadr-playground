@@ -2,6 +2,7 @@ import asyncio
 from typing import Callable, Dict, List, Optional
 import threading
 
+
 class AsyncEventDispatcher:
   _instance = None
   _lock = threading.Lock()
@@ -69,6 +70,7 @@ class AsyncEventDispatcher:
       self._subscribers[event_type].clear()
     elif callback in self._subscribers[event_type]:
       self._subscribers[event_type].remove(callback)
+
 
 # Create a global dispatcher instance
 dispatcher = AsyncEventDispatcher()

@@ -24,6 +24,7 @@ pydispatcher = "*"
 pyee = "*"
 kafka-python = "*"
 gradio = "*"
+nest-asyncio = "*"
 
 [dev-packages]
 ruff = "*"

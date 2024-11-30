@@ -1,29 +1,44 @@
-import asyncio
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
+from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
+def sample_callback_1():
+  print("callback 1")
+  return 10
 
-async def run_node_frontend():
-  current_dir = os.getcwd()
-  script_path = os.path.join(current_dir, 'addons\streamlit.py')
-
-  process = await asyncio.create_subprocess_exec('streamlit', 'run', script_path)
-
-  await process.wait()
-
+def sample_callback_2():
+  print("callback 2")
+  return 10
 
 def main():
   load_dotenv()
+  reports = [
+    ReportConfiguration(
+      resource_id="res_123",
+      measurement="temperature",
+      sampling_rate=timedelta(seconds=20),
+      callback=sample_callback_1,
+      additional_metadata={"unit": "Celsius", "location": "Room 101"}
+    ),
+    ReportConfiguration(
+      resource_id="res_456",
+      measurement="humidity",
+      sampling_rate=timedelta(seconds=10),
+      callback=sample_callback_2,
+      additional_metadata={"unit": "%", "location": "Room 202"}
+    )
+  ]
 
   node_manager = NodeManager(
     # vtn_name=os.getenv('SERVER_NAME'),
     ven_name=os.getenv('VEN_NAME'),
     vtn_url=os.getenv('VTN_URL'),
   )
-  node_manager.add_task(run_node_frontend())
+  node_manager.add_report(reports)
   node_manager.run_node()
   pass
 

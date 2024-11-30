@@ -9,7 +9,7 @@ class NodeFrontend:
 
   def run(self):
     st.header('Async Streamlit App')
-    st.write('This is a simple Streamlit frontend with async support')
+    st.write('This is a simple Streamlit gradio_ui with async support')
 
 
 if __name__ == '__main__':
