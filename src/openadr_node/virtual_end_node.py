@@ -6,12 +6,10 @@ from src.openadr_node.models import ReportConfiguration
 
 
 class VirtualEndNode:
-  def __init__(self, ven_name: str, vtn_url: str, callback):
+  def __init__(self, ven_name: str, vtn_url: str):
     self._ven_name = ven_name
-    print(self._ven_name)
     self._vtn_url = vtn_url
     self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
-    self._update_manger_callback = callback
     self._init_default_handler()
 
   def  _init_default_handler(self):
@@ -30,11 +28,11 @@ class VirtualEndNode:
           callback=report.callback,
         )
 
-  async def handle_event(self, event):
+  @staticmethod
+  async def handle_event(event):
     # business logic
     # handle event
     print("DISPATCHING EVENT MUST BE HANDLED!!!")
-    # self._update_manger_callback(event)
     _event_descriptor = event['event_descriptor']
     _active_period = event['active_period']
     _event_signals = event['event_signals']

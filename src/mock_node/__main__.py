@@ -9,7 +9,10 @@ from src.openadr_node.node_manager import NodeManager
 
 def run_gradio_thread(interface):
   """Run Gradio in a separate thread"""
-  interface.launch(server_port=7862, server_name='0.0.0.0')
+  try:
+    interface.launch(server_port=7862, server_name='0.0.0.0')
+  except Exception as e:
+    print(f'Failed to launch Gradio interface: {e}')
 
 
 def main():

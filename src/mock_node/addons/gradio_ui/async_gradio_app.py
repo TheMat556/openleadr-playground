@@ -1,30 +1,77 @@
-from signal import signal
+from datetime import datetime
 
 import gradio as gr
+import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 import math
+
+from gradio import Timer
 from pydispatch import dispatcher
 
 
 class AsyncGradioApp:
+  """
+  A Gradio application for interactive slider-based load profile visualization.
+
+  This class creates a web interface with multiple sliders representing hourly load values,
+  with real-time chart updates and the ability to save and interpolate slider values.
+
+  :param num_sliders: Number of sliders to create in the interface, defaults to 24
+  :type num_sliders: int, optional
+  :param slider_file: Path to the file for storing and loading slider values, defaults to './slider_values.txt'
+  :type slider_file: str, optional
+  """
+
   def __init__(self, num_sliders=24, slider_file='./slider_values.txt'):
     self.num_sliders = num_sliders
     self.slider_file = slider_file
     self.slider_values = self.load_slider_values(slider_file)
-    print(dispatcher)
+    self._current_consumption = 0
+
+    # Unique dispatcher connections
+    dispatcher.connect(self._on_update_consumption_data, sender="nm", signal="update_consumption_data")
+
+  def _on_update_consumption_data(self, sender, data):
+    """
+    Update current consumption and refresh the label if it exists.
+
+    :param sender: Signal sender
+    :param data: Consumption data dictionary
+    """
+    print("ui got data")
+    self._current_consumption = 3
+    for ven_id, resources in data.items():
+      for resource_id, (_, value) in resources.items():
+        self._current_consumption += value
+    print(self._current_consumption)
 
   def load_slider_values(self, filename):
-    """Load slider values from a file."""
+    """
+    Load slider values from a file or generate default values.
+
+    :param filename: Path to the file containing slider values
+    :type filename: str
+    :return: List of slider values, padded with default values if necessary
+    :rtype: list[int]
+    """
     try:
       with open(filename, 'r') as file:
-        values = [float(line.strip()) for line in file.readlines()]
+        values = [int(line.strip()) for line in file.readlines()]
       return values[: self.num_sliders] + [30] * (self.num_sliders - len(values))
     except FileNotFoundError:
       print(f'{filename} not found. Using default values.')
       return [30] * self.num_sliders
 
   def interpolate_slider_values(self, slider_values):
+    """
+    Interpolate slider values to create a 15-minute resolution time series.
+
+    :param slider_values: List of hourly slider values
+    :type slider_values: list[int]
+    :return: Interpolated DataFrame with 15-minute resolution time index
+    :rtype: pandas.DataFrame
+    """
     time_index = pd.date_range(start='2024-01-01 00:00:00', periods=96, freq='15T')
     original_time_index = pd.date_range(
       start='2024-01-01 00:00:00', periods=24, freq='1H'
@@ -40,11 +87,20 @@ class AsyncGradioApp:
 
     return df_interpolated[['Slider Value']]
 
-  def save_slider_values(self, slider_values):
+  def save_slider_values(self, *args):
+    """
+    Save slider values to a file and send interpolated values via dispatcher.
+
+    :param args: Variable number of slider values
+    :type args: list[int]
+    """
+    slider_values = list(args)[: self.num_sliders]
+    self.slider_values = slider_values
+
     interpolated_values = self.interpolate_slider_values(slider_values)
     dispatcher.send(
-      signal="update_load_profile",
-      sender="UI",
+      signal='update_load_profile',
+      sender='ui',
       data=interpolated_values.to_json(),
     )
     try:
@@ -54,11 +110,19 @@ class AsyncGradioApp:
     except Exception as e:
       print(f'Error saving slider values: {e}')
 
-  def update_chart(self, *slider_values):
+  def update_chart(self, *args):
+    """
+    Create a Plotly scatter plot visualization of slider values.
+
+    :param args: Variable number of slider values
+    :type args: list[int]
+    :return: Plotly Figure object with slider values visualization
+    :rtype: plotly.graph_objs._figure.Figure
+    """
+    slider_values = list(args)[: self.num_sliders]
+
     if not slider_values:
       slider_values = self.slider_values
-
-    self.save_slider_values(slider_values)
 
     fig = go.Figure(
       data=[
@@ -72,7 +136,6 @@ class AsyncGradioApp:
       ]
     )
 
-    # Customize the layout with transparent background and white font
     fig.update_layout(
       title={'text': 'Slider Values Visualization', 'font': {'color': 'white'}},
       xaxis_title='Data Points',
@@ -88,15 +151,21 @@ class AsyncGradioApp:
         gridcolor='rgba(255,255,255,0.2)',
       ),
       height=400,
-      plot_bgcolor='rgba(0,0,0,0)',  # Transparent plot background
-      paper_bgcolor='rgba(0,0,0,0)',  # Transparent overall background
-      font_color='white',  # Global font color
-      template='plotly_dark',  # Dark template as base
+      plot_bgcolor='rgba(0,0,0,0)',
+      paper_bgcolor='rgba(0,0,0,0)',
+      font_color='white',
+      template='plotly_dark',
     )
 
     return fig
 
   def create_interface(self):
+    """
+    Create the Gradio interface with sliders and interactive plot.
+
+    :return: Gradio Blocks interface
+    :rtype: gradio.Blocks
+    """
     rows = math.ceil(self.num_sliders / 4)
 
     slider_rows = []
@@ -142,17 +211,37 @@ class AsyncGradioApp:
                 inputs=inputs,
                 outputs=plot_output,
               )
+              slider.release(
+                fn=self.save_slider_values,
+                inputs=inputs,
+              )
+
         with gr.Row():
-          gr.Label('25kWh', label='Node consumption')
-          gr.Label('12KWh', label='Current allowed consumption')
+          gr.Label(value=self.get_current_consumption, label='Node consumption', every=Timer(5))
+          gr.Label(value=self.get_current_allowed_consumption, label='Current allowed consumption', every=Timer(5))
 
     return interface
 
+  def get_current_consumption(self):
+    return f"{self._current_consumption} kWh"
+
+  def get_current_allowed_consumption(self):
+    interpolated_values = self.interpolate_slider_values(self.slider_values)
+    now = datetime.now()
+    minutes = (now.minute // 15) * 15
+    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)#
+    rounded_time_str = rounded_time.strftime("%H:%M")
+    allowed_consumption = interpolated_values.loc[rounded_time_str, 'Slider Value']
+
+    return f"{allowed_consumption} kWh"
 
 def main():
-  # Create and launch the app with the specified slider file
+  """
+  Main function to create and launch the AsyncGradioApp.
+  """
   app = AsyncGradioApp(num_sliders=24, slider_file='slider_values.txt')
-  app.create_interface().launch()
+  interface = app.create_interface()
+  interface.launch(share=True)
 
 
 if __name__ == '__main__':
