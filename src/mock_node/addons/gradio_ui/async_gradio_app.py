@@ -127,7 +127,7 @@ class AsyncGradioApp:
     fig = go.Figure(
       data=[
         go.Scatter(
-          x=[i + 1 for i in range(self.num_sliders)],
+          x=[i for i in range(self.num_sliders)],
           y=list(slider_values),
           mode='lines+markers',
           line=dict(color='rgba(250, 115, 24, 0.6)'),
