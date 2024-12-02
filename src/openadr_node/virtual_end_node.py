@@ -1,8 +1,13 @@
 from typing import Optional, List
+import logging
 
 from openleadr import OpenADRClient
 
 from src.openadr_node.models import ReportConfiguration
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class VirtualEndNode:
@@ -30,7 +35,7 @@ class VirtualEndNode:
   async def handle_event(event):
     # business logic
     # handle event
-    print('DISPATCHING EVENT MUST BE HANDLED!!!')
+    logging.info('Processing openADR Event')
     _event_descriptor = event['event_descriptor']
     _active_period = event['active_period']
     _event_signals = event['event_signals']

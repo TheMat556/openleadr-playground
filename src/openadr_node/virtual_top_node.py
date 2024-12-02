@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from functools import partial
-from typing import Dict, Any
+from typing import Dict
 
 from openleadr import OpenADRServer
 from openleadr.utils import generate_id

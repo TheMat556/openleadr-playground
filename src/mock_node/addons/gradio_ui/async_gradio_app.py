@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import gradio as gr
 import pandas as pd
@@ -60,11 +61,17 @@ class AsyncGradioApp:
     :rtype: list[int]
     """
     try:
-      with open(filename, 'r') as file:
+      filepath = Path(filename).resolve()
+      with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
       return values[: self.num_sliders] + [30] * (self.num_sliders - len(values))
     except FileNotFoundError:
-      print(f'{filename} not found. Using default values.')
+      logging.warning(
+        f'Slider values file not found at {filename}. Using default values.'
+      )
+      return [30] * self.num_sliders
+    except ValueError as e:
+      logging.error(f'Invalid data in {filename}: {e}')
       return [30] * self.num_sliders
 
   def interpolate_slider_values(self, slider_values):
