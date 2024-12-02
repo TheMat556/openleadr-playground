@@ -1,13 +1,17 @@
 from datetime import datetime
 
 import gradio as gr
-import numpy as np
 import pandas as pd
 import plotly.graph_objs as go
 import math
 
 from gradio import Timer
 from pydispatch import dispatcher
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class AsyncGradioApp:
@@ -30,7 +34,9 @@ class AsyncGradioApp:
     self._current_consumption = 0
 
     # Unique dispatcher connections
-    dispatcher.connect(self._on_update_consumption_data, sender="nm", signal="update_consumption_data")
+    dispatcher.connect(
+      self._on_update_consumption_data, sender='nm', signal='update_consumption_data'
+    )
 
   def _on_update_consumption_data(self, sender, data):
     """
@@ -39,12 +45,10 @@ class AsyncGradioApp:
     :param sender: Signal sender
     :param data: Consumption data dictionary
     """
-    print("ui got data")
     self._current_consumption = 3
     for ven_id, resources in data.items():
       for resource_id, (_, value) in resources.items():
         self._current_consumption += value
-    print(self._current_consumption)
 
   def load_slider_values(self, filename):
     """
@@ -217,23 +221,30 @@ class AsyncGradioApp:
               )
 
         with gr.Row():
-          gr.Label(value=self.get_current_consumption, label='Node consumption', every=Timer(5))
-          gr.Label(value=self.get_current_allowed_consumption, label='Current allowed consumption', every=Timer(5))
+          gr.Label(
+            value=self.get_current_consumption, label='Node consumption', every=Timer(5)
+          )
+          gr.Label(
+            value=self.get_current_allowed_consumption,
+            label='Current allowed consumption',
+            every=Timer(5),
+          )
 
     return interface
 
   def get_current_consumption(self):
-    return f"{self._current_consumption} kWh"
+    return f'{self._current_consumption} kWh'
 
   def get_current_allowed_consumption(self):
     interpolated_values = self.interpolate_slider_values(self.slider_values)
     now = datetime.now()
     minutes = (now.minute // 15) * 15
-    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)#
-    rounded_time_str = rounded_time.strftime("%H:%M")
+    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)  #
+    rounded_time_str = rounded_time.strftime('%H:%M')
     allowed_consumption = interpolated_values.loc[rounded_time_str, 'Slider Value']
 
-    return f"{allowed_consumption} kWh"
+    return f'{allowed_consumption} kWh'
+
 
 def main():
   """

@@ -21,7 +21,9 @@ class VirtualTopNode:
     self._open_adr_server = OpenADRServer(self._server_name)
     self._init_default_handler()
 
-    dispatcher.connect(self._on_update_load_profile, signal='update_load_profile', sender="nm")
+    dispatcher.connect(
+      self._on_update_load_profile, signal='update_load_profile', sender='nm'
+    )
 
   def _init_default_handler(self):
     self._open_adr_server.add_handler(
@@ -32,7 +34,7 @@ class VirtualTopNode:
   async def _on_create_party_registration(self, registration_info: dict):
     ven_name = registration_info.get('ven_name')
     # TODO: Check in the database if VEN exists
-    ven_id = "ven123" # generate_id('ven_id')
+    ven_id = 'ven123'  # generate_id('ven_id')
     registration_id = generate_id()
     logger.info(
       f'Registered new VEN: {ven_name} with ID: {ven_id} and Registration ID: {registration_id}'
@@ -70,7 +72,7 @@ class VirtualTopNode:
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
 
-    if measurement == "energy":
+    if measurement == 'energy':
       if ven_id not in self._ven_data:
         self._ven_data[ven_id] = {}
 
@@ -81,7 +83,7 @@ class VirtualTopNode:
       logger.debug(f'Data: {data}')
 
   def _update_node_manager(self):
-    dispatcher.send(signal="update_consumption_data", sender="vtn", data=self._ven_data)
+    dispatcher.send(signal='update_consumption_data', sender='vtn', data=self._ven_data)
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str):
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
@@ -103,10 +105,7 @@ class VirtualTopNode:
     return self._open_adr_server.run()
 
   def dispatch_adr_event(self, event):
-    print("NEXT STEP DISPATCH")
-    print(event)
     if event:
-      print("!!!!")
       self._open_adr_server.add_event(
         ven_id=event.ven_id,
         signal_name=event.signal_name,
@@ -119,4 +118,4 @@ class VirtualTopNode:
     """
     Callback that receives the response from a VEN to an Event.
     """
-    print(f"VEN {ven_id} responded to Event {event_id} with: {opt_type}")
+    print(f'VEN {ven_id} responded to Event {event_id} with: {opt_type}')

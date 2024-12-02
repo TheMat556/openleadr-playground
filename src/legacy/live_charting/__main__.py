@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 async def main():
-  #data_generator = DataGenerator()
+  # data_generator = DataGenerator()
   live_charting = LiveCharting()
 
   try:

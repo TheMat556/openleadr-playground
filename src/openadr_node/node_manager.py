@@ -3,7 +3,7 @@ import os
 from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone, timedelta
 
-from src.openadr_node.models import ReportConfiguration, EventSignal, Interval
+from src.openadr_node.models import ReportConfiguration, EventSignal
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
@@ -25,28 +25,37 @@ class NodeManager:
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
 
-    dispatcher.connect(self._update_load_profile, signal='update_load_profile', sender="ui")
-    dispatcher.connect(self._update_consumption_data, signal='update_consumption_data', sender="vtn")
+    dispatcher.connect(
+      self._update_load_profile, signal='update_load_profile', sender='ui'
+    )
+    dispatcher.connect(
+      self._update_consumption_data, signal='update_consumption_data', sender='vtn'
+    )
 
   def event_response_callback(self):
-    print("callback done")
+    print('callback done')
 
   def _update_load_profile(self, sender, data):
     self._topics['load_profile'] = data
     event = EventSignal(
-       ven_id=os.getenv('VEN_NAME'),
-       signal_name='simple',
-       signal_type='level',
-       intervals=[{'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-                   'duration': timedelta(minutes=10),
-                   'signal_payload': 1}],
-       callback=None)
+      ven_id=os.getenv('VEN_NAME'),
+      signal_name='simple',
+      signal_type='level',
+      intervals=[
+        {
+          'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+          'duration': timedelta(minutes=10),
+          'signal_payload': 1,
+        }
+      ],
+      callback=None,
+    )
     print(f'LOADPROFILE has been updated from {sender}')
-    dispatcher.send(sender="nm", signal='update_load_profile', data=event)
+    dispatcher.send(sender='nm', signal='update_load_profile', data=event)
 
   def _update_consumption_data(self, sender, data):
-    print("nm got data")
-    dispatcher.send(signal="update_consumption_data", sender="nm", data=data)
+    print('nm got data')
+    dispatcher.send(signal='update_consumption_data', sender='nm', data=data)
 
   def _create_node_tasks(self):
     if self._vtn_name:
