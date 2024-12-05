@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  tst1:
+    build: .
+    container_name: tst1_container
+    environment:
+      - NAME=tst1
+
+  tst2:
+    build: .
+    container_name: tst2_container
+    environment:
+      - NAME=tst2
