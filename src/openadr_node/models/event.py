@@ -11,11 +11,10 @@ class Interval:
 
   def __post_init__(self):
     if self.dtstart.tzinfo is None:
-      raise ValueError("dtstart must be timezone-aware")
+      raise ValueError('dtstart must be timezone-aware')
 
     if self.duration.total_seconds() < 0:
-      raise ValueError("duration cannot be negative")
-
+      raise ValueError('duration cannot be negative')
 
 
 @dataclass

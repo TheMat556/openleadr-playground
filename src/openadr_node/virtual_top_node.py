@@ -7,11 +7,9 @@ from typing import Dict
 from openleadr import OpenADRServer
 from openleadr.utils import generate_id
 
-from pydispatch import dispatcher
-
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.connect_decorator import ConnectDispatcher
-from src.openadr_node.send_decorator import SendDispatcher
+from src.openadr_node.decorator.connect_decorator import ConnectDispatcher
+from src.openadr_node.decorator.send_decorator import SendDispatcher
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 class VirtualTopNode(AdrBaseConfig):
   def __init__(self, server_name: str):
-    print("VTN")
     super().__init__()
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
@@ -69,7 +66,7 @@ class VirtualTopNode(AdrBaseConfig):
 
     return callback, sampling_interval
 
-  @SendDispatcher(signal="update_consumption_report", sender="vtn")
+  @SendDispatcher(signal='update_consumption_data', sender='vtn')
   def _on_update_report(
     self, data: list, ven_id: str, resource_id: str, measurement: str
   ):
@@ -77,20 +74,20 @@ class VirtualTopNode(AdrBaseConfig):
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
 
-    #logic can be done in node manager, event could be general
+    # logic can be done in node manager, event could be general
     if measurement == 'energy':
       if ven_id not in self._ven_data:
         self._ven_data[ven_id] = {}
 
       self._ven_data[ven_id][resource_id] = data[0]
-      #self._update_node_manager()
+      # self._update_node_manager()
 
     if data:
       logger.debug(f'Data: {data}')
 
     return self._ven_data
 
-  #def _update_node_manager(self):
+  # def _update_node_manager(self):
   #  dispatcher.send(signal='update_consumption_data', sender='vtn', data=self._ven_data)
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str):
@@ -107,14 +104,12 @@ class VirtualTopNode(AdrBaseConfig):
 
   @ConnectDispatcher('update_load_profile', 'nm')
   def _on_update_load_profile(self, signal, sender, data):
-    print("DISP-ACT gotten")
     print(data)
     if data:
-      print("sending...")
       self._open_adr_server.add_event(
         ven_id='ven123',
         signal_type='level',
-        signal_name="simple",
+        signal_name='simple',
         intervals=[
           {
             'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),

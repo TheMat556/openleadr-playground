@@ -18,14 +18,12 @@ def run_gradio_thread(interface):
 def main():
   def cleanup():
     if gradio_thread.is_alive():
-        interface.close()
-        gradio_thread.join(timeout=1)
+      interface.close()
+      gradio_thread.join(timeout=1)
 
   load_dotenv()
 
-  node_manager = NodeManager(
-    vtn_name=os.getenv('SERVER_NAME')
-  )
+  node_manager = NodeManager(vtn_name=os.getenv('SERVER_NAME'))
   app = AsyncGradioApp()
   interface = app.create_interface()
 

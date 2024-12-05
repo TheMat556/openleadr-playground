@@ -7,11 +7,11 @@ import plotly.graph_objs as go
 import math
 
 from gradio import Timer
-from pydispatch import dispatcher
 import logging
 
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.send_decorator import SendDispatcher
+from src.openadr_node.decorator.connect_decorator import ConnectDispatcher
+from src.openadr_node.decorator.send_decorator import SendDispatcher
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,11 +39,12 @@ class AsyncGradioApp(AdrBaseConfig):
     self._current_consumption = 0
 
     # Unique dispatcher connections
-    dispatcher.connect(
-      self._on_update_consumption_data, sender='nm', signal='update_consumption_data'
-    )
+    # dispatcher.connect(
+    #  self._on_update_consumption_data, sender='nm', signal='update_consumption_data'
+    # )
 
-  def _on_update_consumption_data(self, sender, data):
+  @ConnectDispatcher('update_consumption_data', 'nm')
+  def _on_update_consumption_data(self, sender, signal, data):
     """
     Update current consumption and refresh the label if it exists.
 
@@ -122,7 +123,7 @@ class AsyncGradioApp(AdrBaseConfig):
     interpolated_values = self.interpolate_slider_values(slider_values)
     self._send_interpolated_values(interpolated_values.to_json)
 
-  @SendDispatcher("update_load_profile", "ui")
+  @SendDispatcher('update_load_profile', 'ui')
   def _send_interpolated_values(self, value):
     return value
 

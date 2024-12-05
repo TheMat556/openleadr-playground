@@ -4,11 +4,8 @@ import os
 from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone, timedelta
 
-from openleadr import OpenADRClient
-
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.models import ReportConfiguration, EventSignal
-from src.openadr_node.send_decorator import SendDispatcher
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
@@ -20,12 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class NodeManager(AdrBaseConfig):
-  def __init__(self, vtn_name: Optional[str] = None, ven_name: Optional[str] = None,
-               vtn_url: Optional[str] = None):
+  def __init__(
+    self,
+    vtn_name: Optional[str] = None,
+    ven_name: Optional[str] = None,
+    vtn_url: Optional[str] = None,
+  ):
     super().__init__()
     # Connect to the `node_ready` event
-    print("INIT DISP.")
-
     self._vtn_name: Optional[str] = vtn_name
     self._ven_name: Optional[str] = ven_name
     self._vtn_url: Optional[str] = vtn_url
@@ -34,34 +33,19 @@ class NodeManager(AdrBaseConfig):
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
 
-    dispatcher.send(signal="on_ready", sender="system")
-
-    #SendDispatcher.connect_all(self)
-    #dispatcher.send(signal='on_ready')  # This will trigger the ready state
-    #dispatcher.send("on_ready", "nm", data=None)
-    #dispatcher.connect(
-    #  self._update_load_profile, signal='update_load_profile', sender='ui'
-    #)
-    #dispatcher.connect(
-    #  self._update_consumption_data, signal='update_consumption_data', sender=dispatcher.Any
-    #)
+    dispatcher.send(signal='on_ready', sender='system')
 
   def _register_dispatcher(self, sender, signal, data):
-    print("sender", sender)
-    print("signal", signal)
-    print("data", data)
     method_name = '_on_' + data
     method = getattr(self, method_name, None)
     if callable(method):
       # If we have a method here custom sending have to be implemented
-      print("callable")
+      print('callable')
       dispatcher.connect(method, signal=data, sender=dispatcher.Any)
     else:
       dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
 
-    logger.info(
-      f"NM - Connected {method_name} to signal: {data} with sender: {sender}"
-    )
+    logger.info(f'NM - Connected {method_name} to signal: {data} with sender: {sender}')
 
   @staticmethod
   def _forward_dispatcher(sender, signal, data):
@@ -87,10 +71,6 @@ class NodeManager(AdrBaseConfig):
     )
     print(f'LOADPROFILE has been updated from {sender}')
     dispatcher.send(sender='nm', signal='update_load_profile', data=event)
-
-  def _update_consumption_data(self, sender, data):
-    print('nm got data')
-    dispatcher.send(signal='update_consumption_data', sender='nm', data=data)
 
   def _create_node_tasks(self):
     if self._vtn_name:

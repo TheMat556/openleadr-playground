@@ -2,7 +2,7 @@ import logging
 
 from pydispatch import dispatcher
 
-from src.openadr_node.send_decorator import SendDispatcher
+from src.openadr_node.decorator.send_decorator import SendDispatcher
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,4 +21,3 @@ class AdrBaseConfig:
     SendDispatcher.connect_all(self)
 
     self._ready = False
-    self._deferred_signals = []
