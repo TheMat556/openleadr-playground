@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class VirtualEndNode:
   def __init__(self, ven_name: str, vtn_url: str):
+    print("INIT VEN")
     self._ven_name = ven_name
     self._vtn_url = vtn_url
     self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
@@ -40,6 +41,7 @@ class VirtualEndNode:
     _active_period = event['active_period']
     _event_signals = event['event_signals']
     _targets = event['targets']
+    print("EVENT!!")
     return 'optIn'  # eventually pass devices status?
 
   def get_open_adr_server_run(self):

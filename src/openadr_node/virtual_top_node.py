@@ -8,22 +8,25 @@ from openleadr.utils import generate_id
 
 from pydispatch import dispatcher
 
+from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.connect_decorator import ConnectDispatcher
+from src.openadr_node.send_decorator import SendDispatcher
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class VirtualTopNode:
+class VirtualTopNode(AdrBaseConfig):
   def __init__(self, server_name: str):
+    print("VTN")
+    super().__init__()
+    self._ven_data: Dict[str, Dict[str, float]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._server_name = server_name
 
     self._open_adr_server = OpenADRServer(self._server_name)
     self._init_default_handler()
-
-    dispatcher.connect(
-      self._on_update_load_profile, signal='update_load_profile', sender='nm'
-    )
 
   def _init_default_handler(self):
     self._open_adr_server.add_handler(
@@ -65,6 +68,7 @@ class VirtualTopNode:
 
     return callback, sampling_interval
 
+  @SendDispatcher(signal="update_consumption_report", sender="vtn")
   def _on_update_report(
     self, data: list, ven_id: str, resource_id: str, measurement: str
   ):
@@ -72,18 +76,21 @@ class VirtualTopNode:
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
 
+    #logic can be done in node manager, event could be general
     if measurement == 'energy':
       if ven_id not in self._ven_data:
         self._ven_data[ven_id] = {}
 
       self._ven_data[ven_id][resource_id] = data[0]
-      self._update_node_manager()
+      #self._update_node_manager()
 
     if data:
       logger.debug(f'Data: {data}')
 
-  def _update_node_manager(self):
-    dispatcher.send(signal='update_consumption_data', sender='vtn', data=self._ven_data)
+    return self._ven_data
+
+  #def _update_node_manager(self):
+  #  dispatcher.send(signal='update_consumption_data', sender='vtn', data=self._ven_data)
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str):
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
@@ -97,22 +104,20 @@ class VirtualTopNode:
     await asyncio.sleep(1)
     logger.info(f'Device status updated for VEN ID: {ven_id}, Opt type: {opt_type}')
 
-  def _on_update_load_profile(self, sender, data):
-    print('Load profile has been updated')
-    self.dispatch_adr_event(data)
+  @ConnectDispatcher('update_load_profile', 'nm')
+  def _on_update_load_profile(self, signal, sender, data):
+    print("DISP-ACT gotten")
+    if data:
+      self._open_adr_server.add_event(
+        ven_id=data.ven_id,
+        signal_name=data.signal_name,
+        signal_type=data.signal_type,
+        intervals=data.intervals,
+        callback=self._event_callback,
+      )
 
   def get_open_adr_server_run(self):
     return self._open_adr_server.run()
-
-  def dispatch_adr_event(self, event):
-    if event:
-      self._open_adr_server.add_event(
-        ven_id=event.ven_id,
-        signal_name=event.signal_name,
-        signal_type=event.signal_type,
-        intervals=event.intervals,
-        callback=self._event_callback,
-      )
 
   async def event_response_callback(self, ven_id, event_id, opt_type):
     """

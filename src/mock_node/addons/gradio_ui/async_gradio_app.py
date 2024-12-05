@@ -10,12 +10,15 @@ from gradio import Timer
 from pydispatch import dispatcher
 import logging
 
+from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.send_decorator import SendDispatcher
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class AsyncGradioApp:
+class AsyncGradioApp(AdrBaseConfig):
   """
   A Gradio application for interactive slider-based load profile visualization.
 
@@ -29,6 +32,7 @@ class AsyncGradioApp:
   """
 
   def __init__(self, num_sliders=24, slider_file='./slider_values.txt'):
+    #super().__init__()
     self.num_sliders = num_sliders
     self.slider_file = slider_file
     self.slider_values = self.load_slider_values(slider_file)
@@ -108,18 +112,19 @@ class AsyncGradioApp:
     slider_values = list(args)[: self.num_sliders]
     self.slider_values = slider_values
 
-    interpolated_values = self.interpolate_slider_values(slider_values)
-    dispatcher.send(
-      signal='update_load_profile',
-      sender='ui',
-      data=interpolated_values.to_json(),
-    )
     try:
       with open(self.slider_file, 'w') as file:
         for value in slider_values:
           file.write(f'{value}\n')
     except Exception as e:
       print(f'Error saving slider values: {e}')
+
+    interpolated_values = self.interpolate_slider_values(slider_values)
+    self._send_interpolated_values(interpolated_values.to_json)
+
+  @SendDispatcher("update_load_profile", "ui")
+  def _send_interpolated_values(self, value):
+    return value
 
   def update_chart(self, *args):
     """
