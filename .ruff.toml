@@ -1,5 +1,5 @@
 exclude = [
-    ".idea/", "src/**/__pycache__/", "database/"
+    ".idea/", "src/**/__pycache__/", "database/", "./src/legacy"
 ]
 
 # Same as Black.
