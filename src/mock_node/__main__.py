@@ -24,7 +24,7 @@ def main():
   load_dotenv()
 
   node_manager = NodeManager(vtn_name=os.getenv('SERVER_NAME'))
-  app = AsyncGradioApp()
+  app = AsyncGradioApp(slider_file='./slider_values.txt')
   interface = app.create_interface()
 
   gradio_thread = threading.Thread(

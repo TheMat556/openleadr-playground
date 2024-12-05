@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict
@@ -7,13 +6,10 @@ from typing import Dict
 from openleadr import OpenADRServer
 from openleadr.utils import generate_id
 
+from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.decorator.connect_decorator import SignalConnector
-from src.openadr_node.decorator.send_decorator import SignalSender
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.openadr_node.decorator.signal_connector import SignalConnector
+from src.openadr_node.decorator.signal_sender import SignalSender
 
 
 class VirtualTopNode(AdrBaseConfig):
@@ -86,9 +82,6 @@ class VirtualTopNode(AdrBaseConfig):
 
     return self._ven_data
 
-  # def _update_node_manager(self):
-  #  dispatcher.send(signal='update_consumption_data', sender='vtn', data=self._ven_data)
-
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str):
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
     await self.handle_device_status(ven_id, opt_type)
@@ -101,7 +94,7 @@ class VirtualTopNode(AdrBaseConfig):
     await asyncio.sleep(1)
     logger.info(f'Device status updated for VEN ID: {ven_id}, Opt type: {opt_type}')
 
-  @SignalConnector('update_load_profile', "nm")
+  @SignalConnector('update_load_profile', 'nm')
   def _on_update_load_profile(self, signal, sender, data):
     print(data)
     print('LOADPROFILE has been updated')

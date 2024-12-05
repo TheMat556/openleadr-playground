@@ -1,19 +1,15 @@
 import asyncio
-import logging
 import os
 from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone, timedelta
 
+from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.models import ReportConfiguration, EventSignal
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
 from pydispatch import dispatcher
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class NodeManager(AdrBaseConfig):
@@ -39,7 +35,6 @@ class NodeManager(AdrBaseConfig):
     method = getattr(self, method_name, None)
     if callable(method):
       # If we have a method here custom sending have to be implemented
-      print('callable')
       dispatcher.connect(method, signal=data, sender=dispatcher.Any)
     else:
       dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
@@ -51,7 +46,7 @@ class NodeManager(AdrBaseConfig):
     return dispatcher.send(signal=signal, sender='nm', data=data)
 
   def event_response_callback(self):
-    print('callback done')
+    pass
 
   def _update_load_profile(self, sender, data):
     self._topics['load_profile'] = data

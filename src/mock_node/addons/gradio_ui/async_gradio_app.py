@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -10,8 +11,8 @@ from gradio import Timer
 import logging
 
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.decorator.connect_decorator import SignalConnector
-from src.openadr_node.decorator.send_decorator import SignalSender
+from src.openadr_node.decorator.signal_connector import SignalConnector
+from src.openadr_node.decorator.signal_sender import SignalSender
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -61,7 +62,16 @@ class AsyncGradioApp(AdrBaseConfig):
     :rtype: list[int]
     """
     try:
-      filepath = Path(filename).resolve()
+      absolute_file_path = Path(os.getcwd())
+      if (
+        'src' not in absolute_file_path.parts
+        or 'mock_node' not in absolute_file_path.parts
+      ):
+        absolute_file_path = absolute_file_path / 'src' / 'mock_node'
+
+      absolute_file_path = absolute_file_path / filename
+      filepath = absolute_file_path.resolve()
+
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
       return values[: self.num_sliders] + [30] * (self.num_sliders - len(values))

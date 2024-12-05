@@ -1,12 +1,7 @@
-import logging
-
 from pydispatch import dispatcher
 
-from src.openadr_node.decorator.send_decorator import SignalSender
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.openadr_node import logger
+from src.openadr_node.decorator.signal_sender import SignalSender
 
 
 class AdrBaseConfig:
