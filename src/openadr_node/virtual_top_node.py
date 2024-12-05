@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict
 
@@ -107,12 +108,20 @@ class VirtualTopNode(AdrBaseConfig):
   @ConnectDispatcher('update_load_profile', 'nm')
   def _on_update_load_profile(self, signal, sender, data):
     print("DISP-ACT gotten")
+    print(data)
     if data:
+      print("sending...")
       self._open_adr_server.add_event(
-        ven_id=data.ven_id,
-        signal_name=data.signal_name,
-        signal_type=data.signal_type,
-        intervals=data.intervals,
+        ven_id='ven123',
+        signal_type='level',
+        signal_name="simple",
+        intervals=[
+          {
+            'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            'duration': timedelta(minutes=10),
+            'signal_payload': 1,
+          }
+        ],
         callback=self._event_callback,
       )
 

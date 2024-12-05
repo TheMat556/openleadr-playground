@@ -10,45 +10,47 @@ class SendDispatcher:
         Initialize the SendDispatcher decorator.
 
         Args:
-            signal (str, optional): Signal to dispatch. If not provided, the method name will be used.
-            sender (str, optional): Sender to use for the dispatch. Defaults to `None`.
+            signal (str, optional): Custom signal to use. If not provided, the method name will be used.
+            sender (str, optional): Custom sender to use. Defaults to `None`.
         """
         self._custom_signal = signal
         self._custom_sender = sender
+        self._ready_dispatched = False  # Flag to track if "on_ready" event has been dispatched
+
+        # Register listener for the "on_ready" event
+        dispatcher.connect(self.on_ready, signal="on_ready", sender=dispatcher.Any)
+
+    def on_ready(self, sender):
+        """
+        This method is called when the "on_ready" event is dispatched.
+        It will enable the dispatching of the `register_dispatcher` event.
+        """
+        logger.info("on_ready event received. Ready to register dispatchers.")
+        if not self._ready_dispatched:
+            # Dispatch the "register_dispatcher" event only once when "on_ready" is received
+            dispatcher.send(signal="register_dispatcher", sender=self._custom_sender, data=self._custom_signal)
+            logger.info(f"Dispatched 'register_dispatcher' signal from {self._custom_sender}")
+            self._ready_dispatched = True
 
     def decorate(self, func):
-        print("!!!!1dqdasd")
         """
-        Decorate a method to send a signal before execution and after execution.
+        Decorate a method to connect it to a signal at runtime.
 
         Args:
-            func (callable): The function to wrap.
+            func (callable): The function to connect to the signal.
         """
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Instance of the class (first argument)
-            instance = args[0]  # Assuming the first argument is `self` (instance method)
-            signal = self._custom_signal or func.__name__
-            sender = self._custom_sender
-            # 1. Pre-send signal (before the method execution)
-            logger.info(f"Pre-sending signal: {signal} from sender: {sender}")
-            if not instance._ready:
-                logger.debug(f"Queuing pre-signal: {signal} from sender: {sender}")
-                instance._deferred_signals.append((signal, sender, kwargs))
-            else:
-                logger.debug(f"Dispatching pre-signal: {signal} from sender: {sender}")
-                dispatcher.send(signal=signal, sender=sender, **kwargs)
+            if not self._ready_dispatched:
+                logger.warning("on_ready event has not been dispatched. Aborting function call.")
+                return None  # Optionally handle this with a return value or exception
 
-            # 2. Call the original method (this will execute after pre-signal is dispatched)
+            # Call the original function and capture the result
             result = func(*args, **kwargs)
 
-            # 3. Post-send signal (after the method execution)
-            if not instance._ready:
-                logger.debug(f"Queuing post-signal: {signal} from sender: {sender}")
-                instance._deferred_signals.append((signal, sender, kwargs))
-            else:
-                logger.debug(f"Dispatching post-signal: {signal} from sender: {sender}")
-                dispatcher.send(signal=signal, sender=sender, **kwargs)
+            # Send the event with the result
+            dispatcher.send(signal=self._custom_signal, sender=self._custom_sender, data=result)
+            logger.info(f"Dispatched signal '{self._custom_signal}' with result: {result}")
 
             return result
 
@@ -60,4 +62,26 @@ class SendDispatcher:
         """
         return self.decorate(func)
 
+    @classmethod
+    def connect_all(cls, instance):
+        """
+        Connect all decorated dispatcher methods for a given instance.
 
+        Args:
+            instance: The instance of the class
+        """
+        for name, method in vars(instance.__class__).items():
+            # Check if the method was decorated
+            if hasattr(method, "_signal") and hasattr(method, "_original_func"):
+                # Create a bound method for the instance
+                bound_method = method.__get__(instance, instance.__class__)
+
+                # Connect the bound method to the dispatcher
+                dispatcher.connect(
+                    receiver=bound_method,
+                    signal=method._signal,
+                    sender=method._sender
+                )
+                logger.info(
+                    f"Connected {name} to signal: {method._signal} with sender: {method._sender}"
+                )

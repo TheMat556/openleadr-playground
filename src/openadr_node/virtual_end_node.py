@@ -36,6 +36,7 @@ class VirtualEndNode:
   async def handle_event(event):
     # business logic
     # handle event
+    print("DISPATCHING ACTION GOTTEN")
     logging.info('Processing openADR Event')
     _event_descriptor = event['event_descriptor']
     _active_period = event['active_period']

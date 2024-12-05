@@ -32,7 +32,7 @@ class AsyncGradioApp(AdrBaseConfig):
   """
 
   def __init__(self, num_sliders=24, slider_file='./slider_values.txt'):
-    #super().__init__()
+    super().__init__()
     self.num_sliders = num_sliders
     self.slider_file = slider_file
     self.slider_values = self.load_slider_values(slider_file)

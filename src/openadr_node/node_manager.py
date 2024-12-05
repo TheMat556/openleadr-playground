@@ -23,6 +23,7 @@ class NodeManager(AdrBaseConfig):
   def __init__(self, vtn_name: Optional[str] = None, ven_name: Optional[str] = None,
                vtn_url: Optional[str] = None):
     super().__init__()
+    # Connect to the `node_ready` event
     print("INIT DISP.")
 
     self._vtn_name: Optional[str] = vtn_name
@@ -33,35 +34,38 @@ class NodeManager(AdrBaseConfig):
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
 
-    dispatcher.send(signal="node_ready", sender="vtn")
+    dispatcher.send(signal="on_ready", sender="system")
+
     #SendDispatcher.connect_all(self)
     #dispatcher.send(signal='on_ready')  # This will trigger the ready state
     #dispatcher.send("on_ready", "nm", data=None)
     #dispatcher.connect(
     #  self._update_load_profile, signal='update_load_profile', sender='ui'
     #)
-    dispatcher.connect(
-      self._update_consumption_data, signal='update_consumption_data', sender='vtn'
-    )
-
-  @classmethod
-  def initialize(cls):
-    # After setup, dispatch the on_ready signal
-    dispatcher.send(signal='on_ready')
+    #dispatcher.connect(
+    #  self._update_consumption_data, signal='update_consumption_data', sender=dispatcher.Any
+    #)
 
   def _register_dispatcher(self, sender, signal, data):
-    print("!!!")
+    print("sender", sender)
+    print("signal", signal)
+    print("data", data)
     method_name = '_on_' + data
     method = getattr(self, method_name, None)
     if callable(method):
       # If we have a method here custom sending have to be implemented
-      dispatcher.connect(method, signal=data, sender="nm")
+      print("callable")
+      dispatcher.connect(method, signal=data, sender=dispatcher.Any)
     else:
-      dispatcher.send(signal="register_dispatcher", sender="nm", data=data)
+      dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
 
     logger.info(
       f"NM - Connected {method_name} to signal: {data} with sender: {sender}"
     )
+
+  @staticmethod
+  def _forward_dispatcher(sender, signal, data):
+    return dispatcher.send(signal=signal, sender='nm', data=data)
 
   def event_response_callback(self):
     print('callback done')
