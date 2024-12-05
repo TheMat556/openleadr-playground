@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class ConnectDispatcher:
+class SignalConnector:
   def __init__(self, signal=None, sender=None):
     """
     Initialize the ConnectDispatcher decorator.

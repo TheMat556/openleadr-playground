@@ -24,7 +24,6 @@ class NodeManager(AdrBaseConfig):
     vtn_url: Optional[str] = None,
   ):
     super().__init__()
-    # Connect to the `node_ready` event
     self._vtn_name: Optional[str] = vtn_name
     self._ven_name: Optional[str] = ven_name
     self._vtn_url: Optional[str] = vtn_url

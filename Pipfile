@@ -16,13 +16,8 @@ dash = "*"
 plotly = "*"
 python-dotenv = "*"
 dependency-injector = "*"
-streamlit = "*"
-streamlit-vertical-slider = "*"
-streamlit-toggle = "*"
 pyopenssl = "24.2.1" #Important! verify is legacy in latest version, signxml not updated yet
 pydispatcher = "*"
-pyee = "*"
-kafka-python = "*"
 gradio = "*"
 nest-asyncio = "*"
 

@@ -8,8 +8,8 @@ from openleadr import OpenADRServer
 from openleadr.utils import generate_id
 
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.decorator.connect_decorator import ConnectDispatcher
-from src.openadr_node.decorator.send_decorator import SendDispatcher
+from src.openadr_node.decorator.connect_decorator import SignalConnector
+from src.openadr_node.decorator.send_decorator import SignalSender
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 class VirtualTopNode(AdrBaseConfig):
   def __init__(self, server_name: str):
     super().__init__()
-    self._ven_data: Dict[str, Dict[str, float]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._server_name = server_name
 
@@ -66,7 +65,7 @@ class VirtualTopNode(AdrBaseConfig):
 
     return callback, sampling_interval
 
-  @SendDispatcher(signal='update_consumption_data', sender='vtn')
+  @SignalSender(signal='update_consumption_data', sender='vtn')
   def _on_update_report(
     self, data: list, ven_id: str, resource_id: str, measurement: str
   ):
@@ -102,9 +101,10 @@ class VirtualTopNode(AdrBaseConfig):
     await asyncio.sleep(1)
     logger.info(f'Device status updated for VEN ID: {ven_id}, Opt type: {opt_type}')
 
-  @ConnectDispatcher('update_load_profile', 'nm')
+  @SignalConnector('update_load_profile', "nm")
   def _on_update_load_profile(self, signal, sender, data):
     print(data)
+    print('LOADPROFILE has been updated')
     if data:
       self._open_adr_server.add_event(
         ven_id='ven123',

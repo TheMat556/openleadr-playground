@@ -2,7 +2,7 @@ import logging
 
 from pydispatch import dispatcher
 
-from src.openadr_node.decorator.send_decorator import SendDispatcher
+from src.openadr_node.decorator.send_decorator import SignalSender
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +18,6 @@ class AdrBaseConfig:
       logger.info("Connected _register_dispatcher to signal 'register_dispatcher'.")
     else:
       logger.warning('No _register_dispatcher method found to connect.')
-    SendDispatcher.connect_all(self)
+    SignalSender.connect_all(self)
 
     self._ready = False
