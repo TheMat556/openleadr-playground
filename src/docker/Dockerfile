@@ -16,4 +16,4 @@ RUN pip install --upgrade pip && \
 EXPOSE 80
 
 # Run tst.py when the container launches
-CMD ["pipenv", "run", "python", "tst.py", "tst"]
+CMD ["pipenv", "run", "python", "main.py", "tst"]

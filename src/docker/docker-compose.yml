@@ -1,14 +1,43 @@
-version: '3.8'
-
 services:
   tst1:
     build: .
     container_name: tst1_container
     environment:
       - NAME=tst1
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import sys; sys.exit(0)" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    restart: "no"
+    networks:
+      - test-network
 
   tst2:
-    build: .
-    container_name: tst2_container
-    environment:
-      - NAME=tst2
+      build: .
+      container_name: tst2_container
+      environment:
+        - NAME=tst2
+      healthcheck:
+        test: [ "CMD", "python", "-c", "import sys; sys.exit(0)" ]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      deploy:
+        resources:
+          limits:
+            memory: 512M
+            cpus: '0.5'
+      restart: "no"
+      networks:
+        - test-network
+
+networks:
+    test-network:
+      name: test-network
+      driver: bridge
