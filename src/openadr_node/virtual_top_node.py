@@ -18,7 +18,7 @@ class VirtualTopNode(AdrBaseConfig):
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._server_name = server_name
 
-    self._open_adr_server = OpenADRServer(self._server_name)
+    self._open_adr_server = OpenADRServer(self._server_name, http_path_prefix="/OpenADR2/Simple/2.0b")
     self._init_default_handler()
 
   def _init_default_handler(self):
