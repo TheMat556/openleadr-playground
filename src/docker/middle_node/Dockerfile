@@ -5,15 +5,14 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Copy the current directory contents into the container at /app
-COPY . /app
+COPY ../../../src /app/src
+COPY ../../../Pipfile /app
+COPY ../../../Pipfile.lock /app
 
 # Install pipenv and any needed packages specified in Pipfile
 RUN pip install --upgrade pip && \
     pip install pipenv && \
     pipenv install --deploy --ignore-pipfile
 
-# Make port 80 available to the world outside this container
-EXPOSE 80
-
 # Run tst.py when the container launches
-CMD ["pipenv", "run", "python", "main.py", "tst"]
+CMD ["pipenv", "run", "start-middle-node"]

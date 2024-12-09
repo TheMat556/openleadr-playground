@@ -2,6 +2,7 @@ import asyncio
 import os
 from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone, timedelta
+from flask import Flask, jsonify
 
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
@@ -10,6 +11,16 @@ from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
 from pydispatch import dispatcher
+from threading import Thread
+
+
+def rest_endpoint(path):
+  def decorator(func):
+    func._rest_endpoint = True
+    func._rest_path = path
+    return func
+
+  return decorator
 
 
 class NodeManager(AdrBaseConfig):
@@ -32,25 +43,31 @@ class NodeManager(AdrBaseConfig):
 
     dispatcher.send(signal='on_ready', sender='system')
 
+    self.app = Flask(__name__)
+    self._init_routes()
+    self._start_flask()
+
   def get_method(self, signal):
     method_name = '_on_' + signal
     return getattr(self, method_name, None)
 
   def _register_dispatcher(self, sender, signal, data):
-    method = self.get_method(signal)
+    method = self.get_method(data)
     if callable(method):
-        dispatcher.connect(self._call_method, signal=data, sender=dispatcher.Any)
+      dispatcher.connect(self._call_method, signal=data, sender=dispatcher.Any)
     else:
       dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
 
-    logger.info(f'NM - Connected {'_on' + signal} to signal: {data} with sender: {sender}')
+    logger.info(
+      f'NM - Connected {"_on" + signal} to signal: {data} with sender: {sender}'
+    )
 
   @staticmethod
   def _forward_dispatcher(sender, signal, data):
     return dispatcher.send(signal=signal, sender='nm', data=data)
 
   def _call_method(self, sender, signal, data):
-    if sender == "nm":
+    if sender == 'nm':
       return
 
     method = self.get_method(signal)
@@ -99,3 +116,21 @@ class NodeManager(AdrBaseConfig):
 
   def add_report(self, list_of_reports: Optional[List[ReportConfiguration]] = None):
     self._ven.add_reports(list_of_reports)
+
+  def _init_routes(self):
+    for attr_name in dir(self):
+      attr = getattr(self, attr_name)
+      if callable(attr) and getattr(attr, '_rest_endpoint', False):
+        self.app.add_url_rule(attr._rest_path, view_func=attr, methods=['GET'])
+
+  def _start_flask(self):
+    def run_flask():
+      self.app.run(host='0.0.0.0', port=5000)
+
+    thread = Thread(target=run_flask)
+    thread.start()
+
+  @rest_endpoint('/data/load_profile')
+  def get_load_profile(self):
+    load_profile = self._topics.get('load_profile', None)
+    return jsonify(load_profile)

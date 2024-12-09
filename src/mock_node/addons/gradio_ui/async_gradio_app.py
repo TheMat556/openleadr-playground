@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -126,7 +127,15 @@ class AsyncGradioApp(AdrBaseConfig):
       print(f'Error saving slider values: {e}')
 
     interpolated_values = self.interpolate_slider_values(slider_values)
-    self._send_interpolated_values(interpolated_values.to_json)
+
+    result = {
+      f'timestamp_{i}': {'time': index, 'value': row['Slider Value']}
+      for i, (index, row) in enumerate(interpolated_values.iterrows())
+    }
+
+    json_result = json.dumps(result, indent=None, separators=(',', ':'))
+
+    self._send_interpolated_values(json_result)
 
   @SignalSender('update_load_profile', 'ui')
   def _send_interpolated_values(self, value):
