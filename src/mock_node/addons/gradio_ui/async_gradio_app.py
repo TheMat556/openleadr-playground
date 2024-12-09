@@ -128,7 +128,7 @@ class AsyncGradioApp(AdrBaseConfig):
     interpolated_values = self.interpolate_slider_values(slider_values)
     self._send_interpolated_values(interpolated_values.to_json)
 
-  @SignalSender('update_load_profile')
+  @SignalSender('update_load_profile', 'ui')
   def _send_interpolated_values(self, value):
     return value
 

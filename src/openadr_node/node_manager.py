@@ -18,11 +18,13 @@ class NodeManager(AdrBaseConfig):
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
+    vtn_path_prefix: Optional[str] = None,
   ):
     super().__init__()
     self._vtn_name: Optional[str] = vtn_name
-    self._ven_name: Optional[str] = ven_name
     self._vtn_url: Optional[str] = vtn_url
+    self._ven_name: Optional[str] = ven_name
+    self.vtn_path_prefix: Optional[str] = vtn_path_prefix
 
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
@@ -30,25 +32,35 @@ class NodeManager(AdrBaseConfig):
 
     dispatcher.send(signal='on_ready', sender='system')
 
+  def get_method(self, signal):
+    method_name = '_on_' + signal
+    return getattr(self, method_name, None)
+
   def _register_dispatcher(self, sender, signal, data):
-    method_name = '_on_' + data
-    method = getattr(self, method_name, None)
+    method = self.get_method(signal)
     if callable(method):
-      # If we have a method here custom sending have to be implemented
-      dispatcher.connect(method, signal=data, sender=dispatcher.Any)
+        dispatcher.connect(self._call_method, signal=data, sender=dispatcher.Any)
     else:
       dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
 
-    logger.info(f'NM - Connected {method_name} to signal: {data} with sender: {sender}')
+    logger.info(f'NM - Connected {'_on' + signal} to signal: {data} with sender: {sender}')
 
   @staticmethod
   def _forward_dispatcher(sender, signal, data):
     return dispatcher.send(signal=signal, sender='nm', data=data)
 
+  def _call_method(self, sender, signal, data):
+    if sender == "nm":
+      return
+
+    method = self.get_method(signal)
+    if callable(method):
+      method(sender, data)
+
   def event_response_callback(self):
     pass
 
-  def _update_load_profile(self, sender, data):
+  def _on_update_load_profile(self, sender, data):
     self._topics['load_profile'] = data
     event = EventSignal(
       ven_id=os.getenv('VEN_NAME'),
@@ -68,7 +80,7 @@ class NodeManager(AdrBaseConfig):
 
   def _create_node_tasks(self):
     if self._vtn_name:
-      self._vtn = VirtualTopNode(self._vtn_name)
+      self._vtn = VirtualTopNode(self._vtn_name, self.vtn_path_prefix)
       self._loop.create_task(self._vtn.get_open_adr_server_run())
 
     if self._ven_name and self._vtn_url:

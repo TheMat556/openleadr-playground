@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Dict
+from typing import Dict, Optional
 
 from openleadr import OpenADRServer
 from openleadr.utils import generate_id
@@ -11,14 +11,19 @@ from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 
-
 class VirtualTopNode(AdrBaseConfig):
-  def __init__(self, server_name: str):
+  def __init__(self, server_name: str, path_prefix: Optional[str] = None):
     super().__init__()
     self._ven_data: Dict[str, Dict[str, float]] = {}
+    self._registration_info: Dict[str, str] = {}
     self._server_name = server_name
 
-    self._open_adr_server = OpenADRServer(self._server_name, http_path_prefix="/OpenADR2/Simple/2.0b")
+    self._open_adr_server = OpenADRServer(
+      self._server_name,
+      http_host='0.0.0.0',
+      http_path_prefix=path_prefix if path_prefix else '/OpenADR2/Simple/2.0b'
+    )
+
     self._init_default_handler()
 
   def _init_default_handler(self):
@@ -30,8 +35,9 @@ class VirtualTopNode(AdrBaseConfig):
   async def _on_create_party_registration(self, registration_info: dict):
     ven_name = registration_info.get('ven_name')
     # TODO: Check in the database if VEN exists
-    ven_id = 'ven123'  # generate_id('ven_id')
+    ven_id = generate_id('ven_id')
     registration_id = generate_id()
+    self._registration_info[ven_id] = registration_id
     logger.info(
       f'Registered new VEN: {ven_name} with ID: {ven_id} and Registration ID: {registration_id}'
     )
@@ -99,19 +105,20 @@ class VirtualTopNode(AdrBaseConfig):
     print(data)
     print('LOADPROFILE has been updated')
     if data:
-      self._open_adr_server.add_event(
-        ven_id='ven123',
-        signal_type='level',
-        signal_name='simple',
-        intervals=[
-          {
-            'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-            'duration': timedelta(minutes=10),
-            'signal_payload': 1,
-          }
-        ],
-        callback=self._event_callback,
-      )
+      for ven_id in self._ven_data.keys():
+        self._open_adr_server.add_event(
+          ven_id=ven_id,
+          signal_type='level',
+          signal_name='simple',
+          intervals=[
+            {
+              'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+              'duration': timedelta(minutes=10),
+              'signal_payload': 1,
+            }
+          ],
+          callback=self._event_callback,
+        )
 
   def get_open_adr_server_run(self):
     return self._open_adr_server.run()

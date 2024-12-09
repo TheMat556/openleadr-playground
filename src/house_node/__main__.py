@@ -39,7 +39,7 @@ def main():
 
   node_manager = NodeManager(
     ven_name=os.getenv('VEN_NAME'),
-    vtn_url=os.getenv('VTN_URL'),
+    vtn_url=os.getenv('CONNECT_VTN_URL'),
   )
   node_manager.add_report(reports)
   node_manager.run_node()

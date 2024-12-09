@@ -57,7 +57,7 @@ class SignalSender:
       dispatcher.send(
         signal=self._custom_signal, sender=self._custom_sender, data=result
       )
-      logging.info(f"Dispatched signal '{self._custom_signal}' with result: {result}")
+      #logging.info(f"Dispatched signal '{self._custom_signal}' with result: {result}")
 
       return result
 

@@ -55,3 +55,28 @@ Ensure you have [Scoop](https://scoop.sh/) installed. If not, you can install it
     ```bash
     pipenv run start-mock-node
     ```
+
+## Containerized approach
+
+This repository allows you to create hierarchical containers,
+where each node has 2 children, this is only for testing purposes and
+to demonstrate the capabilities of the implementation.
+Note: The installation steps has to be followed before running the docker compose file.
+
+1. **Create the docker compose file:**
+
+    ```bash
+    pipenv run create-docker-compose <layers>
+    ```
+
+2. **Start the containers:**
+
+    ```bash
+   docker compose up
+    ```
+
+3. **Stop the containers:**
+
+    ```
+    docker compose down
+    ```
