@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from datetime import timedelta
@@ -43,6 +44,9 @@ def main():
     node_manager.add_report(reports)
     node_manager.run_node()
   except KeyboardInterrupt:
+    logging.info('Shutting down node...')
+  except Exception as e:
+    logging.error(f'Error running node: {e}')
     sys.exit(0)
 
 

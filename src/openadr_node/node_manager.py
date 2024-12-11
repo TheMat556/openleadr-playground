@@ -77,7 +77,11 @@ class NodeManager(AdrBaseConfig):
 
     method = self.get_method(signal)
     if callable(method):
-      method(sender, data)
+      try:
+        method(sender, data)
+      except Exception as e:
+        logger.error(f'Error calling method {signal}: {e}')
+        raise
 
   def event_response_callback(self):
     pass

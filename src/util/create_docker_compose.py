@@ -48,7 +48,7 @@ def generate_node(
   gradio_port=7862,
   rest_api_port=5000,
   parent_ports=None,
-  parent_ip=None,
+  parent_service_name=None,
 ):
   """
   Generate a node with the given layer and index.
@@ -71,10 +71,10 @@ def generate_node(
     'REST_API_PORT': str(rest_api_port),
     'VTN_PORT': str(port),
   }
-  if parent_path_prefix is not None and parent_ip is not None:
+  if parent_path_prefix is not None and parent_service_name is not None:
     parent_port = parent_ports[0].split(':')[0]
     environment['CONNECT_VTN_URL'] = (
-      f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
+      f'http://{parent_service_name}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
   port_mapping = [
@@ -82,7 +82,6 @@ def generate_node(
     SingleQuotedScalarString(f'{gradio_port}:{gradio_port}'),
     SingleQuotedScalarString(f'{rest_api_port}:{rest_api_port}'),
   ]
-  ipv4_address = ip_allocator.allocate_ip()
 
   # Determine the Dockerfile based on the node's index
   if index == '0':
@@ -99,7 +98,7 @@ def generate_node(
     'container_name': f'{index}_container',
     'environment': environment,
     'ports': port_mapping,
-    'networks': {'my_network': {'ipv4_address': ipv4_address}},
+    'networks': {'my_network': {'aliases': [f'{index}_node']}},
     'depends_on': {},
     'expose': [port],
   }
@@ -128,7 +127,7 @@ def generate_node(
       gradio_port + 1,  # Increment gradio_port for each child node
       rest_api_port + 1,  # Increment rest_api_port for each child node
       port_mapping,
-      ipv4_address,
+      f'{index}_node',
     )
     if child_node:
       children.append(child_node)

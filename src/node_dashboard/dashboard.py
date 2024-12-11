@@ -141,11 +141,6 @@ class GradioNodeDashboard:
             def plot(config=env_config):
               return self.update_plot(config.rest_api_port)
 
-            if plot() is not None:
-              gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
-            else:
-              gr.Label(
-                value=lambda config=env_config: f'⚠ No data available for {config.vtn_name}',
-                every=Timer(5),
-              )
+            gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
+
     return interface

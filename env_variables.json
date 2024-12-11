@@ -19,7 +19,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5001",
     "VTN_PORT": "8081",
-    "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_node:8080/0/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8081"
   },
   "0_0_0_container": {
@@ -31,7 +31,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5002",
     "VTN_PORT": "8082",
-    "CONNECT_VTN_URL": "http://172.18.0.3:8081/0/0/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_0_node:8081/0/0/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8082"
   },
   "0_0_1_container": {
@@ -43,7 +43,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5003",
     "VTN_PORT": "8083",
-    "CONNECT_VTN_URL": "http://172.18.0.3:8081/0/0/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_0_node:8081/0/0/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8083"
   },
   "0_1_container": {
@@ -55,7 +55,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5004",
     "VTN_PORT": "8084",
-    "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_node:8080/0/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8084"
   },
   "0_1_0_container": {
@@ -67,7 +67,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5005",
     "VTN_PORT": "8085",
-    "CONNECT_VTN_URL": "http://172.18.0.6:8084/0/1/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_1_node:8084/0/1/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8085"
   },
   "0_1_1_container": {
@@ -79,7 +79,7 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5006",
     "VTN_PORT": "8086",
-    "CONNECT_VTN_URL": "http://172.18.0.6:8084/0/1/OpenADR2/Simple/2.0b",
+    "CONNECT_VTN_URL": "http://0_1_node:8084/0/1/OpenADR2/Simple/2.0b",
     "ADR_MAPPING_PORT": "8086"
   }
 }

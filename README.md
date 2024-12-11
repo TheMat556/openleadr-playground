@@ -97,3 +97,10 @@ Note: The installation steps has to be followed before running the docker compos
     ```
     docker compose down
     ```
+
+### Additional dashboard
+
+This application also provides a dashboard to visualize and periodically update the load profile of the nodes.
+It uses the additional generated file `env_variables` to fetch the data from the endpoints.
+
+![Dashboard Screenshot](public/node_dashboard.png)
