@@ -51,7 +51,6 @@ class VirtualEndNode(AdrBaseConfig):
       for interval in signal['intervals']
     ]
 
-    print('FLATTENED INTERVALS: ', flattened_intervals)
     self.update_load_profile(flattened_intervals)
     return 'optIn'  # eventually pass devices status?
 

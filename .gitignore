@@ -5,3 +5,5 @@
 /src/legacy/database/openleadr.db
 /src/database/
 /src/mock_node/slider_values.txt
+/docker-compose.yml
+/env_variables.json

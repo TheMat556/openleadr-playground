@@ -12,6 +12,8 @@ from gradio import Timer
 
 @dataclass
 class ContainerConfig:
+  """Configuration for container settings including VTN, VEN, and port information."""
+
   vtn_name: str
   vtn_url: str
   vtn_path_prefix: str

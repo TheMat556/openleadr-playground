@@ -84,7 +84,10 @@ class NodeManager(AdrBaseConfig):
   def _on_update_load_profile(self, sender, data):
     print(f'LOADPROFILE has been updated from {sender}')
 
-    print(data)
+    if not isinstance(data, list):
+      logger.error('Invalid data format: expected list of intervals')
+      return
+
     transformed_data = [
       {
         'time': interval['dtstart'].strftime('%H:%M'),
@@ -94,7 +97,6 @@ class NodeManager(AdrBaseConfig):
     ]
     df = pd.DataFrame(transformed_data)
     self._topics['load_profile'] = df
-    print('LOAD-PROFILE: ', df)
     df.set_index('time', inplace=True)
 
     dispatcher.send(sender='nm', signal='update_load_profile', data=data)
