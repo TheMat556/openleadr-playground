@@ -125,7 +125,12 @@ class NodeManager(AdrBaseConfig):
 
   def _start_flask(self):
     def run_flask():
-      self.app.run(host='0.0.0.0', port=5000)
+      port = int(os.getenv('REST_API_PORT', 5000))
+      try:
+        self.app.run(host='0.0.0.0', port=port)
+      except OSError as e:
+        logger.error(f'Failed to start Flask server: {e}')
+        raise
 
     thread = Thread(target=run_flask)
     thread.start()
@@ -133,4 +138,14 @@ class NodeManager(AdrBaseConfig):
   @rest_endpoint('/data/load_profile')
   def get_load_profile(self):
     load_profile = self._topics.get('load_profile', None)
-    return jsonify(load_profile)
+
+    if load_profile is None:
+      return jsonify({'error': 'Load profile not found'}), 404
+
+    return jsonify(
+      {
+        'status': 'success',
+        'data': load_profile,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+      }
+    )

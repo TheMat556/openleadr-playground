@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 
 import requests
@@ -20,6 +21,11 @@ class ContainerConfig:
   adr_mapping_port: str
 
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 class GradioNodeDashboard:
   def __init__(self, file_path='../../env_variables.json'):
     self.configs = []
@@ -29,26 +35,31 @@ class GradioNodeDashboard:
     print('Configs loaded: ', self.configs)
 
   def load_configs(self, file_path):
-    with open(file_path) as f:
-      data = json.load(f)
-      for key, value in data.items():
-        config = {
-          'vtn_name': value['VTN_NAME'],
-          'vtn_url': value['VTN_URL'],
-          'vtn_path_prefix': value['VTN_PATH_PREFIX'],
-          'ven_name': value['VEN_NAME'],
-          'gradio_port': value['GRADIO_PORT'],
-          'gradio_server_name': value['GRADIO_SERVER_NAME'],
-          'rest_api_port': value['REST_API_PORT'],
-          'adr_mapping_port': value['ADR_MAPPING_PORT'],
-        }
-        self.configs.append(ContainerConfig(**config))
+    try:
+      with open(file_path) as f:
+        data = json.load(f)
+        for key, value in data.items():
+          config = {
+            'vtn_name': value['VTN_NAME'],
+            'vtn_url': value['VTN_URL'],
+            'vtn_path_prefix': value['VTN_PATH_PREFIX'],
+            'ven_name': value['VEN_NAME'],
+            'gradio_port': value['GRADIO_PORT'],
+            'gradio_server_name': value['GRADIO_SERVER_NAME'],
+            'rest_api_port': value['REST_API_PORT'],
+            'adr_mapping_port': value['ADR_MAPPING_PORT'],
+          }
+          self.configs.append(ContainerConfig(**config))
+    except FileNotFoundError:
+      logging.error(f'Config file not found: {file_path}')
+    except json.JSONDecodeError as e:
+      logging.error(f'Invalid JSON in config file: {e}')
 
   def fetch_data(self, rest_api_port):
     url = f'http://localhost:{rest_api_port}/data/load_profile'
     response = requests.get(url)
     response.raise_for_status()
-    return json.loads(response.json())
+    return response.json()
 
   def process_data(self, data):
     time_values = [(v['time'], v['value']) for v in data.values()]
@@ -100,16 +111,20 @@ class GradioNodeDashboard:
     return df
 
   def update_plot(self, rest_api_port):
-    data = self.fetch_data(rest_api_port)
-    df = self.process_data(data)
-    return self.create_plot(df)
+    try:
+      data = self.fetch_data(rest_api_port)
+      df = self.process_data(data)
+      return self.create_plot(df)
+    except Exception as e:
+      logging.error(f'Failed to update plot: {e}')
+      return go.Figure()
 
   def create_interface(self):
     with gr.Blocks(css='.gradio-container { max-width: 95% !important; }') as interface:
       with gr.Row():
         for config in self.configs:
           with gr.Column():
-            plot_output = gr.Plot(
+            gr.Plot(
               value=lambda: self.update_plot(config.rest_api_port), every=Timer(5)
             )
     return interface

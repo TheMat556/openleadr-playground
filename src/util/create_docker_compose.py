@@ -2,7 +2,7 @@ import ruamel.yaml
 import argparse
 import sys
 import json
-from ruamel.yaml.scalarstring import SingleQuotedScalarString, LiteralScalarString
+from ruamel.yaml.scalarstring import SingleQuotedScalarString
 
 # Create YAML instance with specific string handling
 yaml = ruamel.yaml.YAML()
@@ -11,13 +11,40 @@ yaml.default_flow_style = False  # Use block style
 yaml.allow_unicode = True
 
 
+class PortRegistry:
+  def __init__(self):
+    self.used_ports = set()
+
+  def allocate_port(self, base_port):
+    port = base_port
+    while port in self.used_ports:
+      port += 1
+    self.used_ports.add(port)
+    return port
+
+
+class IPAllocator:
+  def __init__(self, base_ip='172.18.0'):
+    self.base_ip = base_ip
+    self.used_ips = set()
+
+  def allocate_ip(self):
+    for i in range(2, 255):  # Start from .2, avoid .0 and .1
+      ip = f'{self.base_ip}.{i}'
+      if ip not in self.used_ips:
+        self.used_ips.add(ip)
+        return ip
+    raise ValueError('No available IP addresses')
+
+
 def generate_node(
   layer,
   index,
   max_layers,
+  port_registry,
+  ip_allocator,
   parent_path_prefix=None,
   base_port=8080,
-  port_increment=0,
   gradio_port=7862,
   rest_api_port=5000,
   parent_ports=None,
@@ -28,6 +55,10 @@ def generate_node(
   """
   if layer >= max_layers:
     return None
+
+  port = port_registry.allocate_port(base_port)
+  gradio_port = port_registry.allocate_port(gradio_port)
+  rest_api_port = port_registry.allocate_port(rest_api_port)
 
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
@@ -45,13 +76,12 @@ def generate_node(
       f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
-  port = base_port + port_increment
   port_mapping = [
-    SingleQuotedScalarString(f'{port}:8080'),
-    SingleQuotedScalarString(f'{gradio_port}:7862'),
-    SingleQuotedScalarString(f'{rest_api_port}:5000'),
+    SingleQuotedScalarString(f'{port}:{port}'),
+    SingleQuotedScalarString(f'{gradio_port}:{gradio_port}'),
+    SingleQuotedScalarString(f'{rest_api_port}:{rest_api_port}'),
   ]
-  ipv4_address = f'172.18.0.{2 + port_increment}'
+  ipv4_address = ip_allocator.allocate_ip()
 
   # Determine the Dockerfile based on the node's index
   if index == '0':
@@ -90,11 +120,12 @@ def generate_node(
       layer + 1,
       child_index,
       max_layers,
+      port_registry,
+      ip_allocator,
       path_prefix,
-      base_port,
-      port_increment + len(children) + 1,
-      gradio_port + len(children) + 1,
-      rest_api_port + len(children) + 1,
+      base_port + 1,  # Increment base_port for each child node
+      gradio_port + 1,  # Increment gradio_port for each child node
+      rest_api_port + 1,  # Increment rest_api_port for each child node
       port_mapping,
       ipv4_address,
     )
@@ -147,7 +178,9 @@ def create_docker_compose(layers):
   """
   Generate the hierarchical YAML structure and create docker-compose.yml.
   """
-  root = generate_node(0, '0', layers)
+  port_registry = PortRegistry()
+  ip_allocator = IPAllocator()
+  root = generate_node(0, '0', layers, port_registry, ip_allocator)
   services = {}
   env_json = {}
   flatten_services(root, services, env_json)
@@ -163,11 +196,14 @@ def create_docker_compose(layers):
     },
   }
 
-  with open('docker-compose.yml', 'w') as file:
-    yaml.dump(compose_content, file)
-
-  with open('env_variables.json', 'w') as file:
-    json.dump(env_json, file, indent=2)
+  try:
+    with open('docker-compose.yml', 'w') as file:
+      yaml.dump(compose_content, file)
+    with open('env_variables.json', 'w') as file:
+      json.dump(env_json, file, indent=2)
+  except (IOError, PermissionError) as e:
+    print(f'Error writing configuration files: {e}')
+    sys.exit(1)
 
 
 if __name__ == '__main__':
