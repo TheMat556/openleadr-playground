@@ -4,7 +4,7 @@ This guide will help you set up and run the server, client, and node using Scoop
 
 ## Prerequisites
 
-Ensure you have [Scoop](https://scoop.sh/) installed. If not, you can install it by following the instructions on the Scoop website.
+Ensure that [Scoop](https://scoop.sh/) is installed on Windows. For other operating systems, consider using a compatible package manager like Homebrew or Pacman. If Scoop is not installed, follow the installation instructions on its official website.
 
 ## Setup Instructions
 

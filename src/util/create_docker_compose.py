@@ -1,7 +1,14 @@
-import yaml
+import ruamel.yaml
 import argparse
 import sys
 import json
+from ruamel.yaml.scalarstring import SingleQuotedScalarString, LiteralScalarString
+
+# Create YAML instance with specific string handling
+yaml = ruamel.yaml.YAML()
+yaml.preserve_quotes = True  # Preserve existing quotes
+yaml.default_flow_style = False  # Use block style
+yaml.allow_unicode = True
 
 
 def generate_node(
@@ -14,6 +21,7 @@ def generate_node(
   gradio_port=7862,
   rest_api_port=5000,
   parent_ports=None,
+  parent_ip=None,
 ):
   """
   Generate a node with the given layer and index.
@@ -24,21 +32,26 @@ def generate_node(
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
     'VTN_NAME': f'vtn_{index}',
-    'VTN_URL': f'http://0.0.0.0:{base_port}{path_prefix}OpenADR2/Simple/2.0b',
+    'VTN_URL': f'http://0:{base_port}{path_prefix}OpenADR2/Simple/2.0b',
     'VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
     'VEN_NAME': f'ven_{index}',
     'GRADIO_PORT': str(gradio_port),
     'GRADIO_SERVER_NAME': '0.0.0.0',
     'REST_API_PORT': str(rest_api_port),
   }
-  if parent_path_prefix is not None:
+  if parent_path_prefix is not None and parent_ip is not None:
     parent_port = parent_ports[0].split(':')[0]
     environment['CONNECT_VTN_URL'] = (
-      f'http://0.0.0.0:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
+      f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
   port = base_port + port_increment
-  port_mapping = [f'{port}:8080', f'{gradio_port}:7862', f'{rest_api_port}:5000']
+  port_mapping = [
+    SingleQuotedScalarString(f'{port}:8080'),
+    SingleQuotedScalarString(f'{gradio_port}:7862'),
+    SingleQuotedScalarString(f'{rest_api_port}:5000'),
+  ]
+  ipv4_address = f'172.18.0.{2 + port_increment}'
 
   # Determine the Dockerfile based on the node's index
   if index == '0':
@@ -55,9 +68,20 @@ def generate_node(
     'container_name': f'{index}_container',
     'environment': environment,
     'ports': port_mapping,
-    'networks': ['my_network'],
-    'depends_on': [],
+    'networks': {'my_network': {'ipv4_address': ipv4_address}},
+    'depends_on': {},
+    'expose': [port],
   }
+
+  if layer < max_layers - 1:
+    node['healthcheck'] = {
+      'test': SingleQuotedScalarString(
+        f"curl -f -s -o /dev/null -w '%{{http_code}}' 127.0.0.1:{port}{path_prefix}OpenADR2/Simple/2.0b | grep 404 || exit 1"
+      ),
+      'interval': '30s',
+      'timeout': '10s',
+      'retries': 5,
+    }
 
   children = []
   for i in range(2):
@@ -72,10 +96,11 @@ def generate_node(
       gradio_port + len(children) + 1,
       rest_api_port + len(children) + 1,
       port_mapping,
+      ipv4_address,
     )
     if child_node:
       children.append(child_node)
-      child_node['depends_on'].append(index)
+      child_node['depends_on'][index] = {'condition': 'service_healthy'}
 
   if children:
     node['children'] = children
@@ -88,14 +113,26 @@ def flatten_services(node, services, env_json):
   Flatten the hierarchical structure into a dictionary of services and build the environment JSON structure.
   """
   service_name = node['server_name']
+
+  # Use CommentedSeq to precisely control port string representation
+  from ruamel.yaml.comments import CommentedSeq
+
+  ports = CommentedSeq()
+  for port in node['ports']:
+    ports.append(port)
+
   services[service_name] = {
     'build': node['build'],
     'container_name': node['container_name'],
     'environment': [f'{key}={value}' for key, value in node['environment'].items()],
-    'ports': node['ports'],
+    'ports': ports,  # Use CommentedSeq to preserve exact port string representation
     'networks': node['networks'],
     'depends_on': node['depends_on'],
+    'expose': node['expose'],
   }
+  if 'healthcheck' in node:
+    services[service_name]['healthcheck'] = node['healthcheck']
+
   adr_mapping_port = node['ports'][0].split(':')[0]
   env_json[node['container_name']] = {
     **node['environment'],
@@ -118,21 +155,19 @@ def create_docker_compose(layers):
   compose_content = {
     'version': '3.8',
     'services': services,
-    'networks': {'my_network': {'driver': 'bridge'}},
+    'networks': {
+      'my_network': {
+        'driver': 'bridge',
+        'ipam': {'config': [{'subnet': '172.18.0.0/16'}]},
+      }
+    },
   }
 
   with open('docker-compose.yml', 'w') as file:
-    yaml.dump(compose_content, file, default_flow_style=False, Dumper=CustomDumper)
+    yaml.dump(compose_content, file)
 
   with open('env_variables.json', 'w') as file:
     json.dump(env_json, file, indent=2)
-
-
-class CustomDumper(yaml.SafeDumper):
-  def represent_scalar(self, tag, value, style=None):
-    if tag == 'tag:yaml.org,2002:str' and ':' in value and 'http' not in value:
-      return super().represent_scalar(tag, value, style='"')
-    return super().represent_scalar(tag, value, style)
 
 
 if __name__ == '__main__':

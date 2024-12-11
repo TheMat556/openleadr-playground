@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 
 from src.openadr_node.node_manager import NodeManager
 
-def main():
 
+def main():
   load_dotenv()
 
   node_manager = NodeManager(
@@ -13,6 +13,7 @@ def main():
   )
 
   node_manager.run_node()
+
 
 if __name__ == '__main__':
   main()

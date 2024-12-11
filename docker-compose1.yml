@@ -1,0 +1,56 @@
+version: '3.8'
+
+networks:
+  my_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+
+services:
+  '0':
+    build:
+      context: .
+      dockerfile: ./src/docker/top_node/Dockerfile
+    container_name: 0_container
+    expose:
+      - "8080"
+    networks:
+      my_network:
+        ipv4_address: 172.18.0.2
+    ports:
+      - "8080:8080"
+      - "7862:7862"
+      - "5000:5000"
+    environment:
+      - VTN_NAME=vtn_0
+      - VTN_URL=http://0:8080/0/OpenADR2/Simple/2.0b
+      - VTN_PATH_PREFIX=/0/OpenADR2/Simple/2.0b
+      - VEN_NAME=ven_0
+      - GRADIO_PORT=7862
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - REST_API_PORT=5000
+
+  '0_0':
+    build:
+      context: .
+      dockerfile: ./src/docker/bottom_node/Dockerfile
+    container_name: 0_0_container
+    depends_on:
+      - '0'
+    networks:
+      my_network:
+        ipv4_address: 172.18.0.3
+    ports:
+      - "8081:8080"
+      - "7863:7862"
+      - "5001:5000"
+    environment:
+      - VEN_NAME=ven_0_0
+      - GRADIO_PORT=7863
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - REST_API_PORT=5001
+      - CONNECT_VTN_URL=http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b
+
+#EXPOSE ENTFERNEN
+#0_0 startet zu früh

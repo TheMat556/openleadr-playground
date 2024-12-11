@@ -10,7 +10,9 @@ COPY ../../../Pipfile /app
 COPY ../../../Pipfile.lock /app
 
 # Install pipenv and any needed packages specified in Pipfile
-RUN pip install --upgrade pip && \
+RUN apt-get update && \
+    apt-get install -y curl && \
+    pip install --upgrade pip && \
     pip install pipenv && \
     pipenv install --deploy --ignore-pipfile
 

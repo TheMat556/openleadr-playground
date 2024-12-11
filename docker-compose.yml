@@ -1,51 +1,89 @@
 version: '3.8'
-
-networks:
-  my_network:
-    driver: bridge
-
 services:
   '0':
     build:
       context: .
       dockerfile: ./src/docker/top_node/Dockerfile
     container_name: 0_container
-    expose:
-      - "8080"
-    networks:
-      - my_network
-    ports:
-      - "8080:8080"
-      - "7862:7862"
-      - "5000:5000"
     environment:
-      - VTN_NAME=vtn_0
-      - VTN_URL=http://0:8080/0/OpenADR2/Simple/2.0b
-      - VTN_PATH_PREFIX=/0/OpenADR2/Simple/2.0b
-      - VEN_NAME=ven_0
-      - GRADIO_PORT=7862
-      - GRADIO_SERVER_NAME=0.0.0.0
-      - REST_API_PORT=5000
-
+    - VTN_NAME=vtn_0
+    - VTN_URL=http://0:8080/0/OpenADR2/Simple/2.0b
+    - VTN_PATH_PREFIX=/0/OpenADR2/Simple/2.0b
+    - VEN_NAME=ven_0
+    - GRADIO_PORT=7862
+    - GRADIO_SERVER_NAME=0.0.0.0
+    - REST_API_PORT=5000
+    ports:
+    - '8080:8080'
+    - '7862:7862'
+    - '5000:5000'
+    networks:
+      my_network:
+        ipv4_address: 172.18.0.2
+    depends_on: {}
+    expose:
+    - 8080
+    healthcheck:
+      test: 'curl -f -s -o /dev/null -w ''%{http_code}'' 127.0.0.1:8080/0/OpenADR2/Simple/2.0b
+        | grep 404 || exit 1'
+      interval: 30s
+      timeout: 10s
+      retries: 5
   '0_0':
     build:
       context: .
       dockerfile: ./src/docker/bottom_node/Dockerfile
     container_name: 0_0_container
-    depends_on:
-      - '0'
-    networks:
-      - my_network
-    ports:
-      - "8081:8080"
-      - "7863:7862"
-      - "5001:5000"
     environment:
-      - VTN_NAME=vtn_0_0
-      - VTN_URL=http://0:8080/0/OpenADR2/Simple/2.0b
-      - VTN_PATH_PREFIX=/0/0/OpenADR2/Simple/2.0b
-      - VEN_NAME=ven_0_0
-      - GRADIO_PORT=7863
-      - GRADIO_SERVER_NAME=0.0.0.0
-      - REST_API_PORT=5001
-      - CONNECT_VTN_URL=http://0:8080/0/OpenADR2/Simple/2.0b
+    - VTN_NAME=vtn_0_0
+    - VTN_URL=http://0:8080/0/0/OpenADR2/Simple/2.0b
+    - VTN_PATH_PREFIX=/0/0/OpenADR2/Simple/2.0b
+    - VEN_NAME=ven_0_0
+    - GRADIO_PORT=7863
+    - GRADIO_SERVER_NAME=0.0.0.0
+    - REST_API_PORT=5001
+    - CONNECT_VTN_URL=http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b
+    ports:
+    - '8081:8080'
+    - '7863:7862'
+    - '5001:5000'
+    networks:
+      my_network:
+        ipv4_address: 172.18.0.3
+    depends_on:
+      '0':
+        condition: service_healthy
+    expose:
+    - 8081
+  '0_1':
+    build:
+      context: .
+      dockerfile: ./src/docker/bottom_node/Dockerfile
+    container_name: 0_1_container
+    environment:
+    - VTN_NAME=vtn_0_1
+    - VTN_URL=http://0:8080/0/1/OpenADR2/Simple/2.0b
+    - VTN_PATH_PREFIX=/0/1/OpenADR2/Simple/2.0b
+    - VEN_NAME=ven_0_1
+    - GRADIO_PORT=7864
+    - GRADIO_SERVER_NAME=0.0.0.0
+    - REST_API_PORT=5002
+    - CONNECT_VTN_URL=http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b
+    ports:
+    - '8082:8080'
+    - '7864:7862'
+    - '5002:5000'
+    networks:
+      my_network:
+        ipv4_address: 172.18.0.4
+    depends_on:
+      '0':
+        condition: service_healthy
+    expose:
+    - 8082
+networks:
+  my_network:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 172.18.0.0/16

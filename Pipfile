@@ -20,6 +20,7 @@ gradio = "*"
 nest-asyncio = "*"
 pyyaml = "*"
 flask = "*"
+"ruamel.yaml" = "*"
 
 [dev-packages]
 ruff = "*"
