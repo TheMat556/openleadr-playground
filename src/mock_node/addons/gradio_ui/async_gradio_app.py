@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import gradio as gr
@@ -39,6 +39,7 @@ class AsyncGradioApp(AdrBaseConfig):
     self.slider_file = slider_file
     self.slider_values = self.load_slider_values(slider_file)
     self._current_consumption = 0
+    self.save_slider_values(*self.slider_values)  # Send interpolated values at startup
 
   @SignalConnector('update_consumption_data', 'nm')
   def _on_update_consumption_data(self, sender, signal, data):
@@ -139,7 +140,23 @@ class AsyncGradioApp(AdrBaseConfig):
 
   @SignalSender('update_load_profile', 'ui')
   def _send_interpolated_values(self, value):
-    return value
+    data = json.loads(value)
+    intervals = []
+    start_time = datetime.now().replace(
+      hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+    )
+    for key, val in data.items():
+      time_str = val['time']
+      hours, minutes = map(int, time_str.split(':'))
+      dtstart = start_time + timedelta(hours=hours, minutes=minutes)
+      interval = {
+        'dtstart': dtstart,
+        'duration': timedelta(minutes=15),
+        'signal_payload': val['value'],
+      }
+      intervals.append(interval)
+    print(intervals)
+    return intervals
 
   def update_chart(self, *args):
     """

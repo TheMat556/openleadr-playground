@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict, Optional
 
@@ -103,21 +102,13 @@ class VirtualTopNode(AdrBaseConfig):
 
   @SignalConnector('update_load_profile', 'nm')
   def _on_update_load_profile(self, signal, sender, data):
-    print(data)
-    print('LOADPROFILE has been updated')
     if data:
       for ven_id in self._ven_data.keys():
         self._open_adr_server.add_event(
           ven_id=ven_id,
           signal_type='level',
           signal_name='simple',
-          intervals=[
-            {
-              'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-              'duration': timedelta(minutes=10),
-              'signal_payload': 1,
-            }
-          ],
+          intervals=data,
           callback=self._event_callback,
         )
 

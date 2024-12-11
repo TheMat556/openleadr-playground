@@ -1,12 +1,13 @@
 import asyncio
 import os
 from typing import Optional, List, Any, Dict
-from datetime import datetime, timezone, timedelta
+
+import pandas as pd
 from flask import Flask, jsonify
 
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.models import ReportConfiguration, EventSignal
+from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
@@ -30,12 +31,14 @@ class NodeManager(AdrBaseConfig):
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
     vtn_path_prefix: Optional[str] = None,
+    rest_api_port: Optional[str] = None,
   ):
     super().__init__()
     self._vtn_name: Optional[str] = vtn_name
     self._vtn_url: Optional[str] = vtn_url
     self._ven_name: Optional[str] = ven_name
-    self.vtn_path_prefix: Optional[str] = vtn_path_prefix
+    self._vtn_path_prefix: Optional[str] = vtn_path_prefix
+    self._rest_api_port: Optional[str] = rest_api_port
 
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
@@ -77,27 +80,28 @@ class NodeManager(AdrBaseConfig):
   def event_response_callback(self):
     pass
 
+  # This will overwrite automatically forwarding
   def _on_update_load_profile(self, sender, data):
-    self._topics['load_profile'] = data
-    event = EventSignal(
-      ven_id=os.getenv('VEN_NAME'),
-      signal_name='simple',
-      signal_type='level',
-      intervals=[
-        {
-          'dtstart': datetime(2021, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
-          'duration': timedelta(minutes=10),
-          'signal_payload': 1,
-        }
-      ],
-      callback=None,
-    )
     print(f'LOADPROFILE has been updated from {sender}')
-    dispatcher.send(sender='nm', signal='update_load_profile', data=event)
+
+    print(data)
+    transformed_data = [
+      {
+        'time': interval['dtstart'].strftime('%H:%M'),
+        'value': interval['signal_payload'],
+      }
+      for interval in data
+    ]
+    df = pd.DataFrame(transformed_data)
+    self._topics['load_profile'] = df
+    print('LOAD-PROFILE: ', df)
+    df.set_index('time', inplace=True)
+
+    dispatcher.send(sender='nm', signal='update_load_profile', data=data)
 
   def _create_node_tasks(self):
     if self._vtn_name:
-      self._vtn = VirtualTopNode(self._vtn_name, self.vtn_path_prefix)
+      self._vtn = VirtualTopNode(self._vtn_name, self._vtn_path_prefix)
       self._loop.create_task(self._vtn.get_open_adr_server_run())
 
     if self._ven_name and self._vtn_url:
@@ -125,7 +129,9 @@ class NodeManager(AdrBaseConfig):
 
   def _start_flask(self):
     def run_flask():
-      port = int(os.getenv('REST_API_PORT', 5000))
+      port = self._rest_api_port
+      if self._rest_api_port is None:
+        port = int(os.getenv('REST_API_PORT', 5000))
       try:
         self.app.run(host='0.0.0.0', port=port)
       except OSError as e:
@@ -133,6 +139,7 @@ class NodeManager(AdrBaseConfig):
         raise
 
     thread = Thread(target=run_flask)
+    thread.daemon = True
     thread.start()
 
   @rest_endpoint('/data/load_profile')
@@ -142,10 +149,4 @@ class NodeManager(AdrBaseConfig):
     if load_profile is None:
       return jsonify({'error': 'Load profile not found'}), 404
 
-    return jsonify(
-      {
-        'status': 'success',
-        'data': load_profile,
-        'timestamp': datetime.now(timezone.utc).isoformat(),
-      }
-    )
+    return load_profile.to_json()

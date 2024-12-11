@@ -1,6 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
+from io import StringIO
 
 import requests
 import pandas as pd
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class GradioNodeDashboard:
-  def __init__(self, file_path='../../env_variables.json'):
+  def __init__(self, file_path='./env_variables.json'):
     self.configs = []
     self.file_path = file_path
 
@@ -57,16 +58,33 @@ class GradioNodeDashboard:
 
   def fetch_data(self, rest_api_port):
     url = f'http://localhost:{rest_api_port}/data/load_profile'
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()
+    try:
+      response = requests.get(url)
+      response.raise_for_status()
+      return response.json()
+    except requests.exceptions.RequestException as e:
+      logger.error(f'Failed to fetch data: {e}')
+      return None
 
   def process_data(self, data):
-    time_values = [(v['time'], v['value']) for v in data.values()]
-    df = pd.DataFrame(time_values, columns=['time', 'value'])
-    return df
+    try:
+      json_str = json.dumps(data)  # Convert dictionary to JSON string
+      df = pd.read_json(StringIO(json_str))  # Wrap JSON string in StringIO
 
-  def create_plot(self, df):
+      # Reset the index to make 'time' a column
+      df.reset_index(inplace=True)
+
+      # Rename the columns
+      df.columns = ['time', 'value']
+
+      return df
+    except Exception as e:
+      logging.error(f'Failed to process data: {e}')
+      return pd.DataFrame(
+        columns=['time', 'value']
+      )  # Return an empty DataFrame in case of an error
+
+  def create_plot(self, df, port):
     fig = go.Figure(
       data=[
         go.Scatter(
@@ -79,7 +97,7 @@ class GradioNodeDashboard:
       ]
     )
     fig.update_layout(
-      title={'text': 'Data Plot', 'font': {'color': 'white'}},
+      title={'text': f'Data {port}', 'font': {'color': 'white'}},
       xaxis_title='Time',
       yaxis_title='Value',
       xaxis=dict(
@@ -100,37 +118,33 @@ class GradioNodeDashboard:
     )
     return fig
 
-  def update_plot1(self):
-    print('update data')
-    # Create a dummy DataFrame with some sample data
-    data = {
-      'time': pd.date_range(start='2024-01-01', periods=10, freq='H'),
-      'value': range(10),
-    }
-    df = pd.DataFrame(data)
-    return df
-
   def update_plot(self, rest_api_port):
-    try:
-      data = self.fetch_data(rest_api_port)
+    data = self.fetch_data(rest_api_port)
+    if data is not None:
       df = self.process_data(data)
-      return self.create_plot(df)
-    except Exception as e:
-      logging.error(f'Failed to update plot: {e}')
-      return go.Figure()
+      return self.create_plot(df, rest_api_port)
+    else:
+      return None  # Return None if data is None
 
   def create_interface(self):
-    with gr.Blocks(css='.gradio-container { max-width: 95% !important; }') as interface:
+    with gr.Blocks(
+      css="""
+            .gradio-container { max-width: 95% !important; background-color: black; }
+            .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
+            """
+    ) as interface:
       with gr.Row():
-        for config in self.configs:
+        for env_config in self.configs:
           with gr.Column():
-            gr.Plot(
-              value=lambda: self.update_plot(config.rest_api_port), every=Timer(5)
-            )
+
+            def plot(config=env_config):
+              return self.update_plot(config.rest_api_port)
+
+            if plot() is not None:
+              gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
+            else:
+              gr.Label(
+                value=lambda config=env_config: f'⚠ No data available for {config.vtn_name}',
+                every=Timer(5),
+              )
     return interface
-
-
-if __name__ == '__main__':
-  gradio_node_dashboard = GradioNodeDashboard()
-  interface = gradio_node_dashboard.create_interface()
-  interface.launch(share=False)

@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import timedelta
 
 import numpy as np
@@ -40,10 +41,13 @@ def main():
   node_manager = NodeManager(
     ven_name=os.getenv('VEN_NAME'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
+    # rest_api_port=5001
   )
   node_manager.add_report(reports)
-  node_manager.run_node()
-  pass
+  try:
+    node_manager.run_node()
+  except KeyboardInterrupt:
+    sys.exit(0)
 
 
 if __name__ == '__main__':

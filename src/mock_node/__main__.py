@@ -11,8 +11,8 @@ def run_gradio_thread(interface):
   """Run Gradio in a separate thread"""
   try:
     interface.launch(
-      server_port=int(os.getenv('GRADIO_PORT')),
-      server_name=os.getenv('GRADIO_SERVER_NAME'),
+      server_port=int(os.getenv('GRADIO_PORT', 7860)),
+      server_name=os.getenv('GRADIO_SERVER_NAME', '0.0.0.0'),
     )
   except Exception as e:
     print(f'Failed to launch Gradio interface: {e}')

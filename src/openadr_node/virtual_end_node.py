@@ -35,13 +35,26 @@ class VirtualEndNode(AdrBaseConfig):
 
   @SignalSender('handle_event', 'ven')
   def handle_event(self, event):
-    # business logic
-    # handle event
-    print('DISPATCHING ACTION GOTTEN')
     logger.info('Processing openADR Event')
     _event_descriptor = event['event_descriptor']
     _active_period = event['active_period']
     _event_signals = event['event_signals']
     _targets = event['targets']
-    print('EVENT!!')
+
+    flattened_intervals = [
+      {
+        'dtstart': interval['dtstart'],
+        'duration': interval['duration'],
+        'signal_payload': interval['signal_payload'],
+      }
+      for signal in _event_signals
+      for interval in signal['intervals']
+    ]
+
+    print('FLATTENED INTERVALS: ', flattened_intervals)
+    self.update_load_profile(flattened_intervals)
     return 'optIn'  # eventually pass devices status?
+
+  @SignalSender('update_load_profile', 'ven')
+  def update_load_profile(self, data):
+    return data
