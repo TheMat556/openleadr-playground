@@ -63,12 +63,13 @@ def generate_node(
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
     'VTN_NAME': f'vtn_{index}',
-    'VTN_URL': f'http://0:{base_port}{path_prefix}OpenADR2/Simple/2.0b',
+    'VTN_URL': f'http://0:{port}{path_prefix}OpenADR2/Simple/2.0b',
     'VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
     'VEN_NAME': f'ven_{index}',
     'GRADIO_PORT': str(gradio_port),
     'GRADIO_SERVER_NAME': '0.0.0.0',
     'REST_API_PORT': str(rest_api_port),
+    'VTN_PORT': str(port),
   }
   if parent_path_prefix is not None and parent_ip is not None:
     parent_port = parent_ports[0].split(':')[0]
@@ -108,7 +109,7 @@ def generate_node(
       'test': SingleQuotedScalarString(
         f"curl -f -s -o /dev/null -w '%{{http_code}}' 127.0.0.1:{port}{path_prefix}OpenADR2/Simple/2.0b | grep 404 || exit 1"
       ),
-      'interval': '30s',
+      'interval': '20s',
       'timeout': '10s',
       'retries': 5,
     }

@@ -30,6 +30,7 @@ class NodeManager(AdrBaseConfig):
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
+    http_port: Optional[int] = None,
     vtn_path_prefix: Optional[str] = None,
     rest_api_port: Optional[str] = None,
   ):
@@ -37,6 +38,7 @@ class NodeManager(AdrBaseConfig):
     self._vtn_name: Optional[str] = vtn_name
     self._vtn_url: Optional[str] = vtn_url
     self._ven_name: Optional[str] = ven_name
+    self._http_port: Optional[str] = http_port
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
     self._rest_api_port: Optional[str] = rest_api_port
 
@@ -103,10 +105,10 @@ class NodeManager(AdrBaseConfig):
 
   def _create_node_tasks(self):
     if self._vtn_name:
-      self._vtn = VirtualTopNode(self._vtn_name, self._vtn_path_prefix)
+      self._vtn = VirtualTopNode(self._vtn_name, self._http_port, self._vtn_path_prefix)
       self._loop.create_task(self._vtn.get_open_adr_server_run())
 
-    if self._ven_name and self._vtn_url:
+    if self._ven_name and self._vtn_url:  #
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
       self._loop.create_task(self._ven.get_open_adr_server_run())
 

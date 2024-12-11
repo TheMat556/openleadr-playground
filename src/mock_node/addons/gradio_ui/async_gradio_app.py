@@ -155,7 +155,6 @@ class AsyncGradioApp(AdrBaseConfig):
         'signal_payload': val['value'],
       }
       intervals.append(interval)
-    print(intervals)
     return intervals
 
   def update_chart(self, *args):

@@ -35,7 +35,6 @@ class GradioNodeDashboard:
     self.file_path = file_path
 
     self.load_configs(file_path)
-    print('Configs loaded: ', self.configs)
 
   def load_configs(self, file_path):
     try:

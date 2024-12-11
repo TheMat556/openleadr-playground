@@ -12,15 +12,20 @@ from src.openadr_node.decorator.signal_sender import SignalSender
 
 
 class VirtualTopNode(AdrBaseConfig):
-  def __init__(self, server_name: str, path_prefix: Optional[str] = None):
+  def __init__(
+    self,
+    server_name: str,
+    http_port: Optional[int] = None,
+    path_prefix: Optional[str] = None,
+  ):
     super().__init__()
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._registration_info: Dict[str, str] = {}
     self._server_name = server_name
-
     self._open_adr_server = OpenADRServer(
       self._server_name,
       http_host='0.0.0.0',
+      http_port=int(http_port if http_port else 8080),
       http_path_prefix=path_prefix if path_prefix else '/OpenADR2/Simple/2.0b',
     )
 
