@@ -59,7 +59,7 @@ class GradioNodeDashboard:
       logging.error(f'Invalid JSON in config file: {e}')
 
   def fetch_data(self, vtn_self_host, rest_api_port):
-    if not bool(os.getenv('DOCKER_ENVIRONMENT', True)):
+    if os.getenv('DOCKER_ENVIRONMENT', True) == 'False':
       url = f'localhost:{rest_api_port}/data/load_profile'
     else:
       url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
