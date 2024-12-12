@@ -108,13 +108,39 @@ class NodeManager(AdrBaseConfig):
     dispatcher.send(sender='nm', signal='update_load_profile', data=data)
 
   def _create_node_tasks(self):
-    if self._vtn_name:
-      self._vtn = VirtualTopNode(self._vtn_name, self._http_port, self._vtn_path_prefix)
-      self._loop.create_task(self._vtn.get_open_adr_server_run())
+    async def run_with_notification(coro, start_callback, end_callback):
+      if start_callback:
+        start_callback()
+      await coro
+      if end_callback:
+        end_callback()
 
-    if self._ven_name and self._vtn_url:  #
+    if self._vtn_name:
+      self._vtn = VirtualTopNode(
+        server_name=self._vtn_name,
+        http_host=self._http_host,
+        http_port=self._http_port,
+        path_prefix=self._vtn_path_prefix,
+      )
+      self._loop.create_task(
+        run_with_notification(
+          self._vtn.get_open_adr_server_run(),
+          start_callback=lambda: print('VTN task started'),
+          end_callback=lambda: self._notify_node_creation(),
+        )
+      )
+
+    if self._ven_name and self._vtn_url:
+      print('VEN NAME:', self._ven_name)
+      print('VTN URL:', self._vtn_url)
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
-      self._loop.create_task(self._ven.get_open_adr_server_run())
+      self._loop.create_task(
+        run_with_notification(
+          self._ven.get_open_adr_server_run(),
+          start_callback=lambda: print('VEN task started'),
+          end_callback=lambda: print('VEN task finished'),
+        )
+      )
 
   @staticmethod
   async def _event_response_callback(self, ven_id, event_id, opt_type) -> None:

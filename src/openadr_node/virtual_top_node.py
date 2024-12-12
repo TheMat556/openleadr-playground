@@ -15,7 +15,8 @@ class VirtualTopNode(AdrBaseConfig):
   def __init__(
     self,
     server_name: str,
-    http_port: Optional[int] = None,
+    http_port: Optional[int] = '8080',
+    http_host: Optional[str] = '0.0.0.0',
     path_prefix: Optional[str] = None,
   ):
     super().__init__()
@@ -24,8 +25,8 @@ class VirtualTopNode(AdrBaseConfig):
     self._server_name = server_name
     self._open_adr_server = OpenADRServer(
       self._server_name,
-      http_host='0.0.0.0',
-      http_port=int(http_port if http_port else 8080),
+      http_host=http_host,
+      http_port=http_port,
       http_path_prefix=path_prefix if path_prefix else '/OpenADR2/Simple/2.0b',
     )
 

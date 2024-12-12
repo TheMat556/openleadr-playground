@@ -60,7 +60,7 @@ class GradioNodeDashboard:
 
   def fetch_data(self, vtn_self_host, rest_api_port):
     if os.getenv('DOCKER_ENVIRONMENT', True) == 'False':
-      url = f'localhost:{rest_api_port}/data/load_profile'
+      url = f'http://localhost:{rest_api_port}/data/load_profile'
     else:
       url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
     try:

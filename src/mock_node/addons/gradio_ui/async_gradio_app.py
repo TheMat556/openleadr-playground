@@ -95,9 +95,9 @@ class AsyncGradioApp(AdrBaseConfig):
     :return: Interpolated DataFrame with 15-minute resolution time index
     :rtype: pandas.DataFrame
     """
-    time_index = pd.date_range(start='2024-01-01 00:00:00', periods=96, freq='15T')
+    time_index = pd.date_range(start='2024-01-01 00:00:00', periods=96, freq='15min')
     original_time_index = pd.date_range(
-      start='2024-01-01 00:00:00', periods=24, freq='1H'
+      start='2024-01-01 00:00:00', periods=24, freq='1h'
     )
 
     df_original = pd.DataFrame(
