@@ -78,8 +78,7 @@ Which will be used to demonstrate the hierarchical network infrastructure.
 This repository allows you to create hierarchical containers,
 where each node has 2 children (done for simplicity), this is only for testing purposes and
 to demonstrate the capabilities of the implementation.
-Note: The installation steps has to be followed before running the docker compose file.
-
+Note: The installation steps have to be followed before running the docker compose file.
 1. **Create the docker compose file:**
 
     ```bash

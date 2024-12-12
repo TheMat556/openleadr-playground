@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from dataclasses import dataclass
 from io import StringIO
 
@@ -21,7 +22,7 @@ class ContainerConfig:
   gradio_port: str
   gradio_server_name: str
   rest_api_port: str
-  adr_mapping_port: str
+  vtn_self_host: str
 
 
 # Configure logging
@@ -49,7 +50,7 @@ class GradioNodeDashboard:
             'gradio_port': value['GRADIO_PORT'],
             'gradio_server_name': value['GRADIO_SERVER_NAME'],
             'rest_api_port': value['REST_API_PORT'],
-            'adr_mapping_port': value['ADR_MAPPING_PORT'],
+            'vtn_self_host': value['VTN_SELF_HOST'],
           }
           self.configs.append(ContainerConfig(**config))
     except FileNotFoundError:
@@ -57,14 +58,17 @@ class GradioNodeDashboard:
     except json.JSONDecodeError as e:
       logging.error(f'Invalid JSON in config file: {e}')
 
-  def fetch_data(self, rest_api_port):
-    url = f'http://localhost:{rest_api_port}/data/load_profile'
+  def fetch_data(self, vtn_self_host, rest_api_port):
+    if not bool(os.getenv('DOCKER_ENVIRONMENT', True)):
+      url = f'localhost:{rest_api_port}/data/load_profile'
+    else:
+      url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
     try:
       response = requests.get(url)
       response.raise_for_status()
       return response.json()
     except requests.exceptions.RequestException as e:
-      logger.error(f'Failed to fetch data: {e}')
+      logger.error(f'Failed to fetch data: {e} from {url}')
       return None
 
   def process_data(self, data):
@@ -85,7 +89,7 @@ class GradioNodeDashboard:
         columns=['time', 'value']
       )  # Return an empty DataFrame in case of an error
 
-  def create_plot(self, df, port):
+  def create_plot(self, df, vtn_self_host, port):
     fig = go.Figure(
       data=[
         go.Scatter(
@@ -119,11 +123,11 @@ class GradioNodeDashboard:
     )
     return fig
 
-  def update_plot(self, rest_api_port):
-    data = self.fetch_data(rest_api_port)
+  def update_plot(self, vtn_self_host, rest_api_port):
+    data = self.fetch_data(vtn_self_host, rest_api_port)
     if data is not None:
       df = self.process_data(data)
-      return self.create_plot(df, rest_api_port)
+      return self.create_plot(df, vtn_self_host, rest_api_port)
     else:
       return None  # Return None if data is None
 
@@ -139,7 +143,7 @@ class GradioNodeDashboard:
           with gr.Column():
 
             def plot(config=env_config):
-              return self.update_plot(config.rest_api_port)
+              return self.update_plot(config.vtn_self_host, config.rest_api_port)
 
             gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
 

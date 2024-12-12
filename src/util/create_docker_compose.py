@@ -16,25 +16,46 @@ class PortRegistry:
     self.used_ports = set()
 
   def allocate_port(self, base_port):
+    if not 0 <= base_port <= 65535:
+      raise ValueError(f'Invalid port number: {base_port}')
     port = base_port
     while port in self.used_ports:
       port += 1
+    if port > 65535:
+      raise ValueError('No available ports in valid range')
     self.used_ports.add(port)
     return port
 
 
 class IPAllocator:
   def __init__(self, base_ip='172.18.0'):
+    # Validate IP format
+    try:
+      octets = base_ip.split('.')
+      if len(octets) != 3 or not all(
+        o.isdigit() and 0 <= int(o) <= 255 for o in octets
+      ):
+        raise ValueError
+    except (ValueError, AttributeError):
+      raise ValueError(
+        f'Invalid base_ip format: {base_ip}. Expected format: xxx.xxx.xxx'
+      )
     self.base_ip = base_ip
     self.used_ips = set()
+    self.available_count = 253  # Track available IPs
 
   def allocate_ip(self):
-    for i in range(2, 255):  # Start from .2, avoid .0 and .1
+    if self.available_count <= 0:
+      raise ValueError('IP address pool exhausted')
+    for i in range(2, 255):
       ip = f'{self.base_ip}.{i}'
       if ip not in self.used_ips:
         self.used_ips.add(ip)
+        self.available_count -= 1
         return ip
-    raise ValueError('No available IP addresses')
+    raise ValueError(
+      'IP address pool fragmented'
+    )  # Should never happen if available_count > 0
 
 
 def generate_node(
@@ -49,6 +70,7 @@ def generate_node(
   rest_api_port=5000,
   parent_ports=None,
   parent_service_name=None,
+  parent_ip=None,
 ):
   """
   Generate a node with the given layer and index.
@@ -59,6 +81,7 @@ def generate_node(
   port = port_registry.allocate_port(base_port)
   gradio_port = port_registry.allocate_port(gradio_port)
   rest_api_port = port_registry.allocate_port(rest_api_port)
+  ip_address = ip_allocator.allocate_ip()
 
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
@@ -70,11 +93,16 @@ def generate_node(
     'GRADIO_SERVER_NAME': '0.0.0.0',
     'REST_API_PORT': str(rest_api_port),
     'VTN_PORT': str(port),
+    'VTN_SELF_HOST': f'http://{ip_address}',
   }
-  if parent_path_prefix is not None and parent_service_name is not None:
+  if (
+    parent_path_prefix is not None
+    and parent_service_name is not None
+    and parent_ip is not None
+  ):
     parent_port = parent_ports[0].split(':')[0]
     environment['CONNECT_VTN_URL'] = (
-      f'http://{parent_service_name}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
+      f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
   port_mapping = [
@@ -98,9 +126,9 @@ def generate_node(
     'container_name': f'{index}_container',
     'environment': environment,
     'ports': port_mapping,
-    'networks': {'my_network': {'aliases': [f'{index}_node']}},
+    'networks': {'my_network': {'ipv4_address': ip_address}},
     'depends_on': {},
-    'expose': [port],
+    'expose': [port, rest_api_port],
   }
 
   if layer < max_layers - 1:
@@ -123,11 +151,12 @@ def generate_node(
       port_registry,
       ip_allocator,
       path_prefix,
-      base_port + 1,  # Increment base_port for each child node
-      gradio_port + 1,  # Increment gradio_port for each child node
-      rest_api_port + 1,  # Increment rest_api_port for each child node
+      base_port + 1,
+      gradio_port + 1,
+      rest_api_port + 1,
       port_mapping,
       f'{index}_node',
+      ip_address,
     )
     if child_node:
       children.append(child_node)
@@ -164,11 +193,7 @@ def flatten_services(node, services, env_json):
   if 'healthcheck' in node:
     services[service_name]['healthcheck'] = node['healthcheck']
 
-  adr_mapping_port = node['ports'][0].split(':')[0]
-  env_json[node['container_name']] = {
-    **node['environment'],
-    'ADR_MAPPING_PORT': adr_mapping_port,
-  }
+  env_json[node['container_name']] = {**node['environment']}
   if 'children' in node:
     for child in node['children']:
       flatten_services(child, services, env_json)
@@ -178,12 +203,29 @@ def create_docker_compose(layers):
   """
   Generate the hierarchical YAML structure and create docker-compose.yml.
   """
+
+  if not isinstance(layers, int):
+    raise TypeError('layers must be an integer')
+  if layers <= 0:
+    raise ValueError('layers must be positive')
+  if layers > 10:  # Adjust limit as needed
+    raise ValueError('layers exceeds maximum allowed value')
+
   port_registry = PortRegistry()
   ip_allocator = IPAllocator()
   root = generate_node(0, '0', layers, port_registry, ip_allocator)
   services = {}
   env_json = {}
   flatten_services(root, services, env_json)
+
+  # Add the node_dashboard service
+  services['node_dashboard'] = {
+    'build': {'context': '.', 'dockerfile': './src/docker/node_dashboard/Dockerfile'},
+    'container_name': 'node_dashboard',
+    'ports': [SingleQuotedScalarString('7860:7860')],
+    'networks': {'my_network': {'ipv4_address': ip_allocator.allocate_ip()}},
+    'environment': ['NODE_GRADIO_PORT=7860'],
+  }
 
   compose_content = {
     'version': '3.8',
