@@ -30,6 +30,7 @@ class NodeManager(AdrBaseConfig):
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
+    http_host: Optional[str] = None,
     http_port: Optional[int] = None,
     vtn_path_prefix: Optional[str] = None,
     rest_api_port: Optional[str] = None,
@@ -38,6 +39,7 @@ class NodeManager(AdrBaseConfig):
     self._vtn_name: Optional[str] = vtn_name
     self._vtn_url: Optional[str] = vtn_url
     self._ven_name: Optional[str] = ven_name
+    self._http_host: Optional[str] = http_host
     self._http_port: Optional[str] = http_port
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
     self._rest_api_port: Optional[str] = rest_api_port
@@ -45,6 +47,7 @@ class NodeManager(AdrBaseConfig):
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
+    self._subscribers = {}
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -126,7 +129,7 @@ class NodeManager(AdrBaseConfig):
         run_with_notification(
           self._vtn.get_open_adr_server_run(),
           start_callback=lambda: print('VTN task started'),
-          end_callback=lambda: self._notify_node_creation(),
+          end_callback=lambda: self.publish('vtn_created', {'status': 'created'}),
         )
       )
 
@@ -184,3 +187,15 @@ class NodeManager(AdrBaseConfig):
       return jsonify({'error': 'Load profile not found'}), 404
 
     return load_profile.to_json()
+
+  def publish(self, signal, data):
+    if signal in self._subscribers:
+      for callback in self._subscribers[signal]:
+        callback(data)
+    logger.info(f'Published signal: {signal} with data: {data}')
+
+  def subscribe(self, signal, callback):
+    if signal not in self._subscribers:
+      self._subscribers[signal] = []
+    self._subscribers[signal].append(callback)
+    logger.info(f'Subscribed to signal: {signal} with callback: {callback.__name__}')
