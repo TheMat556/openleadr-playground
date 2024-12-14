@@ -16,7 +16,6 @@ async def run_other_coroutines():
   """Simulated coroutines that need to run concurrently"""
   while True:
     print('Running VTN Server Coroutine...')
-    # print("VTN:", id(dispatcher))
     await asyncio.sleep(2)
 
 
@@ -24,15 +23,12 @@ async def run_ven_coroutine():
   """Simulated VEN Server Coroutine"""
   while True:
     print('Running VEN Server Coroutine...')
-    # print("VEN:", id(dispatcher))
     await asyncio.sleep(3)
 
 
 async def main():
   # Enable nested asyncio support
   nest_asyncio.apply()
-
-  # print(id(dispatcher))
 
   # Instantiate the app
   app = AsyncGradioApp()

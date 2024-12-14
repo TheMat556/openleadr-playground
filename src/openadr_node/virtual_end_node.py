@@ -34,14 +34,40 @@ class VirtualEndNode(AdrBaseConfig):
         )
 
   @SignalSender('handle_event', 'ven')
-  def handle_event(self, event):
-    # business logic
-    # handle event
-    print('DISPATCHING ACTION GOTTEN')
+  def handle_event(self, event: dict) -> str:
+    """Handle OpenADR event and update load profile.
+
+    Args:
+        event (dict): OpenADR event containing event_signals, each with intervals
+            defining dtstart, duration, and signal_payload.
+
+    Returns:
+        str: Response status ('optIn' or 'optOut')
+
+    Raises:
+        KeyError: If required event fields are missing
+    """
     logger.info('Processing openADR Event')
+    required_keys = {'event_descriptor', 'active_period', 'event_signals', 'targets'}
+    if not all(key in event for key in required_keys):
+      raise KeyError(f'Event missing required fields: {required_keys}')
+
     _event_descriptor = event['event_descriptor']
     _active_period = event['active_period']
     _event_signals = event['event_signals']
     _targets = event['targets']
-    print('EVENT!!')
+    flattened_intervals = [
+      {
+        'dtstart': interval['dtstart'],
+        'duration': interval['duration'],
+        'signal_payload': interval['signal_payload'],
+      }
+      for signal in _event_signals
+      for interval in signal['intervals']
+    ]
+    self.update_load_profile(flattened_intervals)
     return 'optIn'  # eventually pass devices status?
+
+  @SignalSender('update_load_profile', 'ven')
+  def update_load_profile(self, data):
+    return data
