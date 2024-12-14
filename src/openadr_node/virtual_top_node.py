@@ -15,7 +15,7 @@ class VirtualTopNode(AdrBaseConfig):
   def __init__(
     self,
     server_name: str,
-    http_port: Optional[int] = '8080',
+    http_port: Optional[int] = 8080,
     http_host: Optional[str] = '0.0.0.0',
     path_prefix: Optional[str] = None,
   ):
@@ -110,13 +110,17 @@ class VirtualTopNode(AdrBaseConfig):
   def _on_update_load_profile(self, signal, sender, data):
     if data:
       for ven_id in self._ven_data.keys():
-        self._open_adr_server.add_event(
-          ven_id=ven_id,
-          signal_type='level',
-          signal_name='simple',
-          intervals=data,
-          callback=self._event_callback,
-        )
+        try:
+          self._open_adr_server.add_event(
+            ven_id=ven_id,
+            signal_type='level',
+            signal_name='simple',
+            intervals=data,
+            callback=self._event_callback,
+          )
+          logger.info(f'Event added successfully for VEN: {ven_id}')
+        except Exception as e:
+          logger.error(f'Failed to add event for VEN {ven_id}: {e}')
 
   def get_open_adr_server_run(self):
     return self._open_adr_server.run()

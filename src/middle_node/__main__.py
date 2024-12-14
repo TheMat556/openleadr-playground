@@ -10,34 +10,51 @@ from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
 
-def sample_callback_1():
-  print('callback 1')
-  return np.random.rand() * 10
+def generate_measurement(
+  measurement_type: str, min_value: float = 0, max_value: float = 10
+) -> float:
+  """Generate a random measurement value within specified bounds."""
+  logging.info(f'Generating {measurement_type} measurement')
+  measurement = np.random.rand() * (max_value - min_value) + min_value
+  logging.debug(f'Generated measurement: {measurement}')
+  return measurement
+
+
+def validate_config():
+  required_vars = [
+    'VTN_NAME',
+    'VTN_PORT',
+    'VTN_PATH_PREFIX',
+    'VEN_NAME',
+    'CONNECT_VTN_URL',
+  ]
+  missing_vars = [var for var in required_vars if not os.getenv(var)]
+  if missing_vars:
+    raise ValueError(
+      f"Missing required environment variables: {', '.join(missing_vars)}"
+    )
 
 
 def main():
   load_dotenv()
+  validate_config()
   # It seems the VEN needs at least 1 report to be able to work properly
   reports = [
     ReportConfiguration(
       resource_id='res_123',
       measurement='energy',
       sampling_rate=timedelta(seconds=5),
-      callback=sample_callback_1,
+      callback=lambda: generate_measurement('energy'),
       additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
     ),
   ]
 
   node_manager = NodeManager(
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
-    http_port=os.getenv('VTN_PORT', 8080),  # http_port=8081,
-    vtn_path_prefix=os.getenv(
-      'VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'
-    ),  # /0/0/OpenADR2/Simple/2.0b', #
+    http_port=os.getenv('VTN_PORT', 8080),
+    vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
     ven_name=os.getenv('VEN_NAME', 'default_ven'),
-    vtn_url=os.getenv(
-      'CONNECT_VTN_URL'
-    ),  #'http://127.0.0.1:8080/0/OpenADR2/Simple/2.0b'
+    vtn_url=os.getenv('CONNECT_VTN_URL'),
   )
 
   try:
@@ -47,7 +64,7 @@ def main():
     logging.info('Shutting down node...')
   except Exception as e:
     logging.error(f'Error running node: {e}')
-    sys.exit(0)
+    sys.exit(1)
 
 
 if __name__ == '__main__':

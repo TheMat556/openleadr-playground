@@ -86,7 +86,7 @@ def generate_node(
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
     'VTN_NAME': f'vtn_{index}',
-    'VTN_URL': f'http://0:{port}{path_prefix}OpenADR2/Simple/2.0b',
+    'VTN_URL': f'http://localhost:{port}{path_prefix}OpenADR2/Simple/2.0b',
     'VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
     'VEN_NAME': f'ven_{index}',
     'GRADIO_PORT': str(gradio_port),

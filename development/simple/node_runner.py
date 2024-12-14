@@ -12,7 +12,7 @@ from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
 
-def run_mock_node():
+def run_mock_node(queue):
   load_dotenv(dotenv_path='./development_configs/simple/.env')
 
   mock_node = NodeManager(
@@ -22,6 +22,11 @@ def run_mock_node():
     http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
     http_port=os.getenv('DEV_VTN_HTTP_PORT'),
   )
+
+  def notify_main_process(data):
+    queue.put('vtn_created')
+
+  mock_node.subscribe('vtn_created', notify_main_process)
 
   app = AsyncGradioApp(slider_file='./slider_values.txt')
   interface = app.create_interface()
@@ -52,7 +57,7 @@ def device_callback():
   return np.random.rand() * 10
 
 
-def run_house_node():
+def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str):
   """Create and configure a house node."""
   reports = [
     ReportConfiguration(
@@ -64,9 +69,9 @@ def run_house_node():
     ),
   ]
   house_node = NodeManager(
-    ven_name=os.getenv('DEV_VEN_NAME'),
-    vtn_url=os.getenv('DEV_VTN_URL'),
-    rest_api_port=os.getenv('DEV_HOUSE_NODE_REST_API'),
+    ven_name=ven_name,
+    vtn_url=vtn_url,
+    rest_api_port=rest_api_port,
   )
   house_node.add_report(reports)
 
@@ -78,9 +83,6 @@ def run_house_node():
 
 def run_node_dashboard():
   """Run the node dashboard."""
-  print('NODE DASHBOARD')
-  print(os.getenv('DEV_NODE_DASHBOARD_PORT'))
-  print(os.getenv('DEV_GRADIO_SERVER_NAME'))
   gradio_node_dashboard = GradioNodeDashboard(
     file_path='./development_configs/simple/env_variables.json'
   )

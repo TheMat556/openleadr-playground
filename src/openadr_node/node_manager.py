@@ -40,7 +40,7 @@ class NodeManager(AdrBaseConfig):
     self._vtn_url: Optional[str] = vtn_url
     self._ven_name: Optional[str] = ven_name
     self._http_host: Optional[str] = http_host
-    self._http_port: Optional[str] = http_port
+    self._http_port: Optional[int] = http_port
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
     self._rest_api_port: Optional[str] = rest_api_port
 
@@ -182,11 +182,13 @@ class NodeManager(AdrBaseConfig):
   @rest_endpoint('/data/load_profile')
   def get_load_profile(self):
     load_profile = self._topics.get('load_profile', None)
-
     if load_profile is None:
       return jsonify({'error': 'Load profile not found'}), 404
-
-    return load_profile.to_json()
+    try:
+      return load_profile.to_json(), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+      logger.error(f'Failed to serialize load profile: {e}')
+      return jsonify({'error': 'Failed to serialize data'}), 500
 
   def publish(self, signal, data):
     if signal in self._subscribers:

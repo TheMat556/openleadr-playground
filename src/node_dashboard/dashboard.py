@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from io import StringIO
 
@@ -36,6 +37,9 @@ class GradioNodeDashboard:
     self.file_path = file_path
 
     self.load_configs(file_path)
+    if not self.configs:
+      logger.error('No configurations loaded. Exiting application.')
+      sys.exit(1)
 
   def load_configs(self, file_path):
     try:
@@ -59,7 +63,7 @@ class GradioNodeDashboard:
       logging.error(f'Invalid JSON in config file: {e}')
 
   def fetch_data(self, vtn_self_host, rest_api_port):
-    if os.getenv('DOCKER_ENVIRONMENT', True) == 'False':
+    if os.getenv('DOCKER_ENVIRONMENT', True).lower() == 'false':
       url = f'http://localhost:{rest_api_port}/data/load_profile'
     else:
       url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
