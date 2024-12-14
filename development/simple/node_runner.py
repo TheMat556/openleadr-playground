@@ -13,7 +13,7 @@ from src.openadr_node.node_manager import NodeManager
 
 
 def run_mock_node(queue):
-  load_dotenv(dotenv_path='./development_configs/simple/.env')
+  load_dotenv(dotenv_path='./development/simple/.env')
 
   mock_node = NodeManager(
     vtn_name=os.getenv('DEV_VTN_NAME'),
@@ -84,7 +84,7 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str):
 def run_node_dashboard():
   """Run the node dashboard."""
   gradio_node_dashboard = GradioNodeDashboard(
-    file_path='./development_configs/simple/env_variables.json'
+    file_path='./development/simple/env_variables.json'
   )
   interface = gradio_node_dashboard.create_interface()
   interface.launch(

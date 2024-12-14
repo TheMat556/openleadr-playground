@@ -252,9 +252,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(
     description='Generate docker-compose.yml with a specified number of layers.'
   )
-  parser.add_argument(
-    'layers', type=int, nargs='?', help='Number of layers to generate'
-  )
+  parser.add_argument('layers', type=int, help='Number of layers to generate')
   args = parser.parse_args()
 
   if args.layers is None:

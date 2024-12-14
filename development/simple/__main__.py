@@ -4,6 +4,7 @@ import signal
 import sys
 from contextlib import contextmanager
 from multiprocessing import Process, Queue
+from queue import Empty
 
 from dotenv import load_dotenv
 
@@ -38,7 +39,11 @@ def signal_handler(signum, frame):
 
 
 if __name__ == '__main__':
-  load_dotenv(dotenv_path='./development_configs/simple/.env')
+  logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO'),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+  )
+  load_dotenv(dotenv_path='./development/simple/.env')
   signal.signal(signal.SIGTERM, signal_handler)
   signal.signal(signal.SIGINT, signal_handler)
 
@@ -52,7 +57,10 @@ if __name__ == '__main__':
   with manage_processes(processes):
     try:
       while True:
-        message = queue.get()
+        try:
+          message = queue.get(timeout=1)
+        except Empty:
+          continue
         if message == 'vtn_created':
           house_node_0_process = Process(
             target=run_house_node,
@@ -63,6 +71,7 @@ if __name__ == '__main__':
             },
           )
           house_node_0_process.start()
+          processes.append(house_node_0_process)
 
           house_node_1_process = Process(
             target=run_house_node,
@@ -73,5 +82,7 @@ if __name__ == '__main__':
             },
           )
           house_node_1_process.start()
+          processes.append(house_node_1_process)
     except KeyboardInterrupt:
-      pass
+      logging.info('Shutting down due to KeyboardInterrupt')
+      sys.exit(0)
