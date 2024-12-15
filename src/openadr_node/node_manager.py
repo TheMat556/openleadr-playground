@@ -113,8 +113,8 @@ class NodeManager(AdrBaseConfig):
   def _create_node_tasks(self) -> None:
     async def run_with_notification(
       coro: Callable,
-      start_callback: Optional[Callable],
-      end_callback: Optional[Callable],
+      start_callback: Optional[Callable[[], None]],
+      end_callback: Optional[Callable[[], None]],
     ) -> None:
       if start_callback:
         start_callback()
@@ -174,7 +174,7 @@ class NodeManager(AdrBaseConfig):
     def run_flask() -> None:
       port = self._rest_api_port
       if self._rest_api_port is None:
-        logging.info('REST API port not set, node manager executing will exit')
+        logging.warning('REST API port not set, node manager executing will exit')
         sys.exit(1)
       try:
         self.app.run(host='0.0.0.0', port=port)
