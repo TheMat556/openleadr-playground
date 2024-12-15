@@ -88,7 +88,6 @@ class NodeManager(AdrBaseConfig):
         logger.error(f'Error calling method {signal}: {e}')
         raise
 
-
   def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
     print(f'LOADPROFILE has been updated from {sender}')
 

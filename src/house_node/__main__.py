@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 rng = np.random.default_rng()
 
 
-def sample_callback_1()-> float:
+def sample_callback_1() -> float:
   print('callback 1')
   return rng.random() * 10
 
