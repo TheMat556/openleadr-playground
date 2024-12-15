@@ -1,11 +1,14 @@
 from functools import wraps
 from pydispatch import dispatcher
+from typing import Callable, Optional, Any
 
 from src.openadr_node import logger
 
 
 class SignalConnector:
-  def __init__(self, signal=None, sender=None):
+  def __init__(
+    self, signal: Optional[str] = None, sender: Optional[str] = None
+  ) -> None:
     """
     Initialize the ConnectDispatcher decorator.
 
@@ -16,7 +19,7 @@ class SignalConnector:
     self._custom_signal = signal
     self._custom_sender = sender
 
-  def decorate(self, func):
+  def decorate(self, func: Callable) -> Callable:
     """
     Decorate a method to connect it to a signal at runtime.
 
@@ -25,7 +28,7 @@ class SignalConnector:
     """
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       # Call the original method
       return func(*args, **kwargs)
 
@@ -36,14 +39,14 @@ class SignalConnector:
 
     return wrapper
 
-  def __call__(self, func):
+  def __call__(self, func: Callable) -> Callable:
     """
     Callable method for the decorator, delegates to `decorate`.
     """
     return self.decorate(func)
 
   @classmethod
-  def connect_all(cls, instance):
+  def connect_all(cls, instance: Any) -> None:
     """
     Connect all decorated dispatcher methods for a given instance.
 
@@ -57,11 +60,9 @@ class SignalConnector:
         bound_method = method.__get__(instance, instance.__class__)
 
         # Connect the bound method to the dispatcher
-
         dispatcher.connect(
           receiver=bound_method, signal=method._signal, sender=method._sender
         )
-        # dispatcher.send(signal="register_dispatcher", sender=method._sender, data=method._signal)
         logger.info(
           f'Connected {name} to signal: {method._signal} with sender: {method._sender}'
         )

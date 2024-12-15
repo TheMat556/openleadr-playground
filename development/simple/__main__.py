@@ -5,6 +5,7 @@ import sys
 from contextlib import contextmanager
 from multiprocessing import Process, Queue
 from queue import Empty
+from typing import List, Generator
 
 from dotenv import load_dotenv
 
@@ -16,7 +17,9 @@ from development.simple.node_runner import (
 
 
 @contextmanager
-def manage_processes(processes_list):
+def manage_processes(
+  processes_list: List[Process],
+) -> Generator[List[Process], None, None]:
   try:
     for p in processes_list:
       p.start()
@@ -33,7 +36,7 @@ def manage_processes(processes_list):
           p.kill()
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum: int, frame: None) -> None:
   logging.info('Received shutdown signal, terminating processes...')
   sys.exit(0)
 

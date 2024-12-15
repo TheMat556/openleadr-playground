@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import threading
@@ -12,6 +13,9 @@ from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def run_mock_node(queue: Any) -> None:
   load_dotenv(dotenv_path='./development/simple/.env')
@@ -19,7 +23,7 @@ def run_mock_node(queue: Any) -> None:
   mock_node = NodeManager(
     vtn_name=os.getenv('DEV_VTN_NAME'),
     vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
-    rest_api_port=int(os.getenv('DEV_MOCK_NODE_REST_API', 8080)),
+    rest_api_port=int(os.getenv('DEV_MOCK_NODE_REST_API_PORT', 5000)),
     http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
     http_port=int(os.getenv('DEV_VTN_HTTP_PORT', 80)),
   )
@@ -40,7 +44,7 @@ def run_mock_node(queue: Any) -> None:
   except KeyboardInterrupt:
     sys.exit(0)
   except Exception as e:
-    print(f'Error running mock node: {e}')
+    logger.error(f'Error running mock node: {e}')
     sys.exit(1)
 
 
@@ -52,7 +56,7 @@ def run_gradio(interface: Any) -> None:
       server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
     )
   except Exception as e:
-    print(f'Failed to launch Gradio interface: {e}')
+    logger.error(f'Error running node dashboard: {e}')
 
 
 rng = np.random.default_rng()
@@ -66,7 +70,7 @@ def device_callback() -> float:
 
 def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
   """Create and configure a house node."""
-  reports = [
+  reports: List[ReportConfiguration] = [
     ReportConfiguration(
       resource_id='res_123',
       measurement='energy',
@@ -87,7 +91,7 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
   except KeyboardInterrupt:
     sys.exit(0)
   except Exception as e:
-    print(f'Error running house node: {e}')
+    logger.error(f'Error running house node: {e}')
     sys.exit(1)
 
 

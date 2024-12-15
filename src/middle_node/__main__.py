@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from datetime import timedelta
+from typing import List
 
 import numpy as np
 from dotenv import load_dotenv
@@ -23,7 +24,7 @@ def generate_measurement(
   return measurement
 
 
-def validate_config():
+def validate_config() -> None:
   required_vars = [
     'VTN_NAME',
     'VTN_PORT',
@@ -38,11 +39,11 @@ def validate_config():
     )
 
 
-def main():
+def main() -> None:
   load_dotenv()
   validate_config()
   # It seems the VEN needs at least 1 report to be able to work properly
-  reports = [
+  reports: List[ReportConfiguration] = [
     ReportConfiguration(
       resource_id='res_123',
       measurement='energy',
@@ -54,7 +55,7 @@ def main():
 
   node_manager = NodeManager(
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
-    http_port=os.getenv('VTN_PORT', 8080),
+    http_port=int(os.getenv('VTN_PORT', 8080)),
     vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
     ven_name=os.getenv('VEN_NAME', 'default_ven'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),

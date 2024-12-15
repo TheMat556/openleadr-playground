@@ -7,7 +7,7 @@ from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.openadr_node.node_manager import NodeManager
 
 
-def run_gradio_thread(interface):
+def run_gradio_thread(interface: AsyncGradioApp) -> None:
   """Run Gradio in a separate thread"""
   try:
     interface.launch(
@@ -18,8 +18,8 @@ def run_gradio_thread(interface):
     print(f'Failed to launch Gradio interface: {e}')
 
 
-def main():
-  def cleanup():
+def main() -> None:
+  def cleanup() -> None:
     if gradio_thread.is_alive():
       interface.close()
       gradio_thread.join(timeout=1)
