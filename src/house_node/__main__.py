@@ -11,7 +11,7 @@ from src.openadr_node.node_manager import NodeManager
 
 def sample_callback_1():
   print('callback 1')
-  return np.random.rand() * 10
+  return np.random.rand() * 11
 
 
 def sample_callback_2():
