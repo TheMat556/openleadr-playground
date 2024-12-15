@@ -52,7 +52,6 @@ class NodeManager(AdrBaseConfig):
     dispatcher.send(signal='on_ready', sender='system')
 
     self.app = Flask(__name__)
-    self.app.config['WTF_CSRF_ENABLED'] = False
 
     self._init_routes()
     self._start_flask()
