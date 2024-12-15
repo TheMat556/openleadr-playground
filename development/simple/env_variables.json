@@ -1,0 +1,37 @@
+{
+  "mock_node": {
+    "VTN_NAME": "VTN_0",
+    "VTN_URL": "",
+    "VTN_PATH_PREFIX": "",
+    "VEN_NAME": "",
+    "GRADIO_PORT": "",
+    "GRADIO_SERVER_NAME": "",
+    "REST_API_PORT": "5000",
+    "VTN_PORT": "",
+    "VTN_SELF_HOST": ""
+  },
+  "house_node": {
+    "VTN_NAME": "",
+    "VTN_URL": "",
+    "VTN_PATH_PREFIX": "",
+    "VEN_NAME": "VEN_1",
+    "GRADIO_PORT": "",
+    "GRADIO_SERVER_NAME": "",
+    "REST_API_PORT": "5001",
+    "VTN_PORT": "",
+    "VTN_SELF_HOST": "",
+    "CONNECT_VTN_URL": ""
+  },
+    "house_node_2": {
+    "VTN_NAME": "",
+    "VTN_URL": "",
+    "VTN_PATH_PREFIX": "",
+    "VEN_NAME": "VEN_1",
+    "GRADIO_PORT": "",
+    "GRADIO_SERVER_NAME": "",
+    "REST_API_PORT": "5002",
+    "VTN_PORT": "",
+    "VTN_SELF_HOST": "",
+    "CONNECT_VTN_URL": ""
+  }
+}
