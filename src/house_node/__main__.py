@@ -11,13 +11,15 @@ from src.openadr_node.node_manager import NodeManager
 
 rng = np.random.default_rng()
 
+
 def sample_callback_1():
-    print('callback 1')
-    return rng.random() * 10
+  print('callback 1')
+  return rng.random() * 10
+
 
 def sample_callback_2():
-    print('callback 2')
-    return rng.random() * 10
+  print('callback 2')
+  return rng.random() * 10
 
 
 def main():

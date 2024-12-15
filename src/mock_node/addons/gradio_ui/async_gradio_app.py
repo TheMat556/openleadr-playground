@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SLIDER_VALUE = 'Slider Value'
 
+
 class AsyncGradioApp(AdrBaseConfig):
   """
   A Gradio application for interactive slider-based load profile visualization.

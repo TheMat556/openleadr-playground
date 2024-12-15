@@ -12,6 +12,7 @@ from src.openadr_node.node_manager import NodeManager
 
 rng = np.random.default_rng()
 
+
 def generate_measurement(
   measurement_type: str, min_value: float = 0, max_value: float = 10
 ) -> float:
