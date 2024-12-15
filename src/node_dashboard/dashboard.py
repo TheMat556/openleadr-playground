@@ -2,9 +2,9 @@ import json
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from io import StringIO
-from typing import List, Optional, Any
+from typing import List, Optional
 
 import requests
 import pandas as pd

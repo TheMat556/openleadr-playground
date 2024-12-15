@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from datetime import timedelta
@@ -8,6 +9,10 @@ from dotenv import load_dotenv
 
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def sample_callback_1() -> float:
@@ -50,7 +55,7 @@ def main() -> None:
   except KeyboardInterrupt:
     sys.exit(0)
   except Exception as e:
-    logging.error(f'Error running node: {e}')
+    logger.error(f'Error running node: {e}')
     sys.exit(1)
 
 

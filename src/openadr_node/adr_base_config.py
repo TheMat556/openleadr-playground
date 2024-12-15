@@ -1,5 +1,4 @@
 from pydispatch import dispatcher
-from typing import Any
 
 from src.openadr_node import logger
 from src.openadr_node.decorator.signal_sender import SignalSender

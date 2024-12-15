@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import gradio as gr
 import pandas as pd
@@ -15,6 +15,9 @@ import logging
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
+
+MINUTES_INTERVAL = 15
+KWH_UNIT = 'kWh'
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -279,17 +282,17 @@ class AsyncGradioApp(AdrBaseConfig):
     return interface
 
   def get_current_consumption(self) -> str:
-    return f'{self._current_consumption} kWh'
+    return f'{self._current_consumption} {KWH_UNIT}'
 
   def get_current_allowed_consumption(self) -> str:
     interpolated_values = self.interpolate_slider_values(self.slider_values)
     now = datetime.now()
-    minutes = (now.minute // 15) * 15
+    minutes = (now.minute // MINUTES_INTERVAL) * MINUTES_INTERVAL
     rounded_time = now.replace(minute=minutes, second=0, microsecond=0)
     rounded_time_str = rounded_time.strftime('%H:%M')
     allowed_consumption = interpolated_values.loc[rounded_time_str, 'Slider Value']
 
-    return f'{allowed_consumption} kWh'
+    return f'{allowed_consumption} {KWH_UNIT}'
 
 
 def main() -> None:

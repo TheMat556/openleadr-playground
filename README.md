@@ -1,3 +1,5 @@
+![logo.png](public/logo.png)
+
 # Basic Idea
 
 This repository provides an implementation of a hierarchical network infrastructure utilizing the OpenADR protocol.

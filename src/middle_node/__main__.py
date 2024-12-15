@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import timedelta
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 from dotenv import load_dotenv

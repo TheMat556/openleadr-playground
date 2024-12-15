@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import sys
 from typing import Optional, List, Any, Dict, Callable
 

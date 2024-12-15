@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import threading
@@ -11,6 +12,9 @@ from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def run_mock_node(queue: Any) -> None:
@@ -40,7 +44,7 @@ def run_mock_node(queue: Any) -> None:
   except KeyboardInterrupt:
     sys.exit(0)
   except Exception as e:
-    print(f'Error running mock node: {e}')
+    logger.error(f'Error running mock node: {e}')
     sys.exit(1)
 
 
@@ -52,7 +56,7 @@ def run_gradio(interface: Any) -> None:
       server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
     )
   except Exception as e:
-    print(f'Failed to launch Gradio interface: {e}')
+    logger.error(f'Error running house node: {e}')
 
 
 def device_callback() -> float:
