@@ -9,6 +9,8 @@ class ReportConfiguration:
   measurement: str
   sampling_rate: timedelta
   callback: Optional[Callable[[], Any]] = None
-  additional_metadata: Dict[str, Any] = field(
-    default_factory=dict
-  )  # TODO Check if needed
+  additional_metadata: Dict[str, Any] = field(default_factory=dict)
+
+  def __post_init__(self) -> None:
+    if self.sampling_rate.total_seconds() <= 0:
+      raise ValueError('sampling_rate must be positive')

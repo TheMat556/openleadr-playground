@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from openleadr import OpenADRClient
 
@@ -16,14 +16,14 @@ class VirtualEndNode(AdrBaseConfig):
     self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
     self._init_default_handler()
 
-  def _init_default_handler(self):
+  def _init_default_handler(self) -> None:
     self._open_adr_client.add_handler('on_event', self.handle_event)
 
-  def get_open_adr_server_run(self):
+  def get_open_adr_server_run(self) -> Any:
     return self._open_adr_client.run()
 
   @SignalSender('add_reports', 'ven')
-  def add_reports(self, reports: Optional[List[ReportConfiguration]] = None):
+  def add_reports(self, reports: Optional[List[ReportConfiguration]] = None) -> None:
     if reports:
       for report in reports:
         self._open_adr_client.add_report(
@@ -34,11 +34,11 @@ class VirtualEndNode(AdrBaseConfig):
         )
 
   @SignalSender('handle_event', 'ven')
-  def handle_event(self, event: dict) -> str:
+  def handle_event(self, event: Dict[str, Any]) -> str:
     """Handle OpenADR event and update load profile.
 
     Args:
-        event (dict): OpenADR event containing event_signals, each with intervals
+        event (Dict[str, Any]): OpenADR event containing event_signals, each with intervals
             defining dtstart, duration, and signal_payload.
 
     Returns:
@@ -56,6 +56,12 @@ class VirtualEndNode(AdrBaseConfig):
     _active_period = event['active_period']
     _event_signals = event['event_signals']
     _targets = event['targets']
+
+    if not isinstance(_event_signals, list) or not all(
+      isinstance(signal, dict) for signal in _event_signals
+    ):
+      raise ValueError('Invalid event_signals format')
+
     flattened_intervals = [
       {
         'dtstart': interval['dtstart'],
@@ -63,11 +69,18 @@ class VirtualEndNode(AdrBaseConfig):
         'signal_payload': interval['signal_payload'],
       }
       for signal in _event_signals
-      for interval in signal['intervals']
+      for interval in signal.get('intervals', [])
+      if 'dtstart' in interval
+      and 'duration' in interval
+      and 'signal_payload' in interval
     ]
+
+    if not flattened_intervals:
+      raise ValueError('No valid intervals found in event_signals')
+
     self.update_load_profile(flattened_intervals)
     return 'optIn'  # eventually pass devices status?
 
   @SignalSender('update_load_profile', 'ven')
-  def update_load_profile(self, data):
+  def update_load_profile(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return data

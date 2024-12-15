@@ -9,7 +9,7 @@ class Interval:
   duration: timedelta
   signal_payload: Any
 
-  def __post_init__(self):
+  def __post_init__(self) -> None:
     if self.dtstart.tzinfo is None:
       raise ValueError('dtstart must be timezone-aware')
 

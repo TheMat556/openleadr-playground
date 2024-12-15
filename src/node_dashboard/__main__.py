@@ -1,5 +1,4 @@
 import os
-
 from src.node_dashboard.dashboard import GradioNodeDashboard
 
 if __name__ == '__main__':

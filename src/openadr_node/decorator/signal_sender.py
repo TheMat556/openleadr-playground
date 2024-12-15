@@ -1,10 +1,13 @@
 from functools import wraps
 from pydispatch import dispatcher
 import logging
+from typing import Optional, Callable, Any
 
 
 class SignalSender:
-  def __init__(self, signal=None, sender=None):
+  def __init__(
+    self, signal: Optional[str] = None, sender: Optional[str] = None
+  ) -> None:
     """
     Initialize the SendDispatcher decorator.
 
@@ -18,7 +21,7 @@ class SignalSender:
 
     dispatcher.connect(self.on_ready, signal='on_ready', sender=dispatcher.Any)
 
-  def on_ready(self, sender):
+  def on_ready(self, sender: Any) -> None:
     """
     This method is called when the "on_ready" event is dispatched.
     It will enable the dispatching of the `register_dispatcher` event.
@@ -36,7 +39,7 @@ class SignalSender:
       )
       self._ready_dispatched = True
 
-  def decorate(self, func):
+  def decorate(self, func: Callable) -> Callable:
     """
     Decorate a method to connect it to a signal at runtime.
 
@@ -45,7 +48,7 @@ class SignalSender:
     """
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
       if not self._ready_dispatched:
         logging.warning(
           'on_ready event has not been dispatched. Aborting function call.'
@@ -63,14 +66,14 @@ class SignalSender:
 
     return wrapper
 
-  def __call__(self, func):
+  def __call__(self, func: Callable) -> Callable:
     """
     Callable method for the decorator, delegates to `decorate`.
     """
     return self.decorate(func)
 
   @classmethod
-  def connect_all(cls, instance):
+  def connect_all(cls, instance: Any) -> None:
     """
     Connect all decorated dispatcher methods for a given instance.
 

@@ -1,6 +1,8 @@
 import asyncio
+import logging
 import os
-from typing import Optional, List, Any, Dict
+import sys
+from typing import Optional, List, Any, Dict, Callable
 
 import pandas as pd
 from flask import Flask, jsonify
@@ -15,8 +17,8 @@ from pydispatch import dispatcher
 from threading import Thread
 
 
-def rest_endpoint(path):
-  def decorator(func):
+def rest_endpoint(path: str) -> Callable:
+  def decorator(func: Callable) -> Callable:
     func._rest_endpoint = True
     func._rest_path = path
     return func
@@ -33,7 +35,7 @@ class NodeManager(AdrBaseConfig):
     http_host: Optional[str] = None,
     http_port: Optional[int] = None,
     vtn_path_prefix: Optional[str] = None,
-    rest_api_port: Optional[str] = None,
+    rest_api_port: Optional[int] = None,
   ):
     super().__init__()
     self._vtn_name: Optional[str] = vtn_name
@@ -42,12 +44,12 @@ class NodeManager(AdrBaseConfig):
     self._http_host: Optional[str] = http_host
     self._http_port: Optional[int] = http_port
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
-    self._rest_api_port: Optional[str] = rest_api_port
+    self._rest_api_port: Optional[int] = rest_api_port
 
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
-    self._subscribers = {}
+    self._subscribers: Dict[str, List[Callable]] = {}
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -55,11 +57,11 @@ class NodeManager(AdrBaseConfig):
     self._init_routes()
     self._start_flask()
 
-  def get_method(self, signal):
+  def get_method(self, signal: str) -> Optional[Callable]:
     method_name = '_on_' + signal
     return getattr(self, method_name, None)
 
-  def _register_dispatcher(self, sender, signal, data):
+  def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
     method = self.get_method(data)
     if callable(method):
       dispatcher.connect(self._call_method, signal=data, sender=dispatcher.Any)
@@ -71,10 +73,10 @@ class NodeManager(AdrBaseConfig):
     )
 
   @staticmethod
-  def _forward_dispatcher(sender, signal, data):
-    return dispatcher.send(signal=signal, sender='nm', data=data)
+  def _forward_dispatcher(sender: str, signal: str, data: Any) -> None:
+    dispatcher.send(signal=signal, sender='nm', data=data)
 
-  def _call_method(self, sender, signal, data):
+  def _call_method(self, sender: str, signal: str, data: Any) -> None:
     if sender == 'nm':
       return
 
@@ -86,11 +88,10 @@ class NodeManager(AdrBaseConfig):
         logger.error(f'Error calling method {signal}: {e}')
         raise
 
-  def event_response_callback(self):
+  def event_response_callback(self) -> None:
     pass
 
-  # This will overwrite automatically forwarding
-  def _on_update_load_profile(self, sender, data):
+  def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
     print(f'LOADPROFILE has been updated from {sender}')
 
     if not isinstance(data, list):
@@ -110,8 +111,12 @@ class NodeManager(AdrBaseConfig):
 
     dispatcher.send(sender='nm', signal='update_load_profile', data=data)
 
-  def _create_node_tasks(self):
-    async def run_with_notification(coro, start_callback, end_callback):
+  def _create_node_tasks(self) -> None:
+    async def run_with_notification(
+      coro: Callable,
+      start_callback: Optional[Callable],
+      end_callback: Optional[Callable],
+    ) -> None:
       if start_callback:
         start_callback()
       await coro
@@ -146,29 +151,32 @@ class NodeManager(AdrBaseConfig):
       )
 
   @staticmethod
-  async def _event_response_callback(self, ven_id, event_id, opt_type) -> None:
+  async def _event_response_callback(ven_id: str, event_id: str, opt_type: str) -> None:
     print(f'The VEN decided to {opt_type}')
 
-  def add_task(self, task):
+  def add_task(self, task: Callable) -> None:
     self._loop.create_task(task())
 
-  def run_node(self):
+  def run_node(self) -> None:
     self._loop.run_forever()
 
-  def add_report(self, list_of_reports: Optional[List[ReportConfiguration]] = None):
+  def add_report(
+    self, list_of_reports: Optional[List[ReportConfiguration]] = None
+  ) -> None:
     self._ven.add_reports(list_of_reports)
 
-  def _init_routes(self):
+  def _init_routes(self) -> None:
     for attr_name in dir(self):
       attr = getattr(self, attr_name)
       if callable(attr) and getattr(attr, '_rest_endpoint', False):
         self.app.add_url_rule(attr._rest_path, view_func=attr, methods=['GET'])
 
-  def _start_flask(self):
-    def run_flask():
+  def _start_flask(self) -> None:
+    def run_flask() -> None:
       port = self._rest_api_port
       if self._rest_api_port is None:
-        port = int(os.getenv('REST_API_PORT', 5000))
+        logging.info('REST API port not set, node manager executing will exit')
+        sys.exit(1)
       try:
         self.app.run(host='0.0.0.0', port=port)
       except OSError as e:
@@ -180,7 +188,7 @@ class NodeManager(AdrBaseConfig):
     thread.start()
 
   @rest_endpoint('/data/load_profile')
-  def get_load_profile(self):
+  def get_load_profile(self) -> Any:
     load_profile = self._topics.get('load_profile', None)
     if load_profile is None:
       return jsonify({'error': 'Load profile not found'}), 404
@@ -190,13 +198,13 @@ class NodeManager(AdrBaseConfig):
       logger.error(f'Failed to serialize load profile: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
 
-  def publish(self, signal, data):
+  def publish(self, signal: str, data: Any) -> None:
     if signal in self._subscribers:
       for callback in self._subscribers[signal]:
         callback(data)
     logger.info(f'Published signal: {signal} with data: {data}')
 
-  def subscribe(self, signal, callback):
+  def subscribe(self, signal: str, callback: Callable) -> None:
     if signal not in self._subscribers:
       self._subscribers[signal] = []
     self._subscribers[signal].append(callback)
