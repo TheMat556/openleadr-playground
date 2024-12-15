@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 from datetime import timedelta
+from typing import Any
 
 import numpy as np
 from dotenv import load_dotenv
@@ -12,83 +13,91 @@ from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
 
-def run_mock_node(queue):
-  load_dotenv(dotenv_path='./development/simple/.env')
+def run_mock_node(queue: Any) -> None:
+    load_dotenv(dotenv_path='./development/simple/.env')
 
-  mock_node = NodeManager(
-    vtn_name=os.getenv('DEV_VTN_NAME'),
-    vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
-    rest_api_port=os.getenv('DEV_MOCK_NODE_REST_API'),
-    http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
-    http_port=os.getenv('DEV_VTN_HTTP_PORT'),
-  )
-
-  def notify_main_process(data):
-    queue.put('vtn_created')
-
-  mock_node.subscribe('vtn_created', notify_main_process)
-
-  app = AsyncGradioApp(slider_file='./slider_values.txt')
-  interface = app.create_interface()
-
-  gradio_thread = threading.Thread(target=run_gradio, args=(interface,), daemon=True)
-  gradio_thread.start()
-
-  try:
-    mock_node.run_node()
-  except KeyboardInterrupt:
-    sys.exit(0)
-
-
-def run_gradio(interface):
-  """Run Gradio in a separate process."""
-  try:
-    interface.launch(
-      server_port=int(os.getenv('DEV_GRADIO_PORT')),
-      server_name=os.getenv('DEV_GRADIO_SERVER_NAME'),
+    mock_node = NodeManager(
+        vtn_name=os.getenv('DEV_VTN_NAME'),
+        vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
+        rest_api_port=int(os.getenv('DEV_MOCK_NODE_REST_API', 8080)),
+        http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
+        http_port=int(os.getenv('DEV_VTN_HTTP_PORT', 80)),
     )
-  except Exception as e:
-    print(f'Failed to launch Gradio interface: {e}')
+
+    def notify_main_process(data: Any) -> None:
+        queue.put('vtn_created')
+
+    mock_node.subscribe('vtn_created', notify_main_process)
+
+    app = AsyncGradioApp(slider_file='./slider_values.txt')
+    interface = app.create_interface()
+
+    gradio_thread = threading.Thread(target=run_gradio, args=(interface,), daemon=True)
+    gradio_thread.start()
+
+    try:
+        mock_node.run_node()
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print(f'Error running mock node: {e}')
+        sys.exit(1)
 
 
-def device_callback():
-  """Simulate a device callback."""
-  print('Device callback called')
-  return np.random.rand() * 10
+def run_gradio(interface: Any) -> None:
+    """Run Gradio in a separate process."""
+    try:
+        interface.launch(
+            server_port=int(os.getenv('DEV_GRADIO_PORT', 7860)),
+            server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
+        )
+    except Exception as e:
+        print(f'Failed to launch Gradio interface: {e}')
 
 
-def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str):
-  """Create and configure a house node."""
-  reports = [
-    ReportConfiguration(
-      resource_id='res_123',
-      measurement='energy',
-      sampling_rate=timedelta(seconds=5),
-      callback=device_callback,
-      additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
-    ),
-  ]
-  house_node = NodeManager(
-    ven_name=ven_name,
-    vtn_url=vtn_url,
-    rest_api_port=rest_api_port,
-  )
-  house_node.add_report(reports)
+rng = np.random.default_rng()
 
-  try:
-    house_node.run_node()
-  except KeyboardInterrupt:
-    sys.exit(0)
+def device_callback() -> float:
+    """Simulate a device callback."""
+    print('Device callback called')
+    return rng.random() * 10
 
 
-def run_node_dashboard():
-  """Run the node dashboard."""
-  gradio_node_dashboard = GradioNodeDashboard(
-    file_path='./development/simple/env_variables.json'
-  )
-  interface = gradio_node_dashboard.create_interface()
-  interface.launch(
-    share=False,
-    server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT')),
-    server_name=os.getenv('DEV_GRADIO_SERVER_NAME'),
-  )
+def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
+    """Create and configure a house node."""
+    reports = [
+        ReportConfiguration(
+            resource_id='res_123',
+            measurement='energy',
+            sampling_rate=timedelta(seconds=5),
+            callback=device_callback,
+            additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
+        ),
+    ]
+    house_node = NodeManager(
+        ven_name=ven_name,
+        vtn_url=vtn_url,
+        rest_api_port=int(rest_api_port),
+    )
+    house_node.add_report(reports)
+
+    try:
+        house_node.run_node()
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print(f'Error running house node: {e}')
+        sys.exit(1)
+
+
+def run_node_dashboard() -> None:
+    """Run the node dashboard."""
+    gradio_node_dashboard = GradioNodeDashboard(
+        file_path='./development/simple/env_variables.json'
+    )
+    interface = gradio_node_dashboard.create_interface()
+    interface.launch(
+        share=False,
+        server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT', 7860)),
+        server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
+    )

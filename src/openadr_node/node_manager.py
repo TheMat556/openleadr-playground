@@ -33,7 +33,7 @@ class NodeManager(AdrBaseConfig):
     http_host: Optional[str] = None,
     http_port: Optional[int] = None,
     vtn_path_prefix: Optional[str] = None,
-    rest_api_port: Optional[str] = None,
+    rest_api_port: Optional[int] = None,
   ):
     super().__init__()
     self._vtn_name: Optional[str] = vtn_name
@@ -42,9 +42,9 @@ class NodeManager(AdrBaseConfig):
     self._http_host: Optional[str] = http_host
     self._http_port: Optional[int] = http_port
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
-    self._rest_api_port: Optional[str] = rest_api_port
+    self._rest_api_port: Optional[int] = rest_api_port
 
-    self._loop = asyncio.get_event_loop()
+    self._loop = asyncio.get_eventloop()
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
     self._subscribers = {}
@@ -52,6 +52,8 @@ class NodeManager(AdrBaseConfig):
     dispatcher.send(signal='on_ready', sender='system')
 
     self.app = Flask(__name__)
+    self.app.config['WTF_CSRF_ENABLED'] = False
+
     self._init_routes()
     self._start_flask()
 
@@ -85,9 +87,6 @@ class NodeManager(AdrBaseConfig):
       except Exception as e:
         logger.error(f'Error calling method {signal}: {e}')
         raise
-
-  def event_response_callback(self):
-    pass
 
   # This will overwrite automatically forwarding
   def _on_update_load_profile(self, sender, data):
@@ -144,10 +143,6 @@ class NodeManager(AdrBaseConfig):
           end_callback=lambda: print('VEN task finished'),
         )
       )
-
-  @staticmethod
-  async def _event_response_callback(self, ven_id, event_id, opt_type) -> None:
-    print(f'The VEN decided to {opt_type}')
 
   def add_task(self, task):
     self._loop.create_task(task())

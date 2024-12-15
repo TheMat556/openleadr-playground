@@ -10,12 +10,14 @@ from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
 
+rng = np.random.default_rng()
+
 def generate_measurement(
   measurement_type: str, min_value: float = 0, max_value: float = 10
 ) -> float:
   """Generate a random measurement value within specified bounds."""
   logging.info(f'Generating {measurement_type} measurement')
-  measurement = np.random.rand() * (max_value - min_value) + min_value
+  measurement = rng.random() * (max_value - min_value) + min_value
   logging.debug(f'Generated measurement: {measurement}')
   return measurement
 

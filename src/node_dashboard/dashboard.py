@@ -93,7 +93,7 @@ class GradioNodeDashboard:
         columns=['time', 'value']
       )  # Return an empty DataFrame in case of an error
 
-  def create_plot(self, df, vtn_self_host, port):
+  def create_plot(self, df, port):
     fig = go.Figure(
       data=[
         go.Scatter(
@@ -131,7 +131,7 @@ class GradioNodeDashboard:
     data = self.fetch_data(vtn_self_host, rest_api_port)
     if data is not None:
       df = self.process_data(data)
-      return self.create_plot(df, vtn_self_host, rest_api_port)
+      return self.create_plot(df, rest_api_port)
     else:
       return None  # Return None if data is None
 
