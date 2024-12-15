@@ -55,7 +55,7 @@ class AsyncGradioApp(AdrBaseConfig):
     :param sender: Signal sender
     :param data: Consumption data dictionary
     """
-    self._current_consumption = 3
+    self._current_consumption = 0
     for ven_id, resources in data.items():
       for resource_id, (_, value) in resources.items():
         self._current_consumption += value
@@ -70,15 +70,9 @@ class AsyncGradioApp(AdrBaseConfig):
     :rtype: list[int]
     """
     try:
-      absolute_file_path = Path(os.getcwd())
-      if (
-        'src' not in absolute_file_path.parts
-        or 'mock_node' not in absolute_file_path.parts
-      ):
-        absolute_file_path = absolute_file_path / 'src' / 'mock_node'
-
-      absolute_file_path = absolute_file_path / filename
-      filepath = absolute_file_path.resolve()
+      base_path = Path(__file__).parent.parent.parent
+      print("BASE PATH:", base_path)
+      filepath = (base_path / filename).resolve()
 
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]

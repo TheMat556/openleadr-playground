@@ -56,7 +56,7 @@ def run_gradio(interface: Any) -> None:
       server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
     )
   except Exception as e:
-    logger.error(f'Error running house node: {e}')
+    logger.error(f'Error running node dashboard: {e}')
 
 
 def device_callback() -> float:
@@ -88,7 +88,7 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
   except KeyboardInterrupt:
     sys.exit(0)
   except Exception as e:
-    print(f'Error running house node: {e}')
+    logger.error(f'Error running house node: {e}')
     sys.exit(1)
 
 

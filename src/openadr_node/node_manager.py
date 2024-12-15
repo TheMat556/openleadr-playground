@@ -204,6 +204,8 @@ class NodeManager(AdrBaseConfig):
     logger.info(f'Published signal: {signal} with data: {data}')
 
   def subscribe(self, signal: str, callback: Callable) -> None:
+    if not callable(callback):
+      raise TypeError("callback must be callable")
     if signal not in self._subscribers:
       self._subscribers[signal] = []
     self._subscribers[signal].append(callback)
