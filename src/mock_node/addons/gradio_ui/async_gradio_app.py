@@ -1,7 +1,7 @@
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import List
 
 import gradio as gr
 import pandas as pd
@@ -14,6 +14,9 @@ import logging
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
+
+MINUTES_INTERVAL = 15
+KWH_UNIT = 'kWh'
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +36,9 @@ class AsyncGradioApp(AdrBaseConfig):
   :type slider_file: str, optional
   """
 
-  def __init__(self, num_sliders=24, slider_file='./slider_values.txt'):
+  def __init__(
+    self, num_sliders: int = 24, slider_file: str = './slider_values.txt'
+  ) -> None:
     super().__init__()
     self.num_sliders = num_sliders
     self.slider_file = slider_file
@@ -42,19 +47,19 @@ class AsyncGradioApp(AdrBaseConfig):
     self.save_slider_values(*self.slider_values)  # Send interpolated values at startup
 
   @SignalConnector('update_consumption_data', 'nm')
-  def _on_update_consumption_data(self, sender, signal, data):
+  def _on_update_consumption_data(self, sender: str, signal: str, data: dict) -> None:
     """
     Update current consumption and refresh the label if it exists.
 
     :param sender: Signal sender
     :param data: Consumption data dictionary
     """
-    self._current_consumption = 3
+    self._current_consumption = 0
     for ven_id, resources in data.items():
       for resource_id, (_, value) in resources.items():
         self._current_consumption += value
 
-  def load_slider_values(self, filename):
+  def load_slider_values(self, filename: str) -> List[int]:
     """
     Load slider values from a file or generate default values.
 
@@ -64,15 +69,9 @@ class AsyncGradioApp(AdrBaseConfig):
     :rtype: list[int]
     """
     try:
-      absolute_file_path = Path(os.getcwd())
-      if (
-        'src' not in absolute_file_path.parts
-        or 'mock_node' not in absolute_file_path.parts
-      ):
-        absolute_file_path = absolute_file_path / 'src' / 'mock_node'
-
-      absolute_file_path = absolute_file_path / filename
-      filepath = absolute_file_path.resolve()
+      base_path = Path(__file__).parent.parent.parent
+      print('BASE PATH:', base_path)
+      filepath = (base_path / filename).resolve()
 
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
@@ -86,7 +85,7 @@ class AsyncGradioApp(AdrBaseConfig):
       logging.error(f'Invalid data in {filename}: {e}')
       return [30] * self.num_sliders
 
-  def interpolate_slider_values(self, slider_values):
+  def interpolate_slider_values(self, slider_values: List[int]) -> pd.DataFrame:
     """
     Interpolate slider values to create a 15-minute resolution time series.
 
@@ -110,7 +109,7 @@ class AsyncGradioApp(AdrBaseConfig):
 
     return df_interpolated[['Slider Value']]
 
-  def save_slider_values(self, *args):
+  def save_slider_values(self, *args: int) -> None:
     """
     Save slider values to a file and send interpolated values via dispatcher.
 
@@ -139,7 +138,7 @@ class AsyncGradioApp(AdrBaseConfig):
     self._send_interpolated_values(json_result)
 
   @SignalSender('update_load_profile', 'ui')
-  def _send_interpolated_values(self, value):
+  def _send_interpolated_values(self, value: str) -> List[dict]:
     data = json.loads(value)
     intervals = []
     start_time = datetime.now().replace(
@@ -157,7 +156,7 @@ class AsyncGradioApp(AdrBaseConfig):
       intervals.append(interval)
     return intervals
 
-  def update_chart(self, *args):
+  def update_chart(self, *args: int) -> go.Figure:
     """
     Create a Plotly scatter plot visualization of slider values.
 
@@ -206,7 +205,7 @@ class AsyncGradioApp(AdrBaseConfig):
 
     return fig
 
-  def create_interface(self):
+  def create_interface(self) -> gr.Blocks:
     """
     Create the Gradio interface with sliders and interactive plot.
 
@@ -275,21 +274,21 @@ class AsyncGradioApp(AdrBaseConfig):
 
     return interface
 
-  def get_current_consumption(self):
-    return f'{self._current_consumption} kWh'
+  def get_current_consumption(self) -> str:
+    return f'{self._current_consumption} {KWH_UNIT}'
 
-  def get_current_allowed_consumption(self):
+  def get_current_allowed_consumption(self) -> str:
     interpolated_values = self.interpolate_slider_values(self.slider_values)
     now = datetime.now()
-    minutes = (now.minute // 15) * 15
-    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)  #
+    minutes = (now.minute // MINUTES_INTERVAL) * MINUTES_INTERVAL
+    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)
     rounded_time_str = rounded_time.strftime('%H:%M')
     allowed_consumption = interpolated_values.loc[rounded_time_str, 'Slider Value']
 
-    return f'{allowed_consumption} kWh'
+    return f'{allowed_consumption} {KWH_UNIT}'
 
 
-def main():
+def main() -> None:
   """
   Main function to create and launch the AsyncGradioApp.
   """

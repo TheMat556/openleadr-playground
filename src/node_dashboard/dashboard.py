@@ -4,6 +4,7 @@ import os
 import sys
 from dataclasses import dataclass
 from io import StringIO
+from typing import List, Optional
 
 import requests
 import pandas as pd
@@ -32,8 +33,8 @@ logger = logging.getLogger(__name__)
 
 
 class GradioNodeDashboard:
-  def __init__(self, file_path='./env_variables.json'):
-    self.configs = []
+  def __init__(self, file_path: str = './env_variables.json') -> None:
+    self.configs: List[ContainerConfig] = []
     self.file_path = file_path
 
     self.load_configs(file_path)
@@ -41,7 +42,7 @@ class GradioNodeDashboard:
       logger.error('No configurations loaded. Exiting application.')
       sys.exit(1)
 
-  def load_configs(self, file_path):
+  def load_configs(self, file_path: str) -> None:
     try:
       with open(file_path) as f:
         data = json.load(f)
@@ -58,12 +59,12 @@ class GradioNodeDashboard:
           }
           self.configs.append(ContainerConfig(**config))
     except FileNotFoundError:
-      logging.error(f'Config file not found: {file_path}')
+      logger.error(f'Config file not found: {file_path}')
     except json.JSONDecodeError as e:
-      logging.error(f'Invalid JSON in config file: {e}')
+      logger.error(f'Invalid JSON in config file: {e}')
 
-  def fetch_data(self, vtn_self_host, rest_api_port):
-    if os.getenv('DOCKER_ENVIRONMENT', True) == 'false':
+  def fetch_data(self, vtn_self_host: str, rest_api_port: str) -> Optional[dict]:
+    if os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false':
       url = f'http://localhost:{rest_api_port}/data/load_profile'
     else:
       url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
@@ -75,7 +76,7 @@ class GradioNodeDashboard:
       logger.error(f'Failed to fetch data: {e} from {url}')
       return None
 
-  def process_data(self, data):
+  def process_data(self, data: dict) -> pd.DataFrame:
     try:
       json_str = json.dumps(data)  # Convert dictionary to JSON string
       df = pd.read_json(StringIO(json_str))  # Wrap JSON string in StringIO
@@ -88,12 +89,12 @@ class GradioNodeDashboard:
 
       return df
     except Exception as e:
-      logging.error(f'Failed to process data: {e}')
+      logger.error(f'Failed to process data: {e}')
       return pd.DataFrame(
         columns=['time', 'value']
       )  # Return an empty DataFrame in case of an error
 
-  def create_plot(self, df, vtn_self_host, port):
+  def create_plot(self, df: pd.DataFrame, vtn_self_host: str, port: str) -> go.Figure:
     fig = go.Figure(
       data=[
         go.Scatter(
@@ -127,7 +128,7 @@ class GradioNodeDashboard:
     )
     return fig
 
-  def update_plot(self, vtn_self_host, rest_api_port):
+  def update_plot(self, vtn_self_host: str, rest_api_port: str) -> Optional[go.Figure]:
     data = self.fetch_data(vtn_self_host, rest_api_port)
     if data is not None:
       df = self.process_data(data)
@@ -135,12 +136,12 @@ class GradioNodeDashboard:
     else:
       return None  # Return None if data is None
 
-  def create_interface(self):
+  def create_interface(self) -> gr.Blocks:
     with gr.Blocks(
       css="""
-            .gradio-container { max-width: 95% !important; background-color: black; }
-            .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
-            """
+                .gradio-container { max-width: 95% !important; background-color: black; }
+                .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
+                """
     ) as interface:
       with gr.Row():
         for env_config in self.configs:
