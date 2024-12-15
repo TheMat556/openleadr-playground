@@ -61,13 +61,13 @@ The basic implementation of the OpenADR node provides a simple base node that ca
 The house, middle, and mock nodes are examples of such extensions.
 Which will be used to demonstrate the hierarchical network infrastructure.
 
-1**Start the house node:**
+1. **Start the house node:**
 
     ```bash
     pipenv run start-house-node
     ```
 
-2**Start the mock node:**
+2. **Start the mock node:**
 
     ```bash
     pipenv run start-mock-node
@@ -82,7 +82,7 @@ Note: The installation steps have to be followed before running the docker compo
 1. **Create the docker compose file:**
 
     ```bash
-    pipenv run create-docker-compose <layers>
+    pipenv run generate-docker-compose <layers>
     ```
 
 2. **Start the containers:**
