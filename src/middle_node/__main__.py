@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
-
-rng = np.random.default_rng()
+seed = 42
+rng = np.random.default_rng(seed)
 
 
 def generate_measurement(

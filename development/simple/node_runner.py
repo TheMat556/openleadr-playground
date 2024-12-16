@@ -62,7 +62,8 @@ def run_gradio(interface: Any) -> None:
     logger.error(f'Error running node dashboard: {e}')
 
 
-rng = np.random.default_rng()
+seed = 42
+rng = np.random.default_rng(seed)
 
 
 def device_callback() -> float:

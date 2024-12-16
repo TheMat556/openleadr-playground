@@ -9,10 +9,8 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ../../../src /app/src
-COPY ../../../Pipfile /app
-COPY ../../../env_variables.json /app
-COPY ../../../Pipfile.lock /app
+COPY src/ /app/src/
+COPY Pipfile Pipfile.lock env_variables.json /app/
 
 RUN chown -R appuser:appuser /app
 

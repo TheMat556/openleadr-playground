@@ -15,7 +15,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-rng = np.random.default_rng()
+seed = 42
+rng = np.random.default_rng(seed)
 
 
 def sample_callback_1() -> float:
