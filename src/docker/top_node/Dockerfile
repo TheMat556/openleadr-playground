@@ -3,11 +3,11 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y sudo curl && \
+    apt-get --no-install-recommends install -y curl && \
     addgroup --system appuser && \
     adduser --disabled-password --gecos '' --system --ingroup appuser appuser && \
-    adduser appuser sudo && \
-    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY ../../../src /app/src
 COPY ../../../Pipfile /app
@@ -25,7 +25,6 @@ RUN pip install --upgrade pip && \
 
 USER appuser
 
-RUN cd /app && \
-    pipenv install --deploy --ignore-pipfile
+RUN pipenv install --deploy --ignore-pipfile
 
 CMD ["pipenv", "run", "start-mock-node"]
