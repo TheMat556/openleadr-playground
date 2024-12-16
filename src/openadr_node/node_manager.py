@@ -45,7 +45,7 @@ class NodeManager(AdrBaseConfig):
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
     self._rest_api_port: Optional[int] = rest_api_port
 
-    self._loop = asyncio.get_eventloop()
+    self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
     self._subscribers: Dict[str, List[Callable]] = {}

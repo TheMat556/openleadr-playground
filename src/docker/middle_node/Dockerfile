@@ -1,31 +1,31 @@
-# Use the official Python image from the Docker Hub
 FROM python:3.12-slim
 
-# Create a non-root user and group
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
+RUN apt-get update && \
+    apt-get install -y sudo curl && \
+    addgroup --system appuser && \
+    adduser --disabled-password --gecos '' --system --ingroup appuser appuser && \
+    adduser appuser sudo && \
+    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
 COPY ../../../src /app/src
 COPY ../../../Pipfile /app
+COPY ../../../env_variables.json /app
 COPY ../../../Pipfile.lock /app
 
-# Change ownership of the /app directory to the non-root user
 RUN chown -R appuser:appuser /app
 
-# Switch to the non-root user
+ENV PIPENV_VENV_IN_PROJECT=1 \
+    PIPENV_IGNORE_VIRTUALENVS=1 \
+    HOME=/home/appuser
+
+RUN pip install --upgrade pip && \
+    pip install pipenv
+
 USER appuser
 
-# Install pipenv and any needed packages specified in Pipfile
-RUN apt-get update && \
-    apt-get install -y curl && \
-    pip install --upgrade pip && \
-    pip install pipenv && \
-    pipenv install --deploy --ignore-pipfile && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN cd /app && \
+    pipenv install --deploy --ignore-pipfile
 
-# Run tst.py when the container launches
 CMD ["pipenv", "run", "start-middle-node"]

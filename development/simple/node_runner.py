@@ -43,8 +43,11 @@ def run_mock_node(queue: Any) -> None:
     mock_node.run_node()
   except KeyboardInterrupt:
     sys.exit(0)
+  except (ConnectionError, ValueError) as e:
+    logging.error(f'Error running mock node: {e}')
+    sys.exit(1)
   except Exception as e:
-    logger.error(f'Error running mock node: {e}')
+    logger.error(f'Unexpected error running mock node: {e}')
     sys.exit(1)
 
 
@@ -90,6 +93,9 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
     house_node.run_node()
   except KeyboardInterrupt:
     sys.exit(0)
+  except (ConnectionError, ValueError) as e:
+    logging.error(f'Error running mock node: {e}')
+    sys.exit(1)
   except Exception as e:
     logger.error(f'Error running house node: {e}')
     sys.exit(1)

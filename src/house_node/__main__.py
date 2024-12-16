@@ -50,7 +50,7 @@ def main() -> None:
   node_manager = NodeManager(
     ven_name=os.getenv('VEN_NAME'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
-    rest_api_port=int(os.getenv('REST_API_PORT', 8080)),
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
   )
   node_manager.add_report(reports)
   try:

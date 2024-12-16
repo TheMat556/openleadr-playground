@@ -59,6 +59,7 @@ def main() -> None:
     vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
     ven_name=os.getenv('VEN_NAME', 'default_ven'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
   )
 
   try:
