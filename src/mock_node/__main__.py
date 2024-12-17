@@ -29,6 +29,7 @@ def main() -> None:
   node_manager = NodeManager(
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
     vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
   )
   app = AsyncGradioApp(slider_file='./slider_values.txt')
   interface = app.create_interface()

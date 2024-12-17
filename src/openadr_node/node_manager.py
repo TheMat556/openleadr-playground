@@ -53,6 +53,7 @@ class NodeManager(AdrBaseConfig):
     dispatcher.send(signal='on_ready', sender='system')
 
     self.app = Flask(__name__)
+
     self._init_routes()
     self._start_flask()
 
@@ -86,9 +87,6 @@ class NodeManager(AdrBaseConfig):
       except Exception as e:
         logger.error(f'Error calling method {signal}: {e}')
         raise
-
-  def event_response_callback(self) -> None:
-    pass
 
   def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
     print(f'LOADPROFILE has been updated from {sender}')
@@ -148,10 +146,6 @@ class NodeManager(AdrBaseConfig):
           end_callback=lambda: print('VEN task finished'),
         )
       )
-
-  @staticmethod
-  async def _event_response_callback(ven_id: str, event_id: str, opt_type: str) -> None:
-    print(f'The VEN decided to {opt_type}')
 
   def add_task(self, task: Callable) -> None:
     self._loop.create_task(task())

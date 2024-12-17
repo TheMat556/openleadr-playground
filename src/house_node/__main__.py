@@ -15,14 +15,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+seed = 42
+rng = np.random.default_rng(seed)
+
+
 def sample_callback_1() -> float:
   print('callback 1')
-  return np.random.rand() * 10
+  return rng.random() * 10
 
 
 def sample_callback_2() -> float:
   print('callback 2')
-  return np.random.rand() * 10
+  return rng.random() * 10
 
 
 def main() -> None:
@@ -47,7 +51,7 @@ def main() -> None:
   node_manager = NodeManager(
     ven_name=os.getenv('VEN_NAME'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
-    rest_api_port=int(os.getenv('REST_API_PORT', 8080)),
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
   )
   node_manager.add_report(reports)
   try:

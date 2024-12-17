@@ -22,6 +22,8 @@ KWH_UNIT = 'kWh'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+SLIDER_VALUE = 'Slider Value'
+
 
 class AsyncGradioApp(AdrBaseConfig):
   """
@@ -100,14 +102,14 @@ class AsyncGradioApp(AdrBaseConfig):
     )
 
     df_original = pd.DataFrame(
-      {'Time': original_time_index, 'Slider Value': slider_values}
+      {'Time': original_time_index, SLIDER_VALUE: slider_values}
     )
 
     df_original.set_index('Time', inplace=True)
     df_interpolated = df_original.reindex(time_index).interpolate(method='linear')
     df_interpolated.index = df_interpolated.index.strftime('%H:%M')
 
-    return df_interpolated[['Slider Value']]
+    return df_interpolated[[SLIDER_VALUE]]
 
   def save_slider_values(self, *args: int) -> None:
     """
@@ -185,7 +187,7 @@ class AsyncGradioApp(AdrBaseConfig):
     fig.update_layout(
       title={'text': 'Slider Values Visualization', 'font': {'color': 'white'}},
       xaxis_title='Data Points',
-      yaxis_title='Slider Value',
+      yaxis_title=SLIDER_VALUE,
       xaxis=dict(
         title_font_color='white',
         tickfont_color='white',
@@ -208,33 +210,32 @@ class AsyncGradioApp(AdrBaseConfig):
   def create_interface(self) -> gr.Blocks:
     """
     Create the Gradio interface with sliders and interactive plot.
-
     :return: Gradio Blocks interface
     :rtype: gradio.Blocks
     """
-    rows = math.ceil(self.num_sliders / 4)
 
-    slider_rows = []
-    for i in range(rows):
-      row_sliders = []
-      for j in range(4):
-        slider_index = i * 4 + j
-        if slider_index < self.num_sliders:
-          row_sliders.append(
-            gr.Slider(
-              minimum=0,
-              maximum=30,
-              value=self.slider_values[slider_index],
-              step=1,
-              label=f'Slider {slider_index}:00',
-              scale=1,  # Distribute space equally
-            )
-          )
-        else:
-          row_sliders.append(gr.Slider(visible=False))
+    def create_slider(index):
+      if index < self.num_sliders:
+        return gr.Slider(
+          minimum=0,
+          maximum=30,
+          value=self.slider_values[index],
+          step=1,
+          label=f'Slider {index}:00',
+          scale=1,  # Distribute space equally
+        )
+      else:
+        return gr.Slider(visible=False)
 
-      slider_rows.append(row_sliders)
+    def create_slider_rows():
+      rows = math.ceil(self.num_sliders / 4)
+      slider_rows = []
+      for i in range(rows):
+        row_sliders = [create_slider(i * 4 + j) for j in range(4)]
+        slider_rows.append(row_sliders)
+      return slider_rows
 
+    slider_rows = create_slider_rows()
     initial_plot = self.update_chart()
 
     with gr.Blocks(css='.gradio-container { max-width: 95% !important; }') as interface:
@@ -245,9 +246,7 @@ class AsyncGradioApp(AdrBaseConfig):
               slider.render()
 
         plot_output = gr.Plot(value=initial_plot)
-
         inputs = [slider for row in slider_rows for slider in row if slider.visible]
-        inputs = [slider for slider in inputs if slider is not None]
 
         for row in slider_rows:
           for slider in row:
@@ -283,7 +282,7 @@ class AsyncGradioApp(AdrBaseConfig):
     minutes = (now.minute // MINUTES_INTERVAL) * MINUTES_INTERVAL
     rounded_time = now.replace(minute=minutes, second=0, microsecond=0)
     rounded_time_str = rounded_time.strftime('%H:%M')
-    allowed_consumption = interpolated_values.loc[rounded_time_str, 'Slider Value']
+    allowed_consumption = interpolated_values.loc[rounded_time_str, SLIDER_VALUE]
 
     return f'{allowed_consumption} {KWH_UNIT}'
 

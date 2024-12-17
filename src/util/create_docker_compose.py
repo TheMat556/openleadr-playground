@@ -143,7 +143,7 @@ def generate_node(
 
   children = []
   for i in range(2):
-    child_index = f'{index}_{i}' if index != '0' else f'{index}_{i}'
+    child_index = f'{index}_{i}'
     child_node = generate_node(
       layer + 1,
       child_index,

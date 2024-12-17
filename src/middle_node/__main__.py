@@ -10,13 +10,16 @@ from dotenv import load_dotenv
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
+seed = 42
+rng = np.random.default_rng(seed)
+
 
 def generate_measurement(
   measurement_type: str, min_value: float = 0, max_value: float = 10
 ) -> float:
   """Generate a random measurement value within specified bounds."""
   logging.info(f'Generating {measurement_type} measurement')
-  measurement = np.random.rand() * (max_value - min_value) + min_value
+  measurement = rng.random() * (max_value - min_value) + min_value
   logging.debug(f'Generated measurement: {measurement}')
   return measurement
 
@@ -56,6 +59,7 @@ def main() -> None:
     vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
     ven_name=os.getenv('VEN_NAME', 'default_ven'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
   )
 
   try:
