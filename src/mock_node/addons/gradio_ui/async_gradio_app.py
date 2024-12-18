@@ -49,17 +49,14 @@ class AsyncGradioApp(AdrBaseConfig):
     self.save_slider_values(*self.slider_values)  # Send interpolated values at startup
 
   @SignalConnector('update_consumption_data', 'nm')
-  def _on_update_consumption_data(self, sender: str, signal: str, data: dict) -> None:
+  def _on_update_consumption_data(self, sender: str, signal: str, data: float) -> None:
     """
     Update current consumption and refresh the label if it exists.
 
     :param sender: Signal sender
     :param data: Consumption data dictionary
     """
-    self._current_consumption = 0
-    for ven_id, resources in data.items():
-      for resource_id, (_, value) in resources.items():
-        self._current_consumption += value
+    self._current_consumption = data
 
   def load_slider_values(self, filename: str) -> List[int]:
     """

@@ -9,6 +9,7 @@ from flask import Flask, jsonify
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.models import ReportConfiguration
+from src.openadr_node.models.event import ResourceConsumption
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
 
@@ -49,6 +50,11 @@ class NodeManager(AdrBaseConfig):
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
     self._subscribers: Dict[str, List[Callable]] = {}
+    self._ven_data: Dict[str, Dict[str, float]] = {}
+    self._current_consumption = 0
+
+    self._ven = None
+    self._vtn = None
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -71,6 +77,10 @@ class NodeManager(AdrBaseConfig):
     logger.info(
       f'NM - Connected {"_on" + signal} to signal: {data} with sender: {sender}'
     )
+
+  def register_base_event(self) -> None:
+    if self._ven:
+      self._ven.register_base_event()
 
   @staticmethod
   def _forward_dispatcher(sender: str, signal: str, data: Any) -> None:
@@ -107,6 +117,29 @@ class NodeManager(AdrBaseConfig):
     df.set_index('time', inplace=True)
 
     dispatcher.send(sender='nm', signal='update_load_profile', data=data)
+
+  def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
+    """
+    Update current consumption and refresh the label if it exists.
+
+    :param sender: Signal sender
+    :param data: Consumption data dictionary
+    """
+    self._current_consumption = 0
+
+    if data.ven_id not in self._ven_data:
+      self._ven_data[data.ven_id] = {}
+
+    self._ven_data[data.ven_id][data.resource_id] = data.data[1]
+
+    for ven_id, resources in self._ven_data.items():
+      for resource_id, value in resources.items():
+        self._current_consumption += value
+
+    print('SEND DATA')
+    dispatcher.send(
+      sender='nm', signal='update_consumption_data', data=self._current_consumption
+    )
 
   def _create_node_tasks(self) -> None:
     async def run_with_notification(
@@ -146,6 +179,9 @@ class NodeManager(AdrBaseConfig):
           end_callback=lambda: print('VEN task finished'),
         )
       )
+
+    if self._ven and self._vtn:
+      self._ven.register_base_event()
 
   def add_task(self, task: Callable) -> None:
     self._loop.create_task(task())

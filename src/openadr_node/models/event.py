@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 
 
 @dataclass
@@ -24,3 +24,10 @@ class EventSignal:
   signal_type: str
   callback: Callable[[Dict[str, Any]], None]
   intervals: List[Interval] = field(default_factory=list)
+
+
+@dataclass
+class ResourceConsumption:
+  ven_id: str
+  resource_id: str
+  data: Tuple[datetime, float]

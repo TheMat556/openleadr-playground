@@ -9,6 +9,7 @@ from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
+from src.openadr_node.models.event import ResourceConsumption
 
 
 class VirtualTopNode(AdrBaseConfig):
@@ -75,24 +76,34 @@ class VirtualTopNode(AdrBaseConfig):
 
     return callback, sampling_interval
 
-  @SignalSender(signal='update_consumption_data', sender='vtn')
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
   ) -> Dict[str, Dict[str, float]]:
     logger.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
+    print('_ON_UPDATE_REPORT: DATA', data)
 
     if measurement == 'energy':
       if ven_id not in self._ven_data:
         self._ven_data[ven_id] = {}
 
       self._ven_data[ven_id][resource_id] = data[0]
+      self._send_consumption_data(ven_id, resource_id, data[0])
 
     if data:
       logger.debug(f'Data: {data}')
 
     return self._ven_data
+
+  @SignalSender(signal='update_consumption_data', sender='vtn')
+  def _send_consumption_data(
+    self, ven_id: str, resource_id: str, data: float
+  ) -> ResourceConsumption:
+    resource_consumption = ResourceConsumption(
+      ven_id=ven_id, resource_id=resource_id, data=data
+    )
+    return resource_consumption
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')

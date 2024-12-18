@@ -1,8 +1,10 @@
+from datetime import timedelta
 from typing import Optional, List, Dict, Any
 
 from openleadr import OpenADRClient
 
 from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node import logger
@@ -15,12 +17,33 @@ class VirtualEndNode(AdrBaseConfig):
     self._vtn_url = vtn_url
     self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
     self._init_default_handler()
+    self._base_event_registered = False  # Flag to track if base event is registered
+    self._base_consumption = 0
 
   def _init_default_handler(self) -> None:
     self._open_adr_client.add_handler('on_event', self.handle_event)
 
   def get_open_adr_server_run(self) -> Any:
     return self._open_adr_client.run()
+
+  def register_base_event(self) -> None:
+    print('Registering base event')
+    if not self._base_event_registered:
+      report = ReportConfiguration(
+        resource_id='base',
+        measurement='energy',
+        sampling_rate=timedelta(seconds=5),
+        callback=self.get_data,  # lambda: self._base_consumption,
+      )
+      self.add_reports([report])
+      self._base_event_registered = True  # Set the flag to True after registering
+      print('Registered REport succ!')
+      self._open_adr_client.stop()
+      self._open_adr_client.run()
+
+  def get_data(self) -> float:
+    print('GET_DATA')
+    return self._base_consumption
 
   @SignalSender('add_reports', 'ven')
   def add_reports(self, reports: Optional[List[ReportConfiguration]] = None) -> None:
@@ -84,3 +107,8 @@ class VirtualEndNode(AdrBaseConfig):
   @SignalSender('update_load_profile', 'ven')
   def update_load_profile(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return data
+
+  @SignalConnector('update_consumption_data', 'nm')
+  def _on_update_consumption_data(self, sender: str, signal: str, data: float) -> None:
+    print('VEN - _on_update_consumption_data', data)
+    self._base_consumption = data
