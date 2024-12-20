@@ -80,7 +80,6 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     try:
       base_path = Path(__file__).parent.parent.parent
-      print('BASE PATH:', base_path)
       filepath = (base_path / filename).resolve()
 
       with filepath.open('r') as file:

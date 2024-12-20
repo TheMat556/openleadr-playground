@@ -3,19 +3,36 @@ import argparse
 import sys
 import json
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
+from typing import Optional, List, Dict, Any
 
 # Create YAML instance with specific string handling
 yaml = ruamel.yaml.YAML()
 yaml.preserve_quotes = True  # Preserve existing quotes
 yaml.default_flow_style = False  # Use block style
-yaml.allow_unicode = True
+yaml.allow_unicode = True  # Allow Unicode characters
 
 
 class PortRegistry:
+  """
+  A class to manage the allocation of unique ports.
+  """
+
   def __init__(self):
+    """
+    Initialize the PortRegistry with an empty set of used ports.
+    """
     self.used_ports = set()
 
-  def allocate_port(self, base_port):
+  def allocate_port(self, base_port: int) -> int:
+    """
+    Allocate a unique port starting from the base_port.
+
+    :param base_port: The starting port number.
+    :type base_port: int
+    :raises ValueError: If the base_port is not in the valid range (0-65535).
+    :return: The allocated port number.
+    :rtype: int
+    """
     if not 0 <= base_port <= 65535:
       raise ValueError(f'Invalid port number: {base_port}')
     port = base_port
@@ -28,7 +45,18 @@ class PortRegistry:
 
 
 class IPAllocator:
-  def __init__(self, base_ip='172.18.0'):
+  """
+  A class to manage the allocation of unique IP addresses.
+  """
+
+  def __init__(self, base_ip: str = '172.18.0'):
+    """
+    Initialize the IPAllocator with a base IP.
+
+    :param base_ip: The base IP address (format: xxx.xxx.xxx).
+    :type base_ip: str
+    :raises ValueError: If the base_ip format is invalid.
+    """
     # Validate IP format
     try:
       octets = base_ip.split('.')
@@ -44,7 +72,14 @@ class IPAllocator:
     self.used_ips = set()
     self.available_count = 253  # Track available IPs
 
-  def allocate_ip(self):
+  def allocate_ip(self) -> str:
+    """
+    Allocate a unique IP address from the base IP range.
+
+    :raises ValueError: If the IP address pool is exhausted or fragmented.
+    :return: The allocated IP address.
+    :rtype: str
+    """
     if self.available_count <= 0:
       raise ValueError('IP address pool exhausted')
     for i in range(2, 255):
@@ -59,30 +94,62 @@ class IPAllocator:
 
 
 def generate_node(
-  layer,
-  index,
-  max_layers,
-  port_registry,
-  ip_allocator,
-  parent_path_prefix=None,
-  base_port=8080,
-  gradio_port=7862,
-  rest_api_port=5000,
-  parent_ports=None,
-  parent_service_name=None,
-  parent_ip=None,
-):
+  layer: int,
+  index: str,
+  max_layers: int,
+  port_registry: PortRegistry,
+  ip_allocator: IPAllocator,
+  parent_path_prefix: Optional[str] = None,
+  base_port: int = 8080,
+  gradio_port: int = 7862,
+  rest_api_port: int = 5000,
+  parent_ports: Optional[List[str]] = None,
+  parent_service_name: Optional[str] = None,
+  parent_ip: Optional[str] = None,
+  last_layer_children: int = 2,
+) -> Optional[Dict[str, Any]]:
   """
   Generate a node with the given layer and index.
+
+  :param layer: The current layer of the node.
+  :type layer: int
+  :param index: The index of the node.
+  :type index: str
+  :param max_layers: The maximum number of layers.
+  :type max_layers: int
+  :param port_registry: The PortRegistry instance.
+  :type port_registry: PortRegistry
+  :param ip_allocator: The IPAllocator instance.
+  :type ip_allocator: IPAllocator
+  :param parent_path_prefix: The path prefix of the parent node.
+  :type parent_path_prefix: Optional[str]
+  :param base_port: The base port number.
+  :type base_port: int
+  :param gradio_port: The Gradio port number.
+  :type gradio_port: int
+  :param rest_api_port: The REST API port number.
+  :type rest_api_port: int
+  :param parent_ports: The list of parent ports.
+  :type parent_ports: Optional[List[str]]
+  :param parent_service_name: The name of the parent service.
+  :type parent_service_name: Optional[str]
+  :param parent_ip: The IP address of the parent node.
+  :type parent_ip: Optional[str]
+  :param last_layer_children: The number of children in the last layer.
+  :type last_layer_children: int
+  :return: The generated node configuration.
+  :rtype: Optional[Dict[str, Any]]
   """
   if layer >= max_layers:
     return None
 
+  # Allocate ports and IP address
   port = port_registry.allocate_port(base_port)
   gradio_port = port_registry.allocate_port(gradio_port)
   rest_api_port = port_registry.allocate_port(rest_api_port)
   ip_address = ip_allocator.allocate_ip()
 
+  # Define path prefix and environment variables
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
     'VTN_NAME': f'vtn_{index}',
@@ -94,17 +161,15 @@ def generate_node(
     'REST_API_PORT': str(rest_api_port),
     'VTN_PORT': str(port),
     'VTN_SELF_HOST': f'http://{ip_address}',
+    'LAYER': str(layer),
   }
-  if (
-    parent_path_prefix is not None
-    and parent_service_name is not None
-    and parent_ip is not None
-  ):
+  if parent_path_prefix and parent_service_name and parent_ip:
     parent_port = parent_ports[0].split(':')[0]
     environment['CONNECT_VTN_URL'] = (
       f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
+  # Define port mappings
   port_mapping = [
     SingleQuotedScalarString(f'{port}:{port}'),
     SingleQuotedScalarString(f'{gradio_port}:{gradio_port}'),
@@ -119,6 +184,7 @@ def generate_node(
   else:
     dockerfile = './src/docker/middle_node/Dockerfile'
 
+  # Define the node configuration
   node = {
     'path_prefix': path_prefix,
     'server_name': index,
@@ -131,6 +197,7 @@ def generate_node(
     'expose': [port, rest_api_port],
   }
 
+  # Add healthcheck for non-leaf nodes
   if layer < max_layers - 1:
     node['healthcheck'] = {
       'test': SingleQuotedScalarString(
@@ -141,8 +208,10 @@ def generate_node(
       'retries': 5,
     }
 
+  # Generate child nodes
   children = []
-  for i in range(2):
+  num_children = last_layer_children if layer == max_layers - 2 else 2
+  for i in range(num_children):
     child_index = f'{index}_{i}'
     child_node = generate_node(
       layer + 1,
@@ -157,6 +226,7 @@ def generate_node(
       port_mapping,
       f'{index}_node',
       ip_address,
+      last_layer_children,
     )
     if child_node:
       children.append(child_node)
@@ -168,9 +238,18 @@ def generate_node(
   return node
 
 
-def flatten_services(node, services, env_json):
+def flatten_services(
+  node: Dict[str, Any], services: Dict[str, Any], env_json: Dict[str, Any]
+) -> None:
   """
   Flatten the hierarchical structure into a dictionary of services and build the environment JSON structure.
+
+  :param node: The node configuration.
+  :type node: Dict[str, Any]
+  :param services: The dictionary to store flattened services.
+  :type services: Dict[str, Any]
+  :param env_json: The dictionary to store environment variables.
+  :type env_json: Dict[str, Any]
   """
   service_name = node['server_name']
 
@@ -199,11 +278,17 @@ def flatten_services(node, services, env_json):
       flatten_services(child, services, env_json)
 
 
-def create_docker_compose(layers):
+def create_docker_compose(layers: int, last_layer_children: int) -> None:
   """
   Generate the hierarchical YAML structure and create docker-compose.yml.
-  """
 
+  :param layers: The number of layers to generate.
+  :type layers: int
+  :param last_layer_children: The number of children in the last layer.
+  :type last_layer_children: int
+  :raises TypeError: If layers is not an integer.
+  :raises ValueError: If layers is not positive or exceeds the maximum allowed value.
+  """
   if not isinstance(layers, int):
     raise TypeError('layers must be an integer')
   if layers <= 0:
@@ -213,7 +298,9 @@ def create_docker_compose(layers):
 
   port_registry = PortRegistry()
   ip_allocator = IPAllocator()
-  root = generate_node(0, '0', layers, port_registry, ip_allocator)
+  root = generate_node(
+    0, '0', layers, port_registry, ip_allocator, last_layer_children=last_layer_children
+  )
   services = {}
   env_json = {}
   flatten_services(root, services, env_json)
@@ -250,13 +337,18 @@ def create_docker_compose(layers):
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(
-    description='Generate docker-compose.yml with a specified number of layers.'
+    description='Generate docker-compose.yml with a specified number of layers and children in the last layer.'
   )
-  parser.add_argument('layers', type=int, help='Number of layers to generate')
+  parser.add_argument(
+    '-l', '--layers', type=int, required=True, help='Number of layers to generate'
+  )
+  parser.add_argument(
+    '-c',
+    '--children',
+    type=int,
+    required=True,
+    help='Number of children in the last layer',
+  )
   args = parser.parse_args()
 
-  if args.layers is None:
-    print('Error: Number of layers must be specified.')
-    sys.exit(1)
-
-  create_docker_compose(args.layers)
+  create_docker_compose(args.layers, args.children)

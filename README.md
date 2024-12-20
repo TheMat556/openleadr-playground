@@ -75,17 +75,30 @@ Which will be used to demonstrate the hierarchical network infrastructure.
     pipenv run start-mock-node
     ```
 
+An environment has been set up for local development,
+allowing you to run both the house and the mock node simultaneously.
+This environment also allows you to use the corresponding gradio UIs.
+
+1. **Start the development environment**
+    ```bash
+    pipenv run start-mock-node
+    ```
+
 ## Containerized approach
 
 This repository allows you to create hierarchical containers,
 where each node has 2 children (done for simplicity), this is only for testing purposes and
 to demonstrate the capabilities of the implementation.
 Note: The installation steps have to be followed before running the docker compose file.
+
 1. **Create the docker compose file:**
 
     ```bash
-    pipenv run generate-docker-compose <layers>
+    pipenv run generate-docker-compose -l <layers> -c <children>
     ```
+
+    - `-l` or `--layers`: Specifies the number of layers to generate.
+    - `-c` or `--children`: Specifies the number of children in the last layer.
 
 2. **Start the containers:**
 

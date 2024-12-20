@@ -10,6 +10,10 @@ def rest_endpoint(path: str) -> Callable:
   :return: The decorated function.
   :rtype: Callable
   """
+  if not path.startswith('/'):
+    raise ValueError("Path must start with '/'")
+  if not all(c.isalnum() or c in {'/', '_'} for c in path):
+    raise ValueError('Path contains invalid characters')
 
   def decorator(func: Callable) -> Callable:
     func._rest_endpoint = True

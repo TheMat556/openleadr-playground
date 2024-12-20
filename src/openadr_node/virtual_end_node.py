@@ -49,11 +49,16 @@ class VirtualEndNode(AdrBaseConfig):
 
   def register_base_report(self) -> None:
     """
-    Register the base report for the Virtual End Node (VEN).
+        Register the base report for the Virtual End Node (VEN).
 
-    :raises Exception: If an error occurs during the registration process.
+        :raises Exception: If an error occurs during the registration process.
+        :raises ConnectionError: If OpenADR client is not connected
+    +   :raises ValueError: If invalid configuration
     """
     try:
+      if not self._open_adr_client:
+        raise ValueError('OpenADR client not initialized')
+
       if not self._base_event_registered:
         logger.info('Registering base report')
         report: List[ReportConfiguration] = [
@@ -61,7 +66,7 @@ class VirtualEndNode(AdrBaseConfig):
             resource_id='base',
             measurement='energy',
             sampling_rate=timedelta(seconds=5),
-            callback=self.get_data,
+            callback=lambda: self._base_consumption,
           )
         ]
         self.add_reports(report)

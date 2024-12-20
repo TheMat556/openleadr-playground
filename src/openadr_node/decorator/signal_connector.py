@@ -37,7 +37,11 @@ class SignalConnector:
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
       # Call the original method
-      return func(*args, **kwargs)
+      try:
+        return func(*args, **kwargs)
+      except Exception as e:
+        logger.error(f'Error in signal handler {func.__name__}: {e}')
+        raise e
 
     # Attach signal and sender information for connection later
     wrapper._signal = self._custom_signal or func.__name__
@@ -70,6 +74,11 @@ class SignalConnector:
       if hasattr(method, '_signal') and hasattr(method, '_original_func'):
         # Create a bound method for the instance
         bound_method = method.__get__(instance, instance.__class__)
+        if not hasattr(instance, '_signal_connections'):
+          instance._signal_connections = []
+          instance._signal_connections.append(
+            (bound_method, method._signal, method._sender)
+          )
 
         # Connect the bound method to the dispatcher
         dispatcher.connect(
@@ -78,3 +87,11 @@ class SignalConnector:
         logger.info(
           f'Connected {name} to signal: {method._signal} with sender: {method._sender}'
         )
+
+  @classmethod
+  def disconnect_all(cls, instance: Any) -> None:
+    """Disconnect all signals for cleanup"""
+    if hasattr(instance, '_signal_connections'):
+      for receiver, signal, sender in instance._signal_connections:
+        dispatcher.disconnect(receiver, signal, sender)
+      instance._signal_connections.clear()

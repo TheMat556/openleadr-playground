@@ -1,7 +1,31 @@
 from functools import wraps
 from pydispatch import dispatcher
 import logging
-from typing import Optional, Callable, Any, List, Tuple
+import time
+from typing import Optional, Callable, Any, Tuple
+from collections import deque
+
+
+class EventBus:
+  """
+  A simple event bus for managing signal dispatches.
+  """
+
+  def __init__(self):
+    self._subscribers = {}
+
+  def subscribe(self, signal: str, handler: Callable):
+    if signal not in self._subscribers:
+      self._subscribers[signal] = []
+    self._subscribers[signal].append(handler)
+
+  def publish(self, signal: str, *args, **kwargs):
+    if signal in self._subscribers:
+      for handler in self._subscribers[signal]:
+        handler(*args, **kwargs)
+
+
+event_bus = EventBus()
 
 
 class SignalSender:
@@ -10,7 +34,10 @@ class SignalSender:
   """
 
   def __init__(
-    self, signal: Optional[str] = None, sender: Optional[str] = None
+    self,
+    signal: Optional[str] = None,
+    sender: Optional[str] = None,
+    max_retries: int = 3,
   ) -> None:
     """
     Initialize the SendDispatcher decorator.
@@ -19,11 +46,15 @@ class SignalSender:
     :type signal: str, optional
     :param sender: Custom sender to use. Defaults to `None`.
     :type sender: str, optional
+    :param max_retries: Maximum number of retries for failed dispatches.
+    :type max_retries: int
     """
     self._custom_signal = signal
     self._custom_sender = sender
     self._ready_dispatched = False
-    self._queue: List[Tuple[Callable, Tuple[Any], dict]] = []
+    self._queue: deque[Tuple[Callable, Tuple[Any], dict]] = deque()
+    self._max_retries = max_retries
+    self._metrics = {'queue_size': 0, 'processing_times': []}
 
     dispatcher.connect(self.on_ready, signal='on_ready', sender=dispatcher.Any)
 
@@ -48,8 +79,26 @@ class SignalSender:
       self._ready_dispatched = True
 
       while self._queue:
-        func, args, kwargs = self._queue.pop(0)
-        func(*args, **kwargs)
+        func, args, kwargs = self._queue.popleft()
+        self._process(func, args, kwargs)
+
+  def _process(self, func: Callable, args: Tuple[Any], kwargs: dict) -> None:
+    retries = 0
+    while retries < self._max_retries:
+      try:
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        dispatcher.send(
+          signal=self._custom_signal, sender=self._custom_sender, data=result
+        )
+        end_time = time.time()
+        self._metrics['processing_times'].append(end_time - start_time)
+        break
+      except Exception as e:
+        logging.error(f'Error processing signal {self._custom_signal}: {e}')
+        retries += 1
+        if retries >= self._max_retries:
+          logging.error(f'Max retries reached for signal {self._custom_signal}')
 
   def decorate(self, func: Callable) -> Callable:
     """
@@ -68,14 +117,10 @@ class SignalSender:
           'on_ready event has not been dispatched. Queuing function call.'
         )
         self._queue.append((func, args, kwargs))
+        self._metrics['queue_size'] = len(self._queue)
         return None
 
-      result = func(*args, **kwargs)
-
-      dispatcher.send(
-        signal=self._custom_signal, sender=self._custom_sender, data=result
-      )
-      return result
+      self._process(func, args, kwargs)
 
     return wrapper
 
