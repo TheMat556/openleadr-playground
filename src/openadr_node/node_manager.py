@@ -46,6 +46,9 @@ class NodeManager(AdrBaseConfig):
     self._vtn_path_prefix: Optional[str] = vtn_path_prefix
     self._rest_api_port: Optional[int] = rest_api_port
 
+    self._ven = None
+    self._vtn = None
+
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
     self._topics: Dict[str, Any] = {}
@@ -53,8 +56,6 @@ class NodeManager(AdrBaseConfig):
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption = 0
 
-    self._ven = None
-    self._vtn = None
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -77,10 +78,6 @@ class NodeManager(AdrBaseConfig):
     logger.info(
       f'NM - Connected {"_on" + signal} to signal: {data} with sender: {sender}'
     )
-
-  def register_base_event(self) -> None:
-    if self._ven:
-      self._ven.register_base_event()
 
   @staticmethod
   def _forward_dispatcher(sender: str, signal: str, data: Any) -> None:
@@ -172,6 +169,7 @@ class NodeManager(AdrBaseConfig):
       print('VEN NAME:', self._ven_name)
       print('VTN URL:', self._vtn_url)
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
+      self.register_base_report()
       self._loop.create_task(
         run_with_notification(
           self._ven.get_open_adr_server_run(),
@@ -180,8 +178,10 @@ class NodeManager(AdrBaseConfig):
         )
       )
 
-    if self._ven and self._vtn:
-      self._ven.register_base_event()
+  def register_base_report(self):
+    if self._vtn_name and self._ven_name:
+      print("REGISTER BASE REPORT!!!")
+      self._ven.register_base_report()
 
   def add_task(self, task: Callable) -> None:
     self._loop.create_task(task())

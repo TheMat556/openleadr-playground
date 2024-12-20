@@ -26,35 +26,37 @@ class VirtualEndNode(AdrBaseConfig):
   def get_open_adr_server_run(self) -> Any:
     return self._open_adr_client.run()
 
-  def register_base_event(self) -> None:
+  def register_base_report(self) -> None:
     print('Registering base event')
     if not self._base_event_registered:
-      report = ReportConfiguration(
+      report: List[ReportConfiguration] = [ReportConfiguration(
         resource_id='base',
         measurement='energy',
         sampling_rate=timedelta(seconds=5),
         callback=self.get_data,  # lambda: self._base_consumption,
-      )
-      self.add_reports([report])
+      )]
+      self.add_reports(report)
       self._base_event_registered = True  # Set the flag to True after registering
       print('Registered REport succ!')
-      self._open_adr_client.stop()
-      self._open_adr_client.run()
 
   def get_data(self) -> float:
     print('GET_DATA')
     return self._base_consumption
 
-  @SignalSender('add_reports', 'ven')
+  #@SignalSender('add_reports', 'ven')
   def add_reports(self, reports: Optional[List[ReportConfiguration]] = None) -> None:
+    print("Step1")
     if reports:
+      print("Step2")
       for report in reports:
+        print("Step3")
         self._open_adr_client.add_report(
           resource_id=report.resource_id,
           measurement=report.measurement,
           sampling_rate=report.sampling_rate,
           callback=report.callback,
         )
+    return None
 
   @SignalSender('handle_event', 'ven')
   def handle_event(self, event: Dict[str, Any]) -> str:

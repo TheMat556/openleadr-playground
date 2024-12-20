@@ -56,6 +56,7 @@ class AsyncGradioApp(AdrBaseConfig):
     :param sender: Signal sender
     :param data: Consumption data dictionary
     """
+    print("GOT update_consumption_data in ASYNCIO GRADIO APP")
     self._current_consumption = data
 
   def load_slider_values(self, filename: str) -> List[int]:
