@@ -11,6 +11,7 @@ import pandas as pd
 import gradio as gr
 import plotly.graph_objs as go
 from gradio import Timer
+from numpy import flexible
 
 
 @dataclass
@@ -25,6 +26,8 @@ class ContainerConfig:
   gradio_server_name: str
   rest_api_port: str
   vtn_self_host: str
+  layer: int
+  container_name: str
 
 
 # Configure logging
@@ -56,6 +59,8 @@ class GradioNodeDashboard:
             'gradio_server_name': value['GRADIO_SERVER_NAME'],
             'rest_api_port': value['REST_API_PORT'],
             'vtn_self_host': value['VTN_SELF_HOST'],
+            'layer': int(value['LAYER']),
+            'container_name': key,
           }
           self.configs.append(ContainerConfig(**config))
     except FileNotFoundError:
@@ -64,10 +69,12 @@ class GradioNodeDashboard:
       logger.error(f'Invalid JSON in config file: {e}')
 
   def fetch_data(self, vtn_self_host: str, rest_api_port: str) -> Optional[dict]:
+    print("FETCH DATA")
     if os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false':
       url = f'http://localhost:{rest_api_port}/data/load_profile'
     else:
       url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
+    print("URL", url)
     try:
       response = requests.get(url)
       response.raise_for_status()
@@ -139,17 +146,30 @@ class GradioNodeDashboard:
   def create_interface(self) -> gr.Blocks:
     with gr.Blocks(
       css="""
-                .gradio-container { max-width: 95% !important; background-color: black; }
-                .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
-                """
+              .gradio-container { max-width: 95% !important; background-color: black; }
+              .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
+              """
     ) as interface:
       with gr.Row():
-        for env_config in self.configs:
-          with gr.Column():
-
-            def plot(config=env_config):
-              return self.update_plot(config.vtn_self_host, config.rest_api_port)
-
-            gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
+        with gr.Column(visible=True, scale=4) as x:  # Set scale to a higher value
+          plot_output = gr.Plot(label="Layer 0 Plot",
+                                value=self.update_plot(vtn_self_host='',
+                                                       rest_api_port='5000'))
+        with gr.Column(visible=True, min_width=200, scale=1) as sidebar:
+          with gr.Accordion("Layers", open=True):
+            max_layer = max(config.layer for config in self.configs)
+            for layer in range(max_layer + 1):
+              with gr.Accordion(f"Layer {layer}", open=False):
+                for config in self.configs:
+                  if config.layer == layer:
+                    gr.Button(f"{config.container_name} {config.rest_api_port}",
+                              value=config.layer,
+                              elem_id=f"{config.container_name}_btn").click(
+                      lambda c=config: self.update_plot(rest_api_port=c.rest_api_port,
+                                                        vtn_self_host=c.vtn_self_host),
+                      # Pass the correct config value
+                      inputs=None,
+                      outputs=plot_output
+                    )
 
     return interface

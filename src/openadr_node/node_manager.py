@@ -338,6 +338,23 @@ class NodeManager(AdrBaseConfig):
       logger.error(f'Failed to serialize load profile: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
 
+  # @rest_endpoint('/data/consumption')
+  # def get_load_profile(self) -> Any:
+  #   """
+  #   Get the load profile data.
+  #
+  #   :return: The load profile data in JSON format.
+  #   :rtype: Any
+  #   """
+  #   consumption = self._topics.get('consumption', None)
+  #   if consumption is None:
+  #     return jsonify({'error': 'Consumption not found'}), 404
+  #   try:
+  #     return consumption.to_json(), 200, {'Content-Type': 'application/json'}
+  #   except Exception as e:
+  #     logger.error(f'Failed to serialize consumption data: {e}')
+  #     return jsonify({'error': 'Failed to serialize data'}), 500
+
   def publish(self, signal: str, data: Any) -> None:
     """
     Publish a signal to subscribers.
