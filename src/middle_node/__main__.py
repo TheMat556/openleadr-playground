@@ -1,13 +1,10 @@
 import logging
 import os
 import sys
-from datetime import timedelta
-from typing import List
 
 import numpy as np
 from dotenv import load_dotenv
 
-from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.node_manager import NodeManager
 
 seed = 42
@@ -42,16 +39,6 @@ def validate_config() -> None:
 def main() -> None:
   load_dotenv()
   validate_config()
-  # It seems the VEN needs at least 1 report to be able to work properly
-  reports: List[ReportConfiguration] = [
-    ReportConfiguration(
-      resource_id='res_123',
-      measurement='energy',
-      sampling_rate=timedelta(seconds=5),
-      callback=lambda: generate_measurement('energy'),
-      additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
-    ),
-  ]
 
   node_manager = NodeManager(
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
@@ -63,7 +50,6 @@ def main() -> None:
   )
 
   try:
-    node_manager.add_report(reports)
     node_manager.run_node()
   except KeyboardInterrupt:
     logging.info('Shutting down node...')

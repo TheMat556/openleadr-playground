@@ -8,7 +8,8 @@
     "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5000",
     "VTN_PORT": "8080",
-    "VTN_SELF_HOST": "http://172.18.0.2"
+    "VTN_SELF_HOST": "http://172.18.0.2",
+    "LAYER": "0"
   },
   "0_0_container": {
     "VTN_NAME": "vtn_0_0",
@@ -20,6 +21,7 @@
     "REST_API_PORT": "5001",
     "VTN_PORT": "8081",
     "VTN_SELF_HOST": "http://172.18.0.3",
+    "LAYER": "1",
     "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b"
   },
   "0_0_0_container": {
@@ -32,6 +34,7 @@
     "REST_API_PORT": "5002",
     "VTN_PORT": "8082",
     "VTN_SELF_HOST": "http://172.18.0.4",
+    "LAYER": "2",
     "CONNECT_VTN_URL": "http://172.18.0.3:8081/0/0/OpenADR2/Simple/2.0b"
   },
   "0_0_1_container": {
@@ -44,6 +47,7 @@
     "REST_API_PORT": "5003",
     "VTN_PORT": "8083",
     "VTN_SELF_HOST": "http://172.18.0.5",
+    "LAYER": "2",
     "CONNECT_VTN_URL": "http://172.18.0.3:8081/0/0/OpenADR2/Simple/2.0b"
   },
   "0_1_container": {
@@ -56,6 +60,7 @@
     "REST_API_PORT": "5004",
     "VTN_PORT": "8084",
     "VTN_SELF_HOST": "http://172.18.0.6",
+    "LAYER": "1",
     "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b"
   },
   "0_1_0_container": {
@@ -68,6 +73,7 @@
     "REST_API_PORT": "5005",
     "VTN_PORT": "8085",
     "VTN_SELF_HOST": "http://172.18.0.7",
+    "LAYER": "2",
     "CONNECT_VTN_URL": "http://172.18.0.6:8084/0/1/OpenADR2/Simple/2.0b"
   },
   "0_1_1_container": {
@@ -80,6 +86,7 @@
     "REST_API_PORT": "5006",
     "VTN_PORT": "8086",
     "VTN_SELF_HOST": "http://172.18.0.8",
+    "LAYER": "2",
     "CONNECT_VTN_URL": "http://172.18.0.6:8084/0/1/OpenADR2/Simple/2.0b"
   }
 }
