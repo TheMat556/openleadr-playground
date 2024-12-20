@@ -41,6 +41,14 @@ class AsyncGradioApp(AdrBaseConfig):
   def __init__(
     self, num_sliders: int = 24, slider_file: str = './slider_values.txt'
   ) -> None:
+    """
+    Initialize the AsyncGradioApp.
+
+    :param num_sliders: Number of sliders to create in the interface.
+    :type num_sliders: int
+    :param slider_file: Path to the file for storing and loading slider values.
+    :type slider_file: str
+    """
     super().__init__()
     self.num_sliders = num_sliders
     self.slider_file = slider_file
@@ -53,19 +61,21 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     Update current consumption and refresh the label if it exists.
 
-    :param sender: Signal sender
-    :param data: Consumption data dictionary
+    :param sender: Signal sender.
+    :type sender: str
+    :param data: Consumption data dictionary.
+    :type data: float
     """
-    print("GOT update_consumption_data in ASYNCIO GRADIO APP")
+    print('GOT update_consumption_data in ASYNCIO GRADIO APP')
     self._current_consumption = data
 
   def load_slider_values(self, filename: str) -> List[int]:
     """
     Load slider values from a file or generate default values.
 
-    :param filename: Path to the file containing slider values
+    :param filename: Path to the file containing slider values.
     :type filename: str
-    :return: List of slider values, padded with default values if necessary
+    :return: List of slider values, padded with default values if necessary.
     :rtype: list[int]
     """
     try:
@@ -89,9 +99,9 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     Interpolate slider values to create a 15-minute resolution time series.
 
-    :param slider_values: List of hourly slider values
+    :param slider_values: List of hourly slider values.
     :type slider_values: list[int]
-    :return: Interpolated DataFrame with 15-minute resolution time index
+    :return: Interpolated DataFrame with 15-minute resolution time index.
     :rtype: pandas.DataFrame
     """
     time_index = pd.date_range(start='2024-01-01 00:00:00', periods=96, freq='15min')
@@ -102,7 +112,6 @@ class AsyncGradioApp(AdrBaseConfig):
     df_original = pd.DataFrame(
       {'Time': original_time_index, SLIDER_VALUE: slider_values}
     )
-
     df_original.set_index('Time', inplace=True)
     df_interpolated = df_original.reindex(time_index).interpolate(method='linear')
     df_interpolated.index = df_interpolated.index.strftime('%H:%M')
@@ -113,7 +122,7 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     Save slider values to a file and send interpolated values via dispatcher.
 
-    :param args: Variable number of slider values
+    :param args: Variable number of slider values.
     :type args: list[int]
     """
     slider_values = list(args)[: self.num_sliders]
@@ -139,6 +148,14 @@ class AsyncGradioApp(AdrBaseConfig):
 
   @SignalSender('update_load_profile', 'ui')
   def _send_interpolated_values(self, value: str) -> List[dict]:
+    """
+    Send interpolated slider values as load profile data.
+
+    :param value: JSON string of interpolated slider values.
+    :type value: str
+    :return: List of intervals with dtstart, duration, and signal_payload.
+    :rtype: list[dict]
+    """
     data = json.loads(value)
     intervals = []
     start_time = datetime.now().replace(
@@ -160,9 +177,9 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     Create a Plotly scatter plot visualization of slider values.
 
-    :param args: Variable number of slider values
+    :param args: Variable number of slider values.
     :type args: list[int]
-    :return: Plotly Figure object with slider values visualization
+    :return: Plotly Figure object with slider values visualization.
     :rtype: plotly.graph_objs._figure.Figure
     """
     slider_values = list(args)[: self.num_sliders]
@@ -208,7 +225,8 @@ class AsyncGradioApp(AdrBaseConfig):
   def create_interface(self) -> gr.Blocks:
     """
     Create the Gradio interface with sliders and interactive plot.
-    :return: Gradio Blocks interface
+
+    :return: Gradio Blocks interface.
     :rtype: gradio.Blocks
     """
 
@@ -272,9 +290,21 @@ class AsyncGradioApp(AdrBaseConfig):
     return interface
 
   def get_current_consumption(self) -> str:
+    """
+    Get the current consumption value.
+
+    :return: Current consumption value with unit.
+    :rtype: str
+    """
     return f'{self._current_consumption} {KWH_UNIT}'
 
   def get_current_allowed_consumption(self) -> str:
+    """
+    Get the current allowed consumption value.
+
+    :return: Current allowed consumption value with unit.
+    :rtype: str
+    """
     interpolated_values = self.interpolate_slider_values(self.slider_values)
     now = datetime.now()
     minutes = (now.minute // MINUTES_INTERVAL) * MINUTES_INTERVAL

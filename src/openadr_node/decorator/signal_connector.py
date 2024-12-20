@@ -6,15 +6,20 @@ from src.openadr_node import logger
 
 
 class SignalConnector:
+  """
+  A decorator class for connecting signals using the pydispatch library.
+  """
+
   def __init__(
     self, signal: Optional[str] = None, sender: Optional[str] = None
   ) -> None:
     """
     Initialize the ConnectDispatcher decorator.
 
-    Args:
-        signal (str, optional): Custom signal to use. If not provided, the method name will be used.
-        sender (str, optional): Custom sender to use. Defaults to `None`.
+    :param signal: Custom signal to use. If not provided, the method name will be used.
+    :type signal: str, optional
+    :param sender: Custom sender to use. Defaults to `None`.
+    :type sender: str, optional
     """
     self._custom_signal = signal
     self._custom_sender = sender
@@ -23,8 +28,10 @@ class SignalConnector:
     """
     Decorate a method to connect it to a signal at runtime.
 
-    Args:
-        func (callable): The function to connect to the signal.
+    :param func: The function to connect to the signal.
+    :type func: Callable
+    :return: The wrapped function.
+    :rtype: Callable
     """
 
     @wraps(func)
@@ -42,6 +49,11 @@ class SignalConnector:
   def __call__(self, func: Callable) -> Callable:
     """
     Callable method for the decorator, delegates to `decorate`.
+
+    :param func: The function to connect to the signal.
+    :type func: Callable
+    :return: The wrapped function.
+    :rtype: Callable
     """
     return self.decorate(func)
 
@@ -50,8 +62,8 @@ class SignalConnector:
     """
     Connect all decorated dispatcher methods for a given instance.
 
-    Args:
-        instance: The instance of the class
+    :param instance: The instance of the class.
+    :type instance: Any
     """
     for name, method in vars(instance.__class__).items():
       # Check if the method was decorated

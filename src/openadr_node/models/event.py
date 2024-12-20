@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List
 
 
 @dataclass
@@ -30,4 +30,4 @@ class EventSignal:
 class ResourceConsumption:
   ven_id: str
   resource_id: str
-  data: Tuple[datetime, float]
+  data: float

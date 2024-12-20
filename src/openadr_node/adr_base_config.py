@@ -5,7 +5,14 @@ from src.openadr_node.decorator.signal_sender import SignalSender
 
 
 class AdrBaseConfig:
+  """
+  Base configuration class for ADR nodes.
+  """
+
   def __init__(self) -> None:
+    """
+    Initialize the AdrBaseConfig and connect the dispatcher if available.
+    """
     if hasattr(self, '_register_dispatcher'):
       dispatcher.connect(
         self._register_dispatcher, signal='register_dispatcher', sender=dispatcher.Any
