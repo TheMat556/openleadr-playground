@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime, timedelta
 from typing import Optional, List, Any, Dict, Callable
 
 import pandas as pd
@@ -338,22 +339,38 @@ class NodeManager(AdrBaseConfig):
       logger.error(f'Failed to serialize load profile: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
 
-  # @rest_endpoint('/data/consumption')
-  # def get_load_profile(self) -> Any:
-  #   """
-  #   Get the load profile data.
-  #
-  #   :return: The load profile data in JSON format.
-  #   :rtype: Any
-  #   """
-  #   consumption = self._topics.get('consumption', None)
-  #   if consumption is None:
-  #     return jsonify({'error': 'Consumption not found'}), 404
-  #   try:
-  #     return consumption.to_json(), 200, {'Content-Type': 'application/json'}
-  #   except Exception as e:
-  #     logger.error(f'Failed to serialize consumption data: {e}')
-  #     return jsonify({'error': 'Failed to serialize data'}), 500
+  @rest_endpoint('/data/consumption')
+  def get_current_consumption(self) -> Any:
+    """
+    Get the current consumption data.
+
+    :return: The current consumption data in JSON format.
+    :rtype: Any
+    """
+    try:
+      # Get the current time
+      now = datetime.now()
+
+      # Round to the nearest 15-minute interval
+      discard = timedelta(
+        minutes=now.minute % 15, seconds=now.second, microseconds=now.microsecond
+      )
+      now -= discard
+      if discard >= timedelta(minutes=7.5):
+        now += timedelta(minutes=15)
+
+      # Prepare the consumption data
+      consumption_data = {
+        'consumption': {
+          'value': self._current_consumption,
+          'timestamp': now.isoformat(),
+          'unit': 'kWh',
+        }
+      }
+      return jsonify(consumption_data), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+      logger.error(f'Failed to serialize consumption data: {e}')
+      return jsonify({'error': 'Failed to serialize data'}), 500
 
   def publish(self, signal: str, data: Any) -> None:
     """

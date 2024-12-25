@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import threading
+import asyncio
 from datetime import timedelta
 from typing import Any, List
 
@@ -108,8 +109,29 @@ def run_node_dashboard() -> None:
     file_path='./development/simple/env_variables.json'
   )
   interface = gradio_node_dashboard.create_interface()
-  interface.launch(
-    share=False,
-    server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT', 7860)),
-    server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
-  )
+
+  async def background_task():
+    while True:
+      await gradio_node_dashboard.update_data_buffers()
+      print('LOOP')
+      await asyncio.sleep(1)  # Update every 1 second
+
+  def run_gradio_interface():
+    interface.launch(
+      share=False,
+      server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT', 7860)),
+      server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
+    )
+
+  # Run Gradio interface in a separate thread
+  gradio_thread = threading.Thread(target=run_gradio_interface, daemon=True)
+  gradio_thread.start()
+
+  # Run the asyncio event loop in the main thread
+  loop = asyncio.get_event_loop()
+  loop.run_until_complete(background_task())
+
+
+# Example of how to use the functions
+if __name__ == '__main__':
+  run_node_dashboard()
