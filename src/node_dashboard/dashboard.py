@@ -10,8 +10,9 @@ import aiohttp
 import plotly.graph_objs as go
 import gradio as gr
 
-from src.node_dashboard.config import load_configs, ContainerConfig
-from src.node_dashboard.utils import fetch_data_async, round_to_nearest_minute
+from src.node_dashboard.helper import constants
+from src.node_dashboard.helper.config import load_configs, ContainerConfig
+from src.node_dashboard.helper.utils import fetch_data_async, round_to_nearest_minute
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ class GradioNodeDashboard:
     self.state: List[ContainerConfig] = self.configs.copy()
     self.plot_cache: Dict[str, go.Layout] = {}
     self.data_buffers: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-    self.max_buffer_size: int = 96
+    self.max_buffer_size: int = constants.MAX_BUFFER_SIZE
 
     if not self.configs:
       logger.error('No configurations loaded. Exiting application.')
@@ -122,7 +123,9 @@ class GradioNodeDashboard:
               if len(buffer['consumption']) > self.max_buffer_size:
                 buffer['consumption'].pop(0)
             except KeyError as e:
-              logger.error(f'Invalid consumption data format: {e}')
+              logger.error(
+                f'Invalid consumption data format for {config.container_name}: Missing key {e}. Data: {consumption_data}'
+              )
       except (aiohttp.ClientError, json.JSONDecodeError) as e:
         logger.error(f'Error fetching consumption data: {e}')
 
@@ -166,7 +169,10 @@ class GradioNodeDashboard:
         if len(buffer['load_profile']) > self.max_buffer_size:
           buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
       else:
-        logger.error(f'Unexpected format for load profile data: {load_profile_data}')
+        logger.error(
+          f'Invalid load profile data format for {config.container_name}: '
+          f'Expected "value" key with dict value, got: {type(load_profile_data.get("value", "key missing"))}'
+        )
       logger.info(f'Updated buffer for {config.container_name} (load_profile)')
 
   @staticmethod
@@ -230,11 +236,9 @@ class GradioNodeDashboard:
           load_profile_times.append(timestamp)
           load_profile_values.append(value)
 
-      sorted_indices = sorted(
-        range(len(load_profile_times)), key=lambda i: load_profile_times[i]
+      load_profile_times, load_profile_values = zip(
+        *sorted(zip(load_profile_times, load_profile_values))
       )
-      load_profile_times = [load_profile_times[i] for i in sorted_indices]
-      load_profile_values = [load_profile_values[i] for i in sorted_indices]
 
       fig.add_trace(
         go.Scatter(
@@ -445,8 +449,8 @@ class GradioNodeDashboard:
       async def async_update_consumption():
         await update_consumption()
 
-      timer_load_profile = gr.Timer(5)
-      timer_consumption_data = gr.Timer(30)
+      timer_load_profile = gr.Timer(constants.LOAD_PROFILE_UPDATE_INTERVAL)
+      timer_consumption_data = gr.Timer(constants.CONSUMPTION_UPDATE_INTERVAL)
       timer_load_profile.tick(lambda: asyncio.run(async_update_load_profile()), [], [])
       timer_consumption_data.tick(
         lambda: asyncio.run(async_update_consumption()), [], []

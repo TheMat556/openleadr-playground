@@ -97,6 +97,12 @@ class VirtualEndNode(AdrBaseConfig):
         self.add_reports(report)
         self._base_event_registered = True
         logger.info('Base report registered successfully')
+    except ValueError as e:
+      logger.error(f'Client initialization error: {e}')
+      raise
+    except TypeError as e:
+      logger.error(f'Invalid report configuration: {e}')
+      raise
     except Exception as e:
       logger.error(f'Failed to register base report: {e}')
       raise
@@ -141,21 +147,17 @@ class VirtualEndNode(AdrBaseConfig):
     """
     if reports:
       for report in reports:
-        if report.resource_id != 'base':
-          wrapped_callback = self._wrap_callback(report.callback, report.resource_id)
-          self._open_adr_client.add_report(
-            resource_id=report.resource_id,
-            measurement=report.measurement,
-            sampling_rate=report.sampling_rate,
-            callback=wrapped_callback,
-          )
-        else:
-          self._open_adr_client.add_report(
-            resource_id=report.resource_id,
-            measurement=report.measurement,
-            sampling_rate=report.sampling_rate,
-            callback=report.callback,
-          )
+        callback = (
+          self._wrap_callback(report.callback, report.resource_id)
+          if report.resource_id != 'base'
+          else report.callback
+        )
+        self._open_adr_client.add_report(
+          resource_id=report.resource_id,
+          measurement=report.measurement,
+          sampling_rate=report.sampling_rate,
+          callback=callback,
+        )
     logger.info('Reports added to OpenADR client')
 
   @SignalSender('handle_event', 'ven')
