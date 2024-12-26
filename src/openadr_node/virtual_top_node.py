@@ -142,7 +142,6 @@ class VirtualTopNode(AdrBaseConfig):
     logger.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
-    print('_ON_UPDATE_REPORT: DATA', data)
 
     if measurement == 'energy':
       if ven_id not in self._ven_data:

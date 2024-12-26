@@ -184,6 +184,7 @@ class GradioNodeDashboard:
     dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
     if timezone:
       from zoneinfo import ZoneInfo
+
       dt = dt.replace(tzinfo=ZoneInfo(timezone))
     return dt
 
@@ -269,7 +270,7 @@ class GradioNodeDashboard:
           mode='lines+markers',
           name='Consumption',
           line=dict(color='rgba(250, 115, 24, 0.6)'),
-          marker=dict(size=8, color='rgba(250, 115, 24, 1.0)'),
+          marker=dict(size=4, color='rgba(250, 115, 24, 1.0)'),  # Smaller dots
           fill='tozeroy',  # Fill the area below the line
           fillcolor='rgba(250, 115, 24, 0.2)',  # Semi-transparent fill color
         )
@@ -419,7 +420,7 @@ class GradioNodeDashboard:
         return outputs
 
       timer_load_profile = gr.Timer(5)
-      timer_consumption_data = gr.Timer(60)
+      timer_consumption_data = gr.Timer(30)
       timer_load_profile.tick(
         lambda: asyncio.run(self.update_load_profile_data()), [], []
       )

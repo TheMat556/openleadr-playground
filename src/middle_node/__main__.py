@@ -7,19 +7,6 @@ from dotenv import load_dotenv
 
 from src.openadr_node.node_manager import NodeManager
 
-seed = 42
-rng = np.random.default_rng(seed)
-
-
-def generate_measurement(
-  measurement_type: str, min_value: float = 0, max_value: float = 10
-) -> float:
-  """Generate a random measurement value within specified bounds."""
-  logging.info(f'Generating {measurement_type} measurement')
-  measurement = rng.random() * (max_value - min_value) + min_value
-  logging.debug(f'Generated measurement: {measurement}')
-  return measurement
-
 
 def validate_config() -> None:
   required_vars = [
