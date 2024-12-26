@@ -113,12 +113,15 @@ class GradioNodeDashboard:
       for idx, config in enumerate(self.configs):
         consumption_data = results[idx]
         if consumption_data:
-          buffer = self.data_buffers.setdefault(
-            config.container_name, {'consumption': [], 'load_profile': []}
-          )
-          buffer['consumption'].append(consumption_data['consumption'])
-          if len(buffer['consumption']) > self.max_buffer_size:
-            buffer['consumption'].pop(0)
+          try:
+            buffer = self.data_buffers.setdefault(
+              config.container_name, {'consumption': [], 'load_profile': []}
+            )
+            buffer['consumption'].append(consumption_data['consumption'])
+            if len(buffer['consumption']) > self.max_buffer_size:
+              buffer['consumption'].pop(0)
+          except KeyError as e:
+            logger.error(f'Invalid consumption data format: {e}')
 
         logger.info(f'Updated buffer for {config.container_name} (consumption)')
 
@@ -164,15 +167,13 @@ class GradioNodeDashboard:
       logger.info(f'Updated buffer for {config.container_name} (load_profile)')
 
   @staticmethod
-  def parse_time_to_datetime(time_str: str) -> datetime:
+  def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
     """
     Parses a time string in 'HH:MM' format to a datetime object with today's date.
-
     Parameters
     ----------
     time_str : str
         Time string in 'HH:MM' format.
-
     Returns
     -------
     datetime
@@ -180,7 +181,11 @@ class GradioNodeDashboard:
     """
     today_str = datetime.now().strftime('%Y-%m-%d')
     timestamp_str = f'{today_str}T{time_str}:00'
-    return datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+    dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+    if timezone:
+      from zoneinfo import ZoneInfo
+      dt = dt.replace(tzinfo=ZoneInfo(timezone))
+    return dt
 
   def create_combined_plot(
     self, data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig
