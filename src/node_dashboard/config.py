@@ -28,6 +28,23 @@ def load_configs(file_path: str) -> List[ContainerConfig]:
     with open(file_path) as f:
       data = json.load(f)
       for container_name, values in data.items():
+        required_keys = [
+          'VTN_NAME',
+          'VTN_URL',
+          'VTN_PATH_PREFIX',
+          'VEN_NAME',
+          'GRADIO_PORT',
+          'GRADIO_SERVER_NAME',
+          'REST_API_PORT',
+          'VTN_SELF_HOST',
+          'LAYER',
+        ]
+        for key in required_keys:
+          if key not in values:
+            logger.error(
+              f"Missing key '{key}' in config for container '{container_name}'"
+            )
+            continue
         config = {
           'vtn_name': values['VTN_NAME'],
           'vtn_url': values['VTN_URL'],

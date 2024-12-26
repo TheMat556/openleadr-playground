@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 import sys
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 import aiohttp
@@ -131,37 +131,40 @@ class GradioNodeDashboard:
     None
     """
     async with aiohttp.ClientSession() as session:
-      tasks = []
-      for config in self.configs:
-        is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
-        base_url = 'http://localhost' if is_local else config.vtn_self_host
-
-        # Fetch load profile data
-        load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
-        tasks.append(fetch_data_async(session, load_profile_url))
-
+      tasks = [
+        self._fetch_load_profile_data(session, config) for config in self.configs
+      ]
       results = await asyncio.gather(*tasks)
       for idx, config in enumerate(self.configs):
-        load_profile_data = results[idx]
-        if load_profile_data:
-          buffer = self.data_buffers.setdefault(
-            config.container_name, {'consumption': [], 'load_profile': []}
-          )
-          if 'value' in load_profile_data and isinstance(
-            load_profile_data['value'], dict
-          ):
-            for time, value in load_profile_data['value'].items():
-              buffer['load_profile'].append({'timestamp': time, 'value': value})
-            if len(buffer['load_profile']) > self.max_buffer_size:
-              buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
-          else:
-            logger.error(
-              f'Unexpected format for load profile data: {load_profile_data}'
-            )
+        self._process_load_profile_data(config, results[idx])
 
-        logger.info(f'Updated buffer for {config.container_name} (load_profile)')
+  @staticmethod
+  async def _fetch_load_profile_data(
+    session: aiohttp.ClientSession, config: ContainerConfig
+  ) -> Optional[Dict[str, Any]]:
+    is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
+    base_url = 'http://localhost' if is_local else config.vtn_self_host
+    load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
+    return await fetch_data_async(session, load_profile_url)
 
-  def parse_time_to_datetime(self, time_str: str) -> datetime:
+  def _process_load_profile_data(
+    self, config: ContainerConfig, load_profile_data: Optional[Dict[str, Any]]
+  ) -> None:
+    if load_profile_data:
+      buffer = self.data_buffers.setdefault(
+        config.container_name, {'consumption': [], 'load_profile': []}
+      )
+      if 'value' in load_profile_data and isinstance(load_profile_data['value'], dict):
+        for time, value in load_profile_data['value'].items():
+          buffer['load_profile'].append({'timestamp': time, 'value': value})
+        if len(buffer['load_profile']) > self.max_buffer_size:
+          buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
+      else:
+        logger.error(f'Unexpected format for load profile data: {load_profile_data}')
+      logger.info(f'Updated buffer for {config.container_name} (load_profile)')
+
+  @staticmethod
+  def parse_time_to_datetime(time_str: str) -> datetime:
     """
     Parses a time string in 'HH:MM' format to a datetime object with today's date.
 
@@ -269,7 +272,8 @@ class GradioNodeDashboard:
 
     return fig
 
-  def _create_new_plot_layout(self, config: ContainerConfig) -> go.Figure:
+  @staticmethod
+  def _create_new_plot_layout(config: ContainerConfig) -> go.Figure:
     """
     Creates a new plot layout for a container.
 
@@ -426,7 +430,8 @@ class GradioNodeDashboard:
 
       return interface
 
-  def _get_css_styles(self) -> str:
+  @staticmethod
+  def _get_css_styles() -> str:
     """
     Returns CSS styles for the Gradio interface.
 
