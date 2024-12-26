@@ -1,85 +1,104 @@
-import json
-import logging
 import os
-import sys
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
+import logging
 import asyncio
+import sys
+from typing import Dict, List, Any
+from datetime import datetime
+
 import aiohttp
-from datetime import datetime, timedelta
-
-import gradio as gr
 import plotly.graph_objs as go
+import gradio as gr
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+from src.node_dashboard.config import load_configs, ContainerConfig
+from src.node_dashboard.utils import fetch_data_async, round_to_nearest_minute
+
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ContainerConfig:
-  vtn_name: str
-  vtn_url: str
-  vtn_path_prefix: str
-  ven_name: str
-  gradio_port: str
-  gradio_server_name: str
-  rest_api_port: str
-  vtn_self_host: str
-  layer: int
-  container_name: str
-
-
 class GradioNodeDashboard:
+  """
+  A class to represent the Gradio Node Dashboard.
+
+  Attributes
+  ----------
+  configs : List[ContainerConfig]
+      List of container configurations.
+  state : List[ContainerConfig]
+      Current state of the dashboard.
+  plot_cache : Dict[str, go.Layout]
+      Cache for plot layouts.
+  data_buffers : Dict[str, Dict[str, List[Dict[str, Any]]]]
+      Buffers to store fetched data.
+  max_buffer_size : int
+      Maximum size of the data buffers.
+
+  Methods
+  -------
+  __init__(file_path: str = "./env_variables.json") -> None:
+      Initializes the dashboard with configurations.
+  update_consumption_data() -> None:
+      Fetches and updates consumption data.
+  update_load_profile_data() -> None:
+      Fetches and updates load profile data.
+  parse_time_to_datetime(time_str: str) -> datetime:
+      Parses time string to datetime object.
+  create_combined_plot(data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig) -> go.Figure:
+      Creates a combined plot of load profile and consumption data.
+  _create_new_plot_layout(config: ContainerConfig) -> go.Figure:
+      Creates a new plot layout for a container.
+  update_state(new_state: List[ContainerConfig]) -> None:
+      Updates the current state.
+  add_to_state(config: ContainerConfig) -> None:
+      Adds a single configuration to the state.
+  add_all_to_state() -> None:
+      Adds all configurations to the state.
+  add_layer_to_state(layer: int) -> None:
+      Adds configurations of a specific layer to the state.
+  get_unique_layers() -> List[int]:
+      Gets a list of unique layers.
+  create_interface() -> gr.Blocks:
+      Creates the Gradio interface.
+  _get_css_styles() -> str:
+      Returns CSS styles for the interface.
+  _create_layout(state_var: gr.State) -> None:
+      Creates the layout for the dashboard.
+  _create_sidebar(state_var: gr.State) -> None:
+      Creates the sidebar for the dashboard.
+  _create_layer_buttons(state_var: gr.State) -> None:
+      Creates buttons for each layer in the sidebar.
+  _create_main_content() -> None:
+      Creates the main content area for the dashboard.
+  _update_plot_components(state: List[ContainerConfig]) -> List[gr.Plot]:
+      Updates the plot components.
+  """
+
   def __init__(self, file_path: str = './env_variables.json') -> None:
-    self.configs: List[ContainerConfig] = []
-    self.state: List[ContainerConfig] = []
-    self.file_path: str = file_path
+    """
+    Initializes the GradioNodeDashboard with configurations.
+
+    Parameters
+    ----------
+    file_path : str, optional
+        Path to the configuration file (default is "./env_variables.json").
+    """
+    self.configs: List[ContainerConfig] = load_configs(file_path)
+    self.state: List[ContainerConfig] = self.configs.copy()
     self.plot_cache: Dict[str, go.Layout] = {}
     self.data_buffers: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     self.max_buffer_size: int = 96
 
-    self._load_configs()
     if not self.configs:
       logger.error('No configurations loaded. Exiting application.')
       sys.exit(1)
 
-  def _load_configs(self) -> None:
-    try:
-      with open(self.file_path) as f:
-        data = json.load(f)
-        for container_name, values in data.items():
-          config = {
-            'vtn_name': values['VTN_NAME'],
-            'vtn_url': values['VTN_URL'],
-            'vtn_path_prefix': values['VTN_PATH_PREFIX'],
-            'ven_name': values['VEN_NAME'],
-            'gradio_port': values['GRADIO_PORT'],
-            'gradio_server_name': values['GRADIO_SERVER_NAME'],
-            'rest_api_port': values['REST_API_PORT'],
-            'vtn_self_host': values['VTN_SELF_HOST'],
-            'layer': int(values['LAYER']),
-            'container_name': container_name,
-          }
-          self.configs.append(ContainerConfig(**config))
-    except FileNotFoundError:
-      logger.error(f'Config file not found: {self.file_path}')
-    except json.JSONDecodeError as e:
-      logger.error(f'Invalid JSON in config file: {e}')
+  async def update_consumption_data(self) -> None:
+    """
+    Fetches and updates consumption data for each container.
 
-  async def fetch_data_async(
-    self, session: aiohttp.ClientSession, url: str
-  ) -> Optional[Dict[str, Any]]:
-    logger.info(f'Fetching data from {url}')
-    try:
-      async with session.get(url, timeout=10) as response:  # Increased timeout
-        response.raise_for_status()
-        return await response.json()
-    except aiohttp.ClientError as e:
-      logger.error(f'Failed to fetch data: {e} from {url}')
-      return None
-
-  async def update_data_buffers(self) -> None:
+    Returns
+    -------
+    None
+    """
     async with aiohttp.ClientSession() as session:
       tasks = []
       for config in self.configs:
@@ -88,17 +107,11 @@ class GradioNodeDashboard:
 
         # Fetch consumption data
         consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
-        tasks.append(self.fetch_data_async(session, consumption_url))
-
-        # Fetch load profile data
-        load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
-        tasks.append(self.fetch_data_async(session, load_profile_url))
+        tasks.append(fetch_data_async(session, consumption_url))
 
       results = await asyncio.gather(*tasks)
       for idx, config in enumerate(self.configs):
-        consumption_data = results[idx * 2]
-        load_profile_data = results[idx * 2 + 1]
-
+        consumption_data = results[idx]
         if consumption_data:
           buffer = self.data_buffers.setdefault(
             config.container_name, {'consumption': [], 'load_profile': []}
@@ -107,7 +120,33 @@ class GradioNodeDashboard:
           if len(buffer['consumption']) > self.max_buffer_size:
             buffer['consumption'].pop(0)
 
+        logger.info(f'Updated buffer for {config.container_name} (consumption)')
+
+  async def update_load_profile_data(self) -> None:
+    """
+    Fetches and updates load profile data for each container.
+
+    Returns
+    -------
+    None
+    """
+    async with aiohttp.ClientSession() as session:
+      tasks = []
+      for config in self.configs:
+        is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
+        base_url = 'http://localhost' if is_local else config.vtn_self_host
+
+        # Fetch load profile data
+        load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
+        tasks.append(fetch_data_async(session, load_profile_url))
+
+      results = await asyncio.gather(*tasks)
+      for idx, config in enumerate(self.configs):
+        load_profile_data = results[idx]
         if load_profile_data:
+          buffer = self.data_buffers.setdefault(
+            config.container_name, {'consumption': [], 'load_profile': []}
+          )
           if 'value' in load_profile_data and isinstance(
             load_profile_data['value'], dict
           ):
@@ -120,25 +159,44 @@ class GradioNodeDashboard:
               f'Unexpected format for load profile data: {load_profile_data}'
             )
 
-        logger.info(
-          f'Updated buffer for {config.container_name} (load_profile): {buffer["load_profile"]}'
-        )
-        logger.info(
-          f'Updated buffer for {config.container_name} (consumption): {buffer["consumption"]}'
-        )
+        logger.info(f'Updated buffer for {config.container_name} (load_profile)')
 
-  def round_to_nearest_15_minutes(self, dt: datetime) -> datetime:
-    discard = timedelta(
-      minutes=dt.minute % 15, seconds=dt.second, microseconds=dt.microsecond
-    )
-    dt -= discard
-    if discard >= timedelta(minutes=7.5):
-      dt += timedelta(minutes=15)
-    return dt
+  def parse_time_to_datetime(self, time_str: str) -> datetime:
+    """
+    Parses a time string in 'HH:MM' format to a datetime object with today's date.
+
+    Parameters
+    ----------
+    time_str : str
+        Time string in 'HH:MM' format.
+
+    Returns
+    -------
+    datetime
+        Datetime object representing the time on today's date.
+    """
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    timestamp_str = f'{today_str}T{time_str}:00'
+    return datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
 
   def create_combined_plot(
     self, data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig
   ) -> go.Figure:
+    """
+    Creates a combined plot of load profile and consumption data for a container.
+
+    Parameters
+    ----------
+    data : Dict[str, List[Dict[str, Any]]]
+        Data to be plotted.
+    config : ContainerConfig
+        Configuration of the container.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure object containing the combined plot.
+    """
     if config.container_name in self.plot_cache:
       fig = go.Figure(layout=self.plot_cache[config.container_name])
     else:
@@ -149,19 +207,23 @@ class GradioNodeDashboard:
 
     # Plot load profile data first
     load_profile_data = data.get('load_profile', [])
-    today_str = datetime.now().strftime('%Y-%m-%d')
     if load_profile_data:
       load_profile_times = []
       load_profile_values = []
       for entry in load_profile_data:
-        timestamp_str = f"{today_str}T{entry['timestamp']}:00"
-        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
-        load_profile_times.append(timestamp.strftime('%H:%M'))
+        timestamp = self.parse_time_to_datetime(entry['timestamp'])
+        load_profile_times.append(timestamp)
         load_profile_values.append(entry['value'])
+
+      sorted_indices = sorted(
+        range(len(load_profile_times)), key=lambda i: load_profile_times[i]
+      )
+      load_profile_times = [load_profile_times[i] for i in sorted_indices]
+      load_profile_values = [load_profile_values[i] for i in sorted_indices]
 
       fig.add_trace(
         go.Scatter(
-          x=sorted(load_profile_times),
+          x=load_profile_times,
           y=load_profile_values,
           mode='lines+markers',
           name='Load Profile',
@@ -182,13 +244,19 @@ class GradioNodeDashboard:
           timestamp = datetime.strptime(entry['timestamp'], '%Y-%m-%dT%H:%M:%S.%f')
         except ValueError:
           timestamp = datetime.strptime(entry['timestamp'], '%Y-%m-%dT%H:%M:%S')
-        timestamp = self.round_to_nearest_15_minutes(timestamp).strftime('%H:%M')
+        timestamp = round_to_nearest_minute(timestamp)
         consumption_times.append(timestamp)
         consumption_values.append(entry['value'])
 
+      sorted_indices = sorted(
+        range(len(consumption_times)), key=lambda i: consumption_times[i]
+      )
+      consumption_times = [consumption_times[i] for i in sorted_indices]
+      consumption_values = [consumption_values[i] for i in sorted_indices]
+
       fig.add_trace(
         go.Scatter(
-          x=sorted(consumption_times),
+          x=consumption_times,
           y=consumption_values,
           mode='lines+markers',
           name='Consumption',
@@ -202,6 +270,19 @@ class GradioNodeDashboard:
     return fig
 
   def _create_new_plot_layout(self, config: ContainerConfig) -> go.Figure:
+    """
+    Creates a new plot layout for a container.
+
+    Parameters
+    ----------
+    config : ContainerConfig
+        Configuration of the container.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure object with the new layout.
+    """
     return go.Figure(
       layout=dict(
         title={
@@ -232,21 +313,80 @@ class GradioNodeDashboard:
     )
 
   def update_state(self, new_state: List[ContainerConfig]) -> None:
+    """
+    Updates the current state with a new state.
+
+    Parameters
+    ----------
+    new_state : List[ContainerConfig]
+        New state to be set.
+
+    Returns
+    -------
+    None
+    """
     self.state = new_state
 
   def add_to_state(self, config: ContainerConfig) -> None:
+    """
+    Adds a single configuration to the current state.
+
+    Parameters
+    ----------
+    config : ContainerConfig
+        Configuration to be added.
+
+    Returns
+    -------
+    None
+    """
     self.state = [config]
 
   def add_all_to_state(self) -> None:
+    """
+    Adds all configurations to the current state.
+
+    Returns
+    -------
+    None
+    """
     self.state = self.configs.copy()
 
   def add_layer_to_state(self, layer: int) -> None:
+    """
+    Adds configurations of a specific layer to the current state.
+
+    Parameters
+    ----------
+    layer : int
+        Layer number to filter configurations by.
+
+    Returns
+    -------
+    None
+    """
     self.state = [config for config in self.configs if config.layer == layer]
 
   def get_unique_layers(self) -> List[int]:
+    """
+    Gets a list of unique layers from the configurations.
+
+    Returns
+    -------
+    List[int]
+        List of unique layer numbers.
+    """
     return sorted({config.layer for config in self.configs})
 
   def create_interface(self) -> gr.Blocks:
+    """
+    Creates the Gradio interface for the dashboard.
+
+    Returns
+    -------
+    gr.Blocks
+        Gradio interface blocks.
+    """
     css = self._get_css_styles()
     with gr.Blocks(css=css) as interface:
       self.add_all_to_state()
@@ -255,31 +395,85 @@ class GradioNodeDashboard:
       self._create_layout(state_var)
 
       def update_plots(state: List[ContainerConfig]) -> List[gr.Plot]:
-        return self._update_plot_components(state)
+        outputs = [gr.Plot(visible=False) for _ in self.plot_components]
 
-      timer = gr.Timer(1)
-      timer.tick(update_plots, inputs=[state_var], outputs=self.plot_components)
+        if not state:
+          return outputs
+
+        for idx, config in enumerate(state):
+          buffer = self.data_buffers.get(
+            config.container_name, {'consumption': [], 'load_profile': []}
+          )
+          plot = self.create_combined_plot(buffer, config)
+          outputs[idx] = gr.Plot(value=plot, visible=True)
+
+        return outputs
+
+      timer_load_profile = gr.Timer(5)
+      timer_consumption_data = gr.Timer(60)
+      timer_load_profile.tick(
+        lambda: asyncio.run(self.update_load_profile_data()), [], []
+      )
+      timer_consumption_data.tick(
+        lambda: asyncio.run(self.update_consumption_data()), [], []
+      )
+      timer_load_profile.tick(
+        update_plots, inputs=[state_var], outputs=self.plot_components
+      )
+
       interface.load(update_plots, inputs=[state_var], outputs=self.plot_components)
       state_var.change(update_plots, inputs=[state_var], outputs=self.plot_components)
 
       return interface
 
   def _get_css_styles(self) -> str:
+    """
+    Returns CSS styles for the Gradio interface.
+
+    Returns
+    -------
+    str
+        CSS styles.
+    """
     return """
-                .gradio-container { max-width: 100% !important; padding: 0 !important; min-height: 100vh; }
-                #dashboard-layout { display: flex; min-height: 100vh; }
-                #sidebar { position: fixed; top: 0; left: 0; width: 250px; height: 100vh;
-                          background-color: #1a1a1a; padding: 1rem; border-right: 1px solid #333;
-                          overflow-y: auto; }
-                #main-content { margin-left: 316px; flex: 1; padding: 1rem; overflow-y: auto; }
-            """
+            .gradio-container { max-width: 100% !important; padding: 0 !important; min-height: 100vh; }
+            #dashboard-layout { display: flex; min-height: 100vh; }
+            #sidebar { position: fixed; top: 0; left: 0; width: 250px; height: 100vh;
+                      background-color: #1a1a1a; padding: 1rem; border-right: 1px solid #333;
+                      overflow-y: auto; }
+            #main-content { margin-left: 316px; flex: 1; padding: 1rem; overflow-y: auto; }
+        """
 
   def _create_layout(self, state_var: gr.State) -> None:
+    """
+    Creates the layout for the dashboard.
+
+    Parameters
+    ----------
+    state_var : gr.State
+        State variable for the Gradio interface.
+
+    Returns
+    -------
+    None
+    """
     with gr.Row(elem_id='dashboard-layout'):
       self._create_sidebar(state_var)
       self._create_main_content()
 
   def _create_sidebar(self, state_var: gr.State) -> None:
+    """
+    Creates the sidebar for the dashboard.
+
+    Parameters
+    ----------
+    state_var : gr.State
+        State variable for the Gradio interface.
+
+    Returns
+    -------
+    None
+    """
     with gr.Column(elem_id='sidebar', scale=1):
       with gr.Accordion('Layers', open=True):
         gr.Button('General Overview').click(
@@ -298,6 +492,18 @@ class GradioNodeDashboard:
         self._create_layer_buttons(state_var)
 
   def _create_layer_buttons(self, state_var: gr.State) -> None:
+    """
+    Creates buttons for each layer in the sidebar.
+
+    Parameters
+    ----------
+    state_var : gr.State
+        State variable for the Gradio interface.
+
+    Returns
+    -------
+    None
+    """
     max_layer = max(config.layer for config in self.configs)
     for layer in range(max_layer + 1):
       with gr.Accordion(f'Layer {layer}', open=False):
@@ -310,6 +516,13 @@ class GradioNodeDashboard:
             )
 
   def _create_main_content(self) -> None:
+    """
+    Creates the main content area for the dashboard.
+
+    Returns
+    -------
+    None
+    """
     with gr.Column(elem_id='main-content', scale=4):
       with gr.Blocks(elem_classes='plot-grid'):
         self.plot_components = [
@@ -318,6 +531,19 @@ class GradioNodeDashboard:
         ]
 
   def _update_plot_components(self, state: List[ContainerConfig]) -> List[gr.Plot]:
+    """
+    Updates the plot components based on the current state.
+
+    Parameters
+    ----------
+    state : List[ContainerConfig]
+        Current state of the dashboard.
+
+    Returns
+    -------
+    List[gr.Plot]
+        List of Gradio plot components.
+    """
     outputs = [gr.Plot(visible=False) for _ in self.plot_components]
 
     if not state:
@@ -331,22 +557,3 @@ class GradioNodeDashboard:
       outputs[idx] = gr.Plot(value=plot, visible=True)
 
     return outputs
-
-
-def main() -> None:
-  dashboard = GradioNodeDashboard()
-  interface = dashboard.create_interface()
-
-  async def background_task():
-    while True:
-      await dashboard.update_data_buffers()
-      await asyncio.sleep(60)  # Update every 60 seconds
-
-  loop = asyncio.get_event_loop()
-  loop.create_task(background_task())
-
-  interface.launch(server_name='0.0.0.0')
-
-
-if __name__ == '__main__':
-  main()

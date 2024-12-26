@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, List, Any, Dict, Callable
 
 import pandas as pd
@@ -350,14 +350,6 @@ class NodeManager(AdrBaseConfig):
     try:
       # Get the current time
       now = datetime.now()
-
-      # Round to the nearest 15-minute interval
-      discard = timedelta(
-        minutes=now.minute % 15, seconds=now.second, microseconds=now.microsecond
-      )
-      now -= discard
-      if discard >= timedelta(minutes=7.5):
-        now += timedelta(minutes=15)
 
       # Prepare the consumption data
       consumption_data = {
