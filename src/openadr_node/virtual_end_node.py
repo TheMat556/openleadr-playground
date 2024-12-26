@@ -49,27 +49,6 @@ class VirtualEndNode(AdrBaseConfig):
     """
     return self._open_adr_client.run()
 
-  @SignalSender(signal='update_consumption_data', sender='ven')
-  def _send_consumption_data(
-    self, ven_id: str, resource_id: str, data: float
-  ) -> ResourceConsumption:
-    """
-    Send consumption data.
-
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param resource_id: Resource ID.
-    :type resource_id: str
-    :param data: Consumption data.
-    :type data: float
-    :return: Resource consumption object.
-    :rtype: ResourceConsumption
-    """
-    resource_consumption = ResourceConsumption(
-      ven_id=ven_id, resource_id=resource_id, data=data
-    )
-    return resource_consumption
-
   def _wrap_callback(self, callback: Callable, resource_id: str) -> Callable:
     """
     Wrap a callback to include a timestamp with the result.

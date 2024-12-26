@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import asyncio
@@ -105,25 +106,27 @@ class GradioNodeDashboard:
         is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
         base_url = 'http://localhost' if is_local else config.vtn_self_host
 
-        # Fetch consumption data
         consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
         tasks.append(fetch_data_async(session, consumption_url))
 
-      results = await asyncio.gather(*tasks)
-      for idx, config in enumerate(self.configs):
-        consumption_data = results[idx]
-        if consumption_data:
-          try:
-            buffer = self.data_buffers.setdefault(
-              config.container_name, {'consumption': [], 'load_profile': []}
-            )
-            buffer['consumption'].append(consumption_data['consumption'])
-            if len(buffer['consumption']) > self.max_buffer_size:
-              buffer['consumption'].pop(0)
-          except KeyError as e:
-            logger.error(f'Invalid consumption data format: {e}')
+      try:
+        results = await asyncio.gather(*tasks)
+        for idx, config in enumerate(self.configs):
+          consumption_data = results[idx]
+          if consumption_data:
+            try:
+              buffer = self.data_buffers.setdefault(
+                config.container_name, {'consumption': [], 'load_profile': []}
+              )
+              buffer['consumption'].append(consumption_data['consumption'])
+              if len(buffer['consumption']) > self.max_buffer_size:
+                buffer['consumption'].pop(0)
+            except KeyError as e:
+              logger.error(f'Invalid consumption data format: {e}')
+      except (aiohttp.ClientError, json.JSONDecodeError) as e:
+        logger.error(f'Error fetching consumption data: {e}')
 
-        logger.info(f'Updated buffer for {config.container_name} (consumption)')
+      logger.info(f'Updated buffer for {config.container_name} (consumption)')
 
   async def update_load_profile_data(self) -> None:
     """
@@ -220,9 +223,12 @@ class GradioNodeDashboard:
       load_profile_times = []
       load_profile_values = []
       for entry in load_profile_data:
-        timestamp = self.parse_time_to_datetime(entry['timestamp'])
-        load_profile_times.append(timestamp)
-        load_profile_values.append(entry['value'])
+        timestamp = entry.get('timestamp')
+        value = entry.get('value')
+        if timestamp and value:
+          timestamp = self.parse_time_to_datetime(timestamp)
+          load_profile_times.append(timestamp)
+          load_profile_values.append(value)
 
       sorted_indices = sorted(
         range(len(load_profile_times)), key=lambda i: load_profile_times[i]
@@ -238,8 +244,8 @@ class GradioNodeDashboard:
           name='Load Profile',
           line=dict(color='rgba(24, 115, 250, 0.6)'),
           marker=dict(size=8, color='rgba(24, 115, 250, 1.0)'),
-          fill='tozeroy',  # Fill the area below the line
-          fillcolor='rgba(24, 115, 250, 0.2)',  # Semi-transparent fill color
+          fill='tozeroy',
+          fillcolor='rgba(24, 115, 250, 0.2)',
         )
       )
 
@@ -249,13 +255,16 @@ class GradioNodeDashboard:
       consumption_times = []
       consumption_values = []
       for entry in consumption_data:
-        try:
-          timestamp = datetime.strptime(entry['timestamp'], '%Y-%m-%dT%H:%M:%S.%f')
-        except ValueError:
-          timestamp = datetime.strptime(entry['timestamp'], '%Y-%m-%dT%H:%M:%S')
-        timestamp = round_to_nearest_minute(timestamp)
-        consumption_times.append(timestamp)
-        consumption_values.append(entry['value'])
+        timestamp = entry.get('timestamp')
+        value = entry.get('value')
+        if timestamp and value:
+          try:
+            timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+          except ValueError:
+            timestamp = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+          timestamp = round_to_nearest_minute(timestamp)
+          consumption_times.append(timestamp)
+          consumption_values.append(value)
 
       sorted_indices = sorted(
         range(len(consumption_times)), key=lambda i: consumption_times[i]
@@ -270,9 +279,9 @@ class GradioNodeDashboard:
           mode='lines+markers',
           name='Consumption',
           line=dict(color='rgba(250, 115, 24, 0.6)'),
-          marker=dict(size=4, color='rgba(250, 115, 24, 1.0)'),  # Smaller dots
-          fill='tozeroy',  # Fill the area below the line
-          fillcolor='rgba(250, 115, 24, 0.2)',  # Semi-transparent fill color
+          marker=dict(size=4, color='rgba(250, 115, 24, 1.0)'),
+          fill='tozeroy',
+          fillcolor='rgba(250, 115, 24, 0.2)',
         )
       )
 
@@ -337,7 +346,7 @@ class GradioNodeDashboard:
     """
     self.state = new_state
 
-  def add_to_state(self, config: ContainerConfig) -> None:
+  def set_state_to_single_config(self, config: ContainerConfig) -> None:
     """
     Adds a single configuration to the current state.
 
@@ -392,6 +401,11 @@ class GradioNodeDashboard:
     """
     Creates the Gradio interface for the dashboard.
 
+    This method sets up the Gradio interface, including the layout, sidebar,
+    and main content area. It also handles the timers for updating load profile
+    and consumption data asynchronously, and ensures that nested event loops
+    are avoided by using asyncio.create_task.
+
     Returns
     -------
     gr.Blocks
@@ -419,13 +433,23 @@ class GradioNodeDashboard:
 
         return outputs
 
+      async def update_load_profile():
+        await self.update_load_profile_data()
+
+      async def update_consumption():
+        await self.update_consumption_data()
+
+      async def async_update_load_profile():
+        await update_load_profile()
+
+      async def async_update_consumption():
+        await update_consumption()
+
       timer_load_profile = gr.Timer(5)
       timer_consumption_data = gr.Timer(30)
-      timer_load_profile.tick(
-        lambda: asyncio.run(self.update_load_profile_data()), [], []
-      )
+      timer_load_profile.tick(lambda: asyncio.run(async_update_load_profile()), [], [])
       timer_consumption_data.tick(
-        lambda: asyncio.run(self.update_consumption_data()), [], []
+        lambda: asyncio.run(async_update_consumption()), [], []
       )
       timer_load_profile.tick(
         update_plots, inputs=[state_var], outputs=self.plot_components

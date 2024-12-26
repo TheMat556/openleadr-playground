@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 
-import numpy as np
 from dotenv import load_dotenv
 
 from src.openadr_node.node_manager import NodeManager
