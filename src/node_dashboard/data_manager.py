@@ -4,6 +4,7 @@ import asyncio
 from typing import Dict, Any, Optional, List
 import aiohttp
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
@@ -87,11 +88,12 @@ class DataManager:
         logger.error(f'Error fetching load profile data: {e}')
 
   @staticmethod
+  @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=10))
   async def _fetch_consumption_data(
     session: aiohttp.ClientSession, config: ContainerConfig
   ) -> Optional[Dict[str, Any]]:
     """
-    Fetches consumption data from the container's REST API.
+    Fetches consumption data from the container's REST API with retry logic.
 
     Parameters
     ----------

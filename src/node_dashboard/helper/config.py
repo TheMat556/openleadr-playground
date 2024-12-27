@@ -11,20 +11,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ContainerConfig:
-  """Configuration for a container instance.
-
-  Attributes:
-    vtn_name: Name of the Virtual Top Node
-    vtn_url: URL endpoint of the VTN
-    vtn_path_prefix: URL path prefix for VTN endpoints
-    ven_name: Name of the Virtual End Node
-    gradio_port: Port for the Gradio interface
-    gradio_server_name: Server name for Gradio
-    rest_api_port: Port for the REST API
-    vtn_self_host: Self-hosted VTN address
-    layer: Layer number for hierarchical organization
-    container_name: Name of the container
-  """
+  """Configuration for a container instance."""
 
   vtn_name: str
   vtn_url: str
@@ -39,9 +26,7 @@ class ContainerConfig:
 
 
 class ConfigManager:
-  """
-  Manages loading and validation of container configurations.
-  """
+  """Manages loading and validation of container configurations."""
 
   REQUIRED_KEYS: frozenset[str] = frozenset(
     {
@@ -118,12 +103,12 @@ class ConfigManager:
         jsonschema.validate(data, self.JSON_SCHEMA)
       except jsonschema.exceptions.ValidationError as e:
         logger.error(f'Schema validation failed: {e}')
-        return []
+        raise ValueError(f'Schema validation failed: {e.message}')
 
       return self._parse_configs(data)
     except json.JSONDecodeError as e:
       logger.error(f'Invalid JSON in config file: {e}')
-      return []
+      raise ValueError(f'Invalid JSON in config file: {e.msg}')
 
   def _parse_configs(self, data: Dict[str, Any]) -> List[ContainerConfig]:
     """
@@ -155,7 +140,6 @@ class ConfigManager:
     Returns:
         Optional[ContainerConfig]: Validated ContainerConfig instance or None if validation fails
     """
-    # Validate required keys
     if missing_keys := self._get_missing_keys(values):
       logger.error(
         f"Missing keys {missing_keys} in config for container '{container_name}'"
@@ -171,7 +155,6 @@ class ConfigManager:
         return False
 
     try:
-      # Validate and convert types before creating config
       layer = int(values['LAYER'])
       if layer < 0:
         raise ValueError(f'Invalid layer value: {layer}')

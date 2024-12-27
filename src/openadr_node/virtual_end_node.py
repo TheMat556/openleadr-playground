@@ -51,28 +51,38 @@ class VirtualEndNode(AdrBaseConfig):
     """
     return self._open_adr_client.run()
 
-  def _wrap_callback(self, callback: Callable, resource_id: str) -> Callable:
+  def _wrap_callback(
+    self, callback: Callable[..., float], resource_id: str
+  ) -> Callable[..., float]:
     """
     Wrap a callback to include a timestamp with the result.
-
     :param callback: The callback function.
-    :type callback: Callable
+    :type callback: Callable[..., float]
     :param resource_id: Resource ID.
     :type resource_id: str
     :return: Wrapped callback function.
-    :rtype: Callable
+    :rtype: Callable[..., float]
     """
 
     @wraps(callback)
     def wrapper(*args, **kwargs):
       if callable(callback):
+        timestamp = datetime.now(timezone.utc)  # Capture time before execution
         result = callback(*args, **kwargs)
-        timestamped_result = (datetime.now(timezone.utc), result)
+        if result is None:
+          logger.warning(f'Callback for resource {resource_id} returned None')
+          return 0.0
+        if not isinstance(result, (int, float)):
+          logger.error(
+            f'Callback for resource {resource_id} returned non-numeric value: {result}'
+          )
+          return 0.0
+        timestamped_result = (timestamp, float(result))
         self._send_consumption_data(
           ven_id=self._ven_name, resource_id=resource_id, data=timestamped_result
         )
         return result
-      return None
+      return 0.0
 
     return wrapper
 
@@ -100,13 +110,20 @@ class VirtualEndNode(AdrBaseConfig):
         self._base_event_registered = True
         logger.info('Base report registered successfully')
     except ValueError as e:
-      logger.error(f'Client initialization error: {e}')
+      logger.error(f'OpenADR client initialization failed: {str(e)}')
+      self._base_event_registered = False
       raise
     except TypeError as e:
-      logger.error(f'Invalid report configuration: {e}')
+      logger.error(
+        f'Invalid base report configuration - Check measurement type and sampling rate: {str(e)}'
+      )
+      self._base_event_registered = False
       raise
     except (ConnectionError, TimeoutError) as e:
-      logger.error(f'Network error while registering base report: {e}')
+      logger.error(
+        f'Network error while registering base report - Check VTN connectivity: {str(e)}'
+      )
+      self._base_event_registered = False
       raise
     except Exception as e:
       logger.error(f'Failed to register base report: {e}')
@@ -152,6 +169,12 @@ class VirtualEndNode(AdrBaseConfig):
     """
     if reports:
       for report in reports:
+        if not report.resource_id or not report.measurement:
+          logger.error(f'Invalid report configuration: {report}')
+          continue
+        logger.info(
+          f'Adding report for resource: {report.resource_id}, measurement: {report.measurement}'
+        )
         callback = (
           self._wrap_callback(report.callback, report.resource_id)
           if report.resource_id != BASE_RESOURCE_ID
@@ -163,6 +186,7 @@ class VirtualEndNode(AdrBaseConfig):
           sampling_rate=report.sampling_rate,
           callback=callback,
         )
+        logger.debug(f'Successfully added report for resource: {report.resource_id}')
     logger.info('Reports added to OpenADR client')
 
   @SignalSender('handle_event', 'ven')
@@ -171,9 +195,9 @@ class VirtualEndNode(AdrBaseConfig):
     Handle an OpenADR event.
 
     :param event: The event data.
-    :type event: Dict[str, Any]
+    :type event: Dict[str, Any] containing event_descriptor, active_period, event_signals, and targets
     :return: Response to the event.
-    :rtype: str
+    :rtype: str ('optIn', 'optOut', or 'optIn with override')
     :raises KeyError: If the event is missing required fields.
     :raises ValueError: If the event signals format is invalid.
     """
@@ -217,9 +241,9 @@ class VirtualEndNode(AdrBaseConfig):
     Update the load profile.
 
     :param data: The load profile data.
-    :type data: List[Dict[str, Any]]
+    :type data: List[Dict[str, Any]] containing dtstart, duration, and signal_payload
     :return: Updated load profile data.
-    :rtype: List[Dict[str, Any]]
+    :rtype: List[Dict[str, Any]] with processed load profile information
     """
     logger.info('Updating load profile')
     return data

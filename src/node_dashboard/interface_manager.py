@@ -21,8 +21,6 @@ class InterfaceManager:
       The dashboard instance containing configurations and state.
   _plot_components : dict
       Dictionary of plot components indexed by container name.
-  plot_components : list
-      List of plot components in the Gradio interface.
   """
 
   def __init__(self, dashboard: 'GradioNodeDashboard'):
@@ -36,7 +34,6 @@ class InterfaceManager:
     """
     self.dashboard = dashboard
     self._plot_components = {}  # Dictionary for easy lookup
-    self.plot_components = []  # List for Gradio compatibility
 
   def create_interface(self) -> gr.Blocks:
     """
@@ -60,10 +57,14 @@ class InterfaceManager:
       self._setup_update_callbacks(state_var)
 
       interface.load(
-        self._update_plots, inputs=[state_var], outputs=self.plot_components
+        self._update_plots,
+        inputs=[state_var],
+        outputs=list(self._plot_components.values()),
       )
       state_var.change(
-        self._update_plots, inputs=[state_var], outputs=self.plot_components
+        self._update_plots,
+        inputs=[state_var],
+        outputs=list(self._plot_components.values()),
       )
 
       return interface
@@ -143,14 +144,27 @@ class InterfaceManager:
     max_layer = max(config.layer for config in self.dashboard.configs)
     for layer in range(max_layer + 1):
       with gr.Accordion(f'Layer {layer}', open=False):
-        for config in self.dashboard.configs:
-          if config.layer == layer:
-            gr.Button(f'{config.container_name} {config.rest_api_port}').click(
-              lambda c=config: self.dashboard.set_state_to_single_config(c)
-              or self.dashboard.state,
-              inputs=None,
-              outputs=state_var,
-            )
+        self._create_buttons_for_layer(layer, state_var)
+
+  def _create_buttons_for_layer(self, layer: int, state_var: gr.State) -> None:
+    """
+    Creates buttons for a specific layer in the sidebar.
+
+    Parameters
+    ----------
+    layer : int
+        The layer number.
+    state_var : gr.State
+        State variable for the Gradio interface.
+    """
+    for config in self.dashboard.configs:
+      if config.layer == layer:
+        gr.Button(f'{config.container_name} {config.rest_api_port}').click(
+          lambda c=config: self.dashboard.set_state_to_single_config(c)
+          or self.dashboard.state,
+          inputs=None,
+          outputs=state_var,
+        )
 
   def _create_main_content(self) -> None:
     """
@@ -162,7 +176,6 @@ class InterfaceManager:
         for config in self.dashboard.configs:
           plot = gr.Plot(visible=False)
           self._plot_components[config.container_name] = plot
-          self.plot_components.append(plot)
 
   def _setup_update_callbacks(self, state_var: gr.State) -> None:
     """
@@ -177,14 +190,14 @@ class InterfaceManager:
       )
       return None  # For Gradio compatibility
 
-    timer_load_profile = gr.Timer(constants.LOAD_PROFILE_UPDATE_INTERVAL)
-    timer_consumption_data = gr.Timer(constants.CONSUMPTION_UPDATE_INTERVAL)
+    timer = gr.Timer(constants.LOAD_PROFILE_UPDATE_INTERVAL)
 
     # Set up timer callbacks
-    timer_load_profile.tick(combined_update, inputs=[], outputs=[])
-    timer_consumption_data.tick(combined_update, inputs=[], outputs=[])
-    timer_load_profile.tick(
-      self._update_plots, inputs=[state_var], outputs=self.plot_components
+    timer.tick(combined_update, inputs=[], outputs=[])
+    timer.tick(
+      self._update_plots,
+      inputs=[state_var],
+      outputs=list(self._plot_components.values()),
     )
 
   def _update_plots(self, state: List[ContainerConfig]) -> List[gr.Plot]:
@@ -201,7 +214,7 @@ class InterfaceManager:
     List[gr.Plot]
         Updated list of plot components.
     """
-    outputs = [gr.Plot(visible=False) for _ in self.plot_components]
+    outputs = [gr.Plot(visible=False) for _ in self._plot_components.values()]
 
     if not state:
       return outputs

@@ -15,15 +15,15 @@ class PlotManager:
 
   Attributes
   ----------
-  plot_cache : Dict[str, go.Layout]
-      Cache for plot layouts to avoid recreating them.
+  plot_cache : Dict[str, go.Figure]
+      Cache for plot figures to avoid recreating them.
   """
 
   def __init__(self):
     """
     Initializes the PlotManager with an empty plot cache.
     """
-    self.plot_cache: Dict[str, go.Layout] = {}
+    self.plot_cache: Dict[str, go.Figure] = {}
 
   def create_combined_plot(
     self,
@@ -52,8 +52,22 @@ class PlotManager:
     if clear_existing:
       fig.data = []  # Clear existing traces
 
-    self._add_load_profile_trace(fig, data.get('load_profile', []))
-    self._add_consumption_trace(fig, data.get('consumption', []))
+    self._add_trace(
+      fig,
+      data.get('load_profile', []),
+      'Load Profile',
+      'rgba(24, 115, 250, 0.6)',
+      'rgba(24, 115, 250, 1.0)',
+      'rgba(24, 115, 250, 0.2)',
+    )
+    self._add_trace(
+      fig,
+      data.get('consumption', []),
+      'Consumption',
+      'rgba(250, 115, 24, 0.6)',
+      'rgba(250, 115, 24, 1.0)',
+      'rgba(250, 115, 24, 0.2)',
+    )
 
     return fig
 
@@ -72,10 +86,10 @@ class PlotManager:
         Plotly figure object.
     """
     if config.container_name in self.plot_cache:
-      return go.Figure(layout=self.plot_cache[config.container_name])
+      return self.plot_cache[config.container_name]
 
     fig = self._create_new_plot_layout(config)
-    self.plot_cache[config.container_name] = fig.layout
+    self.plot_cache[config.container_name] = fig
     return fig
 
   @staticmethod
@@ -122,71 +136,98 @@ class PlotManager:
       )
     )
 
-  def _add_load_profile_trace(
-    self, fig: go.Figure, load_profile_data: List[Dict[str, Any]]
+  def _add_trace(
+    self,
+    fig: go.Figure,
+    data: List[Dict[str, Any]],
+    name: str,
+    line_color: str,
+    marker_color: str,
+    fill_color: str,
   ) -> None:
     """
-    Adds load profile trace to the figure.
+    Adds a trace to the figure.
 
     Parameters
     ----------
     fig : go.Figure
         Plotly figure object.
-    load_profile_data : List[Dict[str, Any]]
-        Load profile data to be plotted.
+    data : List[Dict[str, Any]]
+        Data to be plotted.
+    name : str
+        Name of the trace.
+    line_color : str
+        Color of the line.
+    marker_color : str
+        Color of the markers.
+    fill_color : str
+        Color of the fill.
 
     Returns
     -------
     None
     """
-    if not load_profile_data:
+    if not data:
       return
 
-    times, values = self._process_load_profile_data_points(load_profile_data)
+    times, values = self._process_data_points(data)
     if times and values:
       fig.add_trace(
         go.Scatter(
           x=times,
           y=values,
           mode='lines+markers',
-          name='Load Profile',
-          line=dict(color='rgba(24, 115, 250, 0.6)'),
-          marker=dict(size=8, color='rgba(24, 115, 250, 1.0)'),
+          name=name,
+          line=dict(color=line_color),
+          marker=dict(size=8, color=marker_color),
           fill='tozeroy',
-          fillcolor='rgba(24, 115, 250, 0.2)',
+          fillcolor=fill_color,
         )
       )
 
-  def _process_load_profile_data_points(
-    self, load_profile_data: List[Dict[str, Any]]
+  def _process_data_points(
+    self, data: List[Dict[str, Any]]
   ) -> Tuple[List[datetime], List[float]]:
     """
-    Processes load profile data points and returns sorted times and values.
+    Processes data points and returns sorted times and values.
 
     Parameters
     ----------
-    load_profile_data : List[Dict[str, Any]]
-        Load profile data points.
+    data : List[Dict[str, Any]]
+        Data points.
 
     Returns
     -------
     Tuple[List[datetime], List[float]]
-        Sorted times and values from the load profile data.
+        Sorted times and values from the data.
     """
     times = []
     values = []
 
-    for entry in load_profile_data:
+    for entry in data:
       timestamp = entry.get('timestamp')
       value = entry.get('value')
       if timestamp and value:
-        times.append(self.parse_time_to_datetime(timestamp))
+        try:
+          time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+        except ValueError:
+          try:
+            time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+          except ValueError:
+            try:
+              time = self.parse_time_to_datetime(timestamp)
+            except ValueError as e:
+              logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
+              continue
+        times.append(round_to_nearest_minute(time))
         values.append(value)
 
-    if times and values:
-      sorted_times, sorted_values = zip(*sorted(zip(times, values)))
-      return list(sorted_times), list(sorted_values)
-    return [], []
+    if not times or not values:
+      return [], []
+
+    # Sort by timestamp
+    sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
+    return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
 
   @staticmethod
   def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
@@ -217,76 +258,3 @@ class PlotManager:
 
       dt = dt.replace(tzinfo=ZoneInfo(timezone))
     return dt
-
-  def _add_consumption_trace(
-    self, fig: go.Figure, consumption_data: List[Dict[str, Any]]
-  ) -> None:
-    """
-    Adds consumption trace to the figure.
-
-    Parameters
-    ----------
-    fig : go.Figure
-        Plotly figure object.
-    consumption_data : List[Dict[str, Any]]
-        Consumption data to be plotted.
-
-    Returns
-    -------
-    None
-    """
-    if not consumption_data:
-      return
-
-    times, values = self._process_consumption_data_points(consumption_data)
-    if times and values:
-      fig.add_trace(
-        go.Scatter(
-          x=times,
-          y=values,
-          mode='lines+markers',
-          name='Consumption',
-          line=dict(color='rgba(250, 115, 24, 0.6)'),
-          marker=dict(size=4, color='rgba(250, 115, 24, 1.0)'),
-          fill='tozeroy',
-          fillcolor='rgba(250, 115, 24, 0.2)',
-        )
-      )
-
-  @staticmethod
-  def _process_consumption_data_points(
-    consumption_data: List[Dict[str, Any]],
-  ) -> Tuple[List[datetime], List[float]]:
-    """
-    Processes consumption data points and returns sorted times and values.
-
-    Parameters
-    ----------
-    consumption_data : List[Dict[str, Any]]
-        Consumption data points.
-
-    Returns
-    -------
-    Tuple[List[datetime], List[float]]
-        Sorted times and values from the consumption data.
-    """
-    times = []
-    values = []
-
-    for entry in consumption_data:
-      timestamp = entry.get('timestamp')
-      value = entry.get('value')
-      if timestamp and value:
-        try:
-          time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-        except ValueError:
-          time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
-        times.append(round_to_nearest_minute(time))
-        values.append(value)
-
-    if not times or not values:
-      return [], []
-
-    # Sort by timestamp
-    sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
-    return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
