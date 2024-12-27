@@ -203,9 +203,9 @@ def generate_node(
       'test': SingleQuotedScalarString(
         f"curl -f -s -o /dev/null -w '%{{http_code}}' 127.0.0.1:{port}{path_prefix}OpenADR2/Simple/2.0b | grep 404 || exit 1"
       ),
-      'interval': '20s',
+      'interval': '30s',
       'timeout': '10s',
-      'retries': 5,
+      'retries': 10,
     }
 
   # Generate child nodes

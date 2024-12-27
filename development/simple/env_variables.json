@@ -8,7 +8,8 @@
     "GRADIO_SERVER_NAME": "",
     "REST_API_PORT": "5000",
     "VTN_PORT": "",
-    "VTN_SELF_HOST": ""
+    "VTN_SELF_HOST": "",
+    "LAYER": 0
   },
   "house_node": {
     "VTN_NAME": "",
@@ -20,7 +21,8 @@
     "REST_API_PORT": "5001",
     "VTN_PORT": "",
     "VTN_SELF_HOST": "",
-    "CONNECT_VTN_URL": ""
+    "CONNECT_VTN_URL": "",
+    "LAYER": 1
   },
     "house_node_2": {
     "VTN_NAME": "",
@@ -32,6 +34,7 @@
     "REST_API_PORT": "5002",
     "VTN_PORT": "",
     "VTN_SELF_HOST": "",
-    "CONNECT_VTN_URL": ""
+    "CONNECT_VTN_URL": "",
+    "LAYER": 1
   }
 }

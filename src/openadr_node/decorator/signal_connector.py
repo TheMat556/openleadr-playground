@@ -30,7 +30,7 @@ class SignalConnector:
 
     :param func: The function to connect to the signal.
     :type func: Callable
-    :return: The wrapped function.
+    :return: The wrapped function, which will be connected to a signal once `connect_all` is invoked.
     :rtype: Callable
     """
 
@@ -90,7 +90,7 @@ class SignalConnector:
 
   @classmethod
   def disconnect_all(cls, instance: Any) -> None:
-    """Disconnect all signals for cleanup"""
+    """Disconnect all signals for cleanup."""
     if hasattr(instance, '_signal_connections'):
       for receiver, signal, sender in instance._signal_connections:
         dispatcher.disconnect(receiver, signal, sender)

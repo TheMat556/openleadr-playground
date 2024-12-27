@@ -30,9 +30,9 @@ services:
     healthcheck:
       test: 'curl -f -s -o /dev/null -w ''%{http_code}'' 127.0.0.1:8080/0/OpenADR2/Simple/2.0b
         | grep 404 || exit 1'
-      interval: 20s
+      interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
   '0_0':
     build:
       context: .
@@ -66,9 +66,9 @@ services:
     healthcheck:
       test: 'curl -f -s -o /dev/null -w ''%{http_code}'' 127.0.0.1:8081/0/0/OpenADR2/Simple/2.0b
         | grep 404 || exit 1'
-      interval: 20s
+      interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
   '0_0_0':
     build:
       context: .
@@ -162,9 +162,9 @@ services:
     healthcheck:
       test: 'curl -f -s -o /dev/null -w ''%{http_code}'' 127.0.0.1:8084/0/1/OpenADR2/Simple/2.0b
         | grep 404 || exit 1'
-      interval: 20s
+      interval: 30s
       timeout: 10s
-      retries: 5
+      retries: 10
   '0_1_0':
     build:
       context: .

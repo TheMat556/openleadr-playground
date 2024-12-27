@@ -2,30 +2,12 @@ from functools import wraps
 from pydispatch import dispatcher
 import logging
 import time
-from typing import Optional, Callable, Any, Tuple
+from typing import Callable, Any, Tuple, Optional
 from collections import deque
+from threading import Lock
 
-
-class EventBus:
-  """
-  A simple event bus for managing signal dispatches.
-  """
-
-  def __init__(self):
-    self._subscribers = {}
-
-  def subscribe(self, signal: str, handler: Callable):
-    if signal not in self._subscribers:
-      self._subscribers[signal] = []
-    self._subscribers[signal].append(handler)
-
-  def publish(self, signal: str, *args, **kwargs):
-    if signal in self._subscribers:
-      for handler in self._subscribers[signal]:
-        handler(*args, **kwargs)
-
-
-event_bus = EventBus()
+MAX_QUEUE_SIZE = 1000
+MAX_METRICS_HISTORY = 1000
 
 
 class SignalSender:
@@ -52,9 +34,13 @@ class SignalSender:
     self._custom_signal = signal
     self._custom_sender = sender
     self._ready_dispatched = False
-    self._queue: deque[Tuple[Callable, Tuple[Any], dict]] = deque()
+    self._queue: deque[Tuple[Callable, Tuple[Any], dict]] = deque(maxlen=MAX_QUEUE_SIZE)
+    self._queue_lock = Lock()
     self._max_retries = max_retries
-    self._metrics = {'queue_size': 0, 'processing_times': []}
+    self._metrics = {
+      'queue_size': 0,
+      'processing_times': deque(maxlen=MAX_METRICS_HISTORY),
+    }
 
     dispatcher.connect(self.on_ready, signal='on_ready', sender=dispatcher.Any)
 
@@ -78,9 +64,10 @@ class SignalSender:
       )
       self._ready_dispatched = True
 
-      while self._queue:
-        func, args, kwargs = self._queue.popleft()
-        self._process(func, args, kwargs)
+      with self._queue_lock:
+        while self._queue:
+          func, args, kwargs = self._queue.popleft()
+          self._process(func, args, kwargs)
 
   def _process(self, func: Callable, args: Tuple[Any], kwargs: dict) -> None:
     retries = 0
@@ -92,7 +79,8 @@ class SignalSender:
           signal=self._custom_signal, sender=self._custom_sender, data=result
         )
         end_time = time.time()
-        self._metrics['processing_times'].append(end_time - start_time)
+        with self._queue_lock:
+          self._metrics['processing_times'].append(end_time - start_time)
         break
       except Exception as e:
         logging.error(f'Error processing signal {self._custom_signal}: {e}')
@@ -111,13 +99,27 @@ class SignalSender:
     """
 
     @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    def wrapper(*args: Any, **kwargs: Any) -> Optional[Any]:
+      """
+      Wrapper function that handles signal dispatch and queuing.
+
+      Args:
+          *args: Variable positional arguments for the wrapped function
+          **kwargs: Variable keyword arguments for the wrapped function
+
+      Returns:
+          Optional[Any]: The result of the function if processed immediately,
+                       None if queued for later processing
+      """
       if not self._ready_dispatched:
         logging.warning(
           'on_ready event has not been dispatched. Queuing function call.'
         )
-        self._queue.append((func, args, kwargs))
-        self._metrics['queue_size'] = len(self._queue)
+        with self._queue_lock:
+          if len(self._queue) >= MAX_QUEUE_SIZE:
+            raise RuntimeError('Signal queue is full')
+          self._queue.append((func, args, kwargs))
+          self._metrics['queue_size'] = len(self._queue)
         return None
 
       self._process(func, args, kwargs)

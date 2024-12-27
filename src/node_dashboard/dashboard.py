@@ -1,155 +1,149 @@
-import json
+from typing import List
 import logging
-import os
 import sys
-from dataclasses import dataclass
-from io import StringIO
-from typing import List, Optional
 
-import requests
-import pandas as pd
 import gradio as gr
-import plotly.graph_objs as go
-from gradio import Timer
 
+from .data_manager import DataManager
+from .helper import constants
+from .plot_manager import PlotManager
+from .interface_manager import InterfaceManager
+from .helper.config import ContainerConfig, ConfigManager
 
-@dataclass
-class ContainerConfig:
-  """Configuration for container settings including VTN, VEN, and port information."""
-
-  vtn_name: str
-  vtn_url: str
-  vtn_path_prefix: str
-  ven_name: str
-  gradio_port: str
-  gradio_server_name: str
-  rest_api_port: str
-  vtn_self_host: str
-
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class GradioNodeDashboard:
-  def __init__(self, file_path: str = './env_variables.json') -> None:
-    self.configs: List[ContainerConfig] = []
-    self.file_path = file_path
+  """
+  Represents the Gradio Node Dashboard for monitoring container data.
 
-    self.load_configs(file_path)
+  Attributes
+  ----------
+  config_manager : ConfigManager
+      Manages loading and handling of container configurations.
+  configs : List[ContainerConfig]
+      List of container configurations.
+  state : List[ContainerConfig]
+      Current state of the dashboard.
+  data_manager : DataManager
+      Manages data fetching and buffering.
+  plot_manager : PlotManager
+      Manages plot creation and updates.
+  interface_manager : InterfaceManager
+      Manages the Gradio interface creation and updates.
+  """
+
+  def __init__(self, file_path: str = './env_variables.json') -> None:
+    """
+    Initializes the GradioNodeDashboard with configurations and managers.
+
+    Parameters
+    ----------
+    file_path : str, optional
+        Path to the configuration file (default is "./env_variables.json").
+    """
+    self.config_manager = ConfigManager(file_path)
+    self.configs = self.config_manager.configs
+    self.state = self.configs.copy()
+
     if not self.configs:
       logger.error('No configurations loaded. Exiting application.')
       sys.exit(1)
 
-  def load_configs(self, file_path: str) -> None:
-    try:
-      with open(file_path) as f:
-        data = json.load(f)
-        for key, value in data.items():
-          config = {
-            'vtn_name': value['VTN_NAME'],
-            'vtn_url': value['VTN_URL'],
-            'vtn_path_prefix': value['VTN_PATH_PREFIX'],
-            'ven_name': value['VEN_NAME'],
-            'gradio_port': value['GRADIO_PORT'],
-            'gradio_server_name': value['GRADIO_SERVER_NAME'],
-            'rest_api_port': value['REST_API_PORT'],
-            'vtn_self_host': value['VTN_SELF_HOST'],
-          }
-          self.configs.append(ContainerConfig(**config))
-    except FileNotFoundError:
-      logger.error(f'Config file not found: {file_path}')
-    except json.JSONDecodeError as e:
-      logger.error(f'Invalid JSON in config file: {e}')
+    self.data_manager = DataManager(self.configs, constants.MAX_BUFFER_SIZE)
+    self.plot_manager = PlotManager()
+    self.interface_manager = InterfaceManager(self)
 
-  def fetch_data(self, vtn_self_host: str, rest_api_port: str) -> Optional[dict]:
-    if os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false':
-      url = f'http://localhost:{rest_api_port}/data/load_profile'
+  def update_state(self, new_state: List[ContainerConfig], merge: bool = False) -> None:
+    """
+    Updates the current state with a new state, with an option to merge.
+
+    Parameters
+    ----------
+    new_state : List[ContainerConfig]
+        New state to be set.
+    merge : bool
+        Whether to merge the new state with the existing state (default is False).
+
+    Returns
+    -------
+    None
+    """
+    if merge:
+      existing_configs = {config.container_name: config for config in self.state}
+      for config in new_state:
+        existing_configs[config.container_name] = config
+      self.state = list(existing_configs.values())
     else:
-      url = f'{vtn_self_host}:{rest_api_port}/data/load_profile'
-    try:
-      response = requests.get(url)
-      response.raise_for_status()
-      return response.json()
-    except requests.exceptions.RequestException as e:
-      logger.error(f'Failed to fetch data: {e} from {url}')
-      return None
+      self.state = new_state
 
-  def process_data(self, data: dict) -> pd.DataFrame:
-    try:
-      json_str = json.dumps(data)  # Convert dictionary to JSON string
-      df = pd.read_json(StringIO(json_str))  # Wrap JSON string in StringIO
+  def set_state_to_single_config(
+    self, config: ContainerConfig, keep_existing: bool = False
+  ) -> None:
+    """
+    Sets the state to a single configuration, with an option to keep existing configs.
 
-      # Reset the index to make 'time' a column
-      df.reset_index(inplace=True)
+    Parameters
+    ----------
+    config : ContainerConfig
+        Configuration to be set as the state.
+    keep_existing : bool
+        Whether to keep existing configurations in the state (default is False).
 
-      # Rename the columns
-      df.columns = ['time', 'value']
-
-      return df
-    except Exception as e:
-      logger.error(f'Failed to process data: {e}')
-      return pd.DataFrame(
-        columns=['time', 'value']
-      )  # Return an empty DataFrame in case of an error
-
-  def create_plot(self, df: pd.DataFrame, port: str) -> go.Figure:
-    fig = go.Figure(
-      data=[
-        go.Scatter(
-          x=df['time'],
-          y=df['value'],
-          mode='lines+markers',
-          line=dict(color='rgba(250, 115, 24, 0.6)'),
-          marker=dict(size=8, color='rgba(250, 115, 24, 1.0)'),
-        )
+    Returns
+    -------
+    None
+    """
+    if keep_existing:
+      self.state = [config] + [
+        cfg for cfg in self.state if cfg.container_name != config.container_name
       ]
-    )
-    fig.update_layout(
-      title={'text': f'Data {port}', 'font': {'color': 'white'}},
-      xaxis_title='Time',
-      yaxis_title='Value',
-      xaxis=dict(
-        title_font_color='white',
-        tickfont_color='white',
-        gridcolor='rgba(255,255,255,0.2)',
-      ),
-      yaxis=dict(
-        title_font_color='white',
-        tickfont_color='white',
-        gridcolor='rgba(255,255,255,0.2)',
-      ),
-      height=400,
-      plot_bgcolor='rgba(0,0,0,0)',
-      paper_bgcolor='rgba(0,0,0,0)',
-      font_color='white',
-      template='plotly_dark',
-    )
-    return fig
-
-  def update_plot(self, vtn_self_host: str, rest_api_port: str) -> Optional[go.Figure]:
-    data = self.fetch_data(vtn_self_host, rest_api_port)
-    if data is not None:
-      df = self.process_data(data)
-      return self.create_plot(df, rest_api_port)
     else:
-      return None  # Return None if data is None
+      self.state = [config]
+
+  def add_all_to_state(self) -> None:
+    """
+    Adds all configurations to the current state.
+
+    Returns
+    -------
+    None
+    """
+    self.state = self.configs.copy()
+
+  def add_layer_to_state(self, layer: int) -> None:
+    """
+    Adds configurations of a specific layer to the current state.
+
+    Parameters
+    ----------
+    layer : int
+        Layer number to filter configurations by.
+
+    Returns
+    -------
+    None
+    """
+    self.state = [config for config in self.configs if config.layer == layer]
+
+  def get_unique_layers(self) -> List[int]:
+    """
+    Gets a list of unique layers from the configurations.
+
+    Returns
+    -------
+    List[int]
+        List of unique layer numbers.
+    """
+    return sorted({config.layer for config in self.configs})
 
   def create_interface(self) -> gr.Blocks:
-    with gr.Blocks(
-      css="""
-                .gradio-container { max-width: 95% !important; background-color: black; }
-                .full-height { height: 100%; display: flex; align-items: center; justify-content: center; }
-                """
-    ) as interface:
-      with gr.Row():
-        for env_config in self.configs:
-          with gr.Column():
+    """
+    Creates the Gradio interface for the dashboard.
 
-            def plot(config=env_config):
-              return self.update_plot(config.vtn_self_host, config.rest_api_port)
-
-            gr.Plot(value=plot, every=Timer(5), label=env_config.vtn_name)
-
-    return interface
+    Returns
+    -------
+    gr.Blocks
+        Gradio interface blocks.
+    """
+    return self.interface_manager.create_interface()

@@ -104,12 +104,15 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
 
 def run_node_dashboard() -> None:
   """Run the node dashboard."""
-  gradio_node_dashboard = GradioNodeDashboard(
-    file_path='./development/simple/env_variables.json'
-  )
-  interface = gradio_node_dashboard.create_interface()
+  dashboard = GradioNodeDashboard(file_path='./development/simple/env_variables.json')
+  interface = dashboard.create_interface()
   interface.launch(
     share=False,
     server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT', 7860)),
     server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
   )
+
+
+# Example of how to use the functions
+if __name__ == '__main__':
+  run_node_dashboard()

@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime
 from typing import Optional, List, Any, Dict, Callable
 
 import pandas as pd
@@ -70,7 +71,6 @@ class NodeManager(AdrBaseConfig):
     self._current_consumption = 0
 
     dispatcher.send(signal='on_ready', sender='system')
-
     self.app = Flask(__name__)
 
     self._init_routes()
@@ -85,7 +85,7 @@ class NodeManager(AdrBaseConfig):
     :return: The method associated with the signal.
     :rtype: Optional[Callable]
     """
-    method_name = '_on_' + signal
+    method_name = f'_on_{signal}'
     return getattr(self, method_name, None)
 
   def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
@@ -105,9 +105,7 @@ class NodeManager(AdrBaseConfig):
     else:
       dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
 
-    logger.info(
-      f'NM - Connected {"_on" + signal} to signal: {data} with sender: {sender}'
-    )
+    logger.info(f'NM - Connected _on{signal} to signal: {data} with sender: {sender}')
 
   @staticmethod
   def _forward_dispatcher(sender: str, signal: str, data: Any) -> None:
@@ -182,6 +180,9 @@ class NodeManager(AdrBaseConfig):
     :raises AttributeError: If an attribute is missing.
     :raises IndexError: If an index is out of range.
     """
+    if self._vtn and sender == 'ven':
+      return
+
     try:
       self._current_consumption = 0.0
       if data.ven_id not in self._ven_data:
@@ -336,6 +337,31 @@ class NodeManager(AdrBaseConfig):
       return load_profile.to_json(), 200, {'Content-Type': 'application/json'}
     except Exception as e:
       logger.error(f'Failed to serialize load profile: {e}')
+      return jsonify({'error': 'Failed to serialize data'}), 500
+
+  @rest_endpoint('/data/consumption')
+  def get_current_consumption(self) -> Any:
+    """
+    Get the current consumption data.
+
+    :return: The current consumption data in JSON format.
+    :rtype: Any
+    """
+    try:
+      # Get the current time
+      now = datetime.now()
+
+      # Prepare the consumption data
+      consumption_data = {
+        'consumption': {
+          'value': self._current_consumption,
+          'timestamp': now.isoformat(),
+          'unit': 'kWh',
+        }
+      }
+      return jsonify(consumption_data), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+      logger.error(f'Failed to serialize consumption data: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
 
   def publish(self, signal: str, data: Any) -> None:
