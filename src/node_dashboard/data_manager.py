@@ -79,7 +79,9 @@ class DataManager:
     -------
     None
     """
-    async with aiohttp.ClientSession() as session:
+    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
       tasks = [
         self._fetch_data(session, config, 'load_profile') for config in self.configs
       ]
@@ -223,6 +225,10 @@ class DataManager:
       except ValidationError as e:
         logger.error(
           f'Invalid load profile data format for {config.container_name}: {e.message}. Data: {load_profile_data}'
+        )
+      except (KeyError, TypeError) as e:
+        logger.error(
+          f'Invalid load profile data format for {config.container_name}: {str(e)}. Data: {load_profile_data}'
         )
       except Exception as e:
         logger.error(

@@ -1,6 +1,8 @@
 import logging
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import plotly.graph_objs as go
 from .helper.config import ContainerConfig
 from .helper.utils import round_to_nearest_minute
@@ -132,7 +134,7 @@ class PlotManager:
         font_color='white',
         template='plotly_dark',
         margin=dict(l=50, r=50, t=50, b=50),
-        height=400,
+        autosize=True,
       )
     )
 
@@ -216,9 +218,10 @@ class PlotManager:
     if not times or not values:
       return [], []
 
-    # Sort by timestamp
-    sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
-    return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
+    # Sort data points in-place
+    data_points = list(zip(times, values))
+    data_points.sort(key=lambda x: x[0])
+    return zip(*data_points)
 
   def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
     """
@@ -270,7 +273,5 @@ class PlotManager:
       logger.error(f'Invalid time string: {time_str}. Error: {e}')
       raise
     if timezone:
-      from zoneinfo import ZoneInfo
-
       dt = dt.replace(tzinfo=ZoneInfo(timezone))
     return dt

@@ -100,7 +100,7 @@ class VirtualEndNode(AdrBaseConfig):
         logger.info('Registering base report')
         report: List[ReportConfiguration] = [
           ReportConfiguration(
-            resource_id='base',
+            resource_id=BASE_RESOURCE_ID,
             measurement='energy',
             sampling_rate=timedelta(seconds=5),
             callback=lambda: self._base_consumption,
@@ -196,6 +196,10 @@ class VirtualEndNode(AdrBaseConfig):
     :param event: The event data.
     :type event: Dict[str, Any] containing event_descriptor, active_period, event_signals, and targets
     :return: Response to the event.
+      - 'optIn': Accept the event as is
+      - 'optOut': Decline to participate in the event
+      - 'optIn with override': Accept with modifications
+    :rtype: str ('optIn', 'optOut', or 'optIn with override')
     :rtype: str ('optIn', 'optOut', or 'optIn with override')
     :raises KeyError: If the event is missing required fields.
     :raises ValueError: If the event signals format is invalid.
