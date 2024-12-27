@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime, timezone
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Any, Callable, Tuple
 from functools import wraps
 
 from openleadr import OpenADRClient
@@ -119,7 +119,7 @@ class VirtualEndNode(AdrBaseConfig):
 
   @SignalSender(signal='update_consumption_data', sender='vtn')
   def _send_consumption_data(
-    self, ven_id: str, resource_id: str, data: float
+    self, ven_id: str, resource_id: str, data: Tuple[datetime, float]
   ) -> ResourceConsumption:
     """
     Send consumption data.

@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
 import aiohttp
 import asyncio
+from typing import List, Dict, Any, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +10,25 @@ logger = logging.getLogger(__name__)
 async def fetch_data_with_retry(
   session: aiohttp.ClientSession, url: str, max_retries: int = 3, timeout: int = 10
 ) -> Optional[Dict[str, Any]]:
+  """
+  Fetch data from the given URL with retry logic and exponential backoff.
+
+  Parameters
+  ----------
+  session : aiohttp.ClientSession
+      The aiohttp session to use for making the request.
+  url : str
+      The URL to fetch data from.
+  max_retries : int, optional
+      The maximum number of retry attempts (default is 3).
+  timeout : int, optional
+      The timeout for each request in seconds (default is 10).
+
+  Returns
+  -------
+  Optional[Dict[str, Any]]
+      The fetched data as a dictionary, or None if the request failed.
+  """
   for attempt in range(max_retries):
     try:
       async with session.get(url, timeout=timeout) as response:
@@ -21,14 +40,99 @@ async def fetch_data_with_retry(
           f'Failed to fetch data after {max_retries} attempts: {e} from {url}'
         )
         return None
+      else:
+        logger.warning(f'Attempt {attempt + 1}/{max_retries} failed: {e}. Retrying...')
       await asyncio.sleep(2**attempt)
 
 
 async def fetch_data_async(
   session: aiohttp.ClientSession, url: str
 ) -> Optional[Dict[str, Any]]:
+  """
+  Fetch data asynchronously from the given URL.
+
+  Parameters
+  ----------
+  session : aiohttp.ClientSession
+      The aiohttp session to use for making the request.
+  url : str
+      The URL to fetch data from.
+
+  Returns
+  -------
+  Optional[Dict[str, Any]]
+      The fetched data as a dictionary, or None if the request failed.
+  """
   return await fetch_data_with_retry(session, url)
 
 
 def round_to_nearest_minute(dt: datetime) -> datetime:
-  return dt.replace(second=0, microsecond=0) + timedelta(minutes=dt.second // 30)
+  """
+  Rounds a datetime object to the nearest minute.
+
+  This function rounds a datetime object to the nearest minute.
+  If the seconds value is 30 or more, it rounds up to the next minute.
+  Otherwise, it rounds down to the current minute.
+
+  Parameters
+  ----------
+  dt : datetime
+      The datetime object to be rounded.
+
+  Returns
+  -------
+  datetime
+      The rounded datetime object.
+  """
+  if dt.second >= 30:
+    return dt.replace(second=0, microsecond=0) + timedelta(minutes=1)
+  else:
+    return dt.replace(second=0, microsecond=0)
+
+
+def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
+  today_str = datetime.now().strftime('%Y-%m-%d')
+  timestamp_str = f'{today_str}T{time_str}:00'
+  dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+  if timezone:
+    from zoneinfo import ZoneInfo
+
+    dt = dt.replace(tzinfo=ZoneInfo(timezone))
+  return dt
+
+
+def process_load_profile_data_points(
+  load_profile_data: List[Dict[str, Any]],
+) -> Tuple[List[datetime], List[float]]:
+  times = []
+  values = []
+  for entry in load_profile_data:
+    timestamp = entry.get('timestamp')
+    value = entry.get('value')
+    if timestamp and value:
+      times.append(parse_time_to_datetime(timestamp))
+      values.append(value)
+  if times and values:
+    return zip(*sorted(zip(times, values)))
+  return [], []
+
+
+def process_consumption_data_points(
+  consumption_data: List[Dict[str, Any]],
+) -> Tuple[List[datetime], List[float]]:
+  times = []
+  values = []
+  for entry in consumption_data:
+    timestamp = entry.get('timestamp')
+    value = entry.get('value')
+    if timestamp and value:
+      try:
+        time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
+      except ValueError:
+        time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
+      times.append(time)
+      values.append(value)
+  if not times or not values:
+    return [], []
+  sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
+  return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
