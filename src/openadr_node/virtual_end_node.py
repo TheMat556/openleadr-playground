@@ -175,6 +175,9 @@ class VirtualEndNode(AdrBaseConfig):
         logger.info(
           f'Adding report for resource: {report.resource_id}, measurement: {report.measurement}'
         )
+        if not report.callback:
+          logger.error(f'Missing callback for report: {report}')
+          continue
         callback = (
           self._wrap_callback(report.callback, report.resource_id)
           if report.resource_id != BASE_RESOURCE_ID
@@ -199,7 +202,6 @@ class VirtualEndNode(AdrBaseConfig):
       - 'optIn': Accept the event as is
       - 'optOut': Decline to participate in the event
       - 'optIn with override': Accept with modifications
-    :rtype: str ('optIn', 'optOut', or 'optIn with override')
     :rtype: str ('optIn', 'optOut', or 'optIn with override')
     :raises KeyError: If the event is missing required fields.
     :raises ValueError: If the event signals format is invalid.

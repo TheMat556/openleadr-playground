@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, List, Any, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import plotly.graph_objs as go
@@ -221,7 +221,8 @@ class PlotManager:
     # Sort data points in-place
     data_points = list(zip(times, values))
     data_points.sort(key=lambda x: x[0])
-    return zip(*data_points)
+    sorted_times, sorted_values = zip(*data_points)
+    return list(sorted_times), list(sorted_values)
 
   def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
     """
@@ -239,7 +240,8 @@ class PlotManager:
     """
     for fmt in ('%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
       try:
-        return datetime.strptime(timestamp, fmt)
+        dt = datetime.strptime(timestamp, fmt)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
       except ValueError:
         continue
     try:
