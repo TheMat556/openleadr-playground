@@ -9,6 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
 
+from src.node_dashboard.helper.constants import Environment
 from src.node_dashboard.helper.utils import fetch_data_async
 from src.node_dashboard.helper.config import ContainerConfig
 
@@ -53,7 +54,8 @@ class DataManager:
     -------
     None
     """
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
       tasks = [self._fetch_consumption_data(session, config) for config in self.configs]
 
       try:
@@ -107,7 +109,8 @@ class DataManager:
     Optional[Dict[str, Any]]
         The fetched consumption data.
     """
-    is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
+    env = os.getenv('DOCKER_ENVIRONMENT', Environment.DOCKER)
+    is_local = env == Environment.LOCAL
     base_url = 'http://localhost' if is_local else config.vtn_self_host
     consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
     return await fetch_data_async(session, consumption_url)

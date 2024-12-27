@@ -8,7 +8,6 @@ from .helper.utils import round_to_nearest_minute
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class PlotManager:
   """
   Manages the creation and updating of plots for container data.
@@ -186,48 +185,64 @@ class PlotManager:
       )
 
   def _process_data_points(
-    self, data: List[Dict[str, Any]]
-  ) -> Tuple[List[datetime], List[float]]:
+      self, data: List[Dict[str, Any]]
+    ) -> Tuple[List[datetime], List[float]]:
+      """
+      Processes data points and returns sorted times and values.
+
+      Parameters
+      ----------
+      data : List[Dict[str, Any]]
+          Data points.
+
+      Returns
+      -------
+      Tuple[List[datetime], List[float]]
+          Sorted times and values from the data.
+      """
+      times = []
+      values = []
+
+      for entry in data:
+        timestamp = entry.get('timestamp')
+        value = entry.get('value')
+        if timestamp and value:
+          time = self._parse_timestamp(timestamp)
+          if time:
+            times.append(round_to_nearest_minute(time))
+            values.append(value)
+
+      if not times or not values:
+        return [], []
+
+      # Sort by timestamp
+      sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
+      return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
+
+  def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
     """
-    Processes data points and returns sorted times and values.
+    Parses a timestamp string into a datetime object.
 
     Parameters
     ----------
-    data : List[Dict[str, Any]]
-        Data points.
+    timestamp : str
+        Timestamp string.
 
     Returns
     -------
-    Tuple[List[datetime], List[float]]
-        Sorted times and values from the data.
+    Optional[datetime]
+        Parsed datetime object or None if parsing fails.
     """
-    times = []
-    values = []
-
-    for entry in data:
-      timestamp = entry.get('timestamp')
-      value = entry.get('value')
-      if timestamp and value:
-        try:
-          time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S.%f')
-        except ValueError:
-          try:
-            time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%S')
-          except ValueError:
-            try:
-              time = self.parse_time_to_datetime(timestamp)
-            except ValueError as e:
-              logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
-              continue
-        times.append(round_to_nearest_minute(time))
-        values.append(value)
-
-    if not times or not values:
-      return [], []
-
-    # Sort by timestamp
-    sorted_indices = sorted(range(len(times)), key=lambda i: times[i])
-    return [times[i] for i in sorted_indices], [values[i] for i in sorted_indices]
+    for fmt in ('%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
+      try:
+        return datetime.strptime(timestamp, fmt)
+      except ValueError:
+        continue
+    try:
+      return self.parse_time_to_datetime(timestamp)
+    except ValueError as e:
+      logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
+      return None
 
   @staticmethod
   def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
@@ -252,7 +267,7 @@ class PlotManager:
       dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
     except ValueError as e:
       logger.error(f'Invalid time string: {time_str}. Error: {e}')
-      return datetime.now()  # Return current datetime as a fallback
+      raise
     if timezone:
       from zoneinfo import ZoneInfo
 
