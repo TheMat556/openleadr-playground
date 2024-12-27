@@ -189,7 +189,6 @@ class VirtualEndNode(AdrBaseConfig):
         logger.debug(f'Successfully added report for resource: {report.resource_id}')
     logger.info('Reports added to OpenADR client')
 
-  @SignalSender('handle_event', 'ven')
   def handle_event(self, event: Dict[str, Any]) -> str:
     """
     Handle an OpenADR event.

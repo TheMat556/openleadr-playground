@@ -243,7 +243,7 @@ class PlotManager:
       return self.parse_time_to_datetime(timestamp)
     except ValueError as e:
       logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
-      return None
+      raise
 
   @staticmethod
   def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:

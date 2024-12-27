@@ -56,7 +56,9 @@ class DataManager:
     """
     timeout = aiohttp.ClientTimeout(total=30)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-      tasks = [self._fetch_consumption_data(session, config) for config in self.configs]
+      tasks = [
+        self._fetch_data(session, config, 'consumption') for config in self.configs
+      ]
 
       try:
         results = await asyncio.gather(*tasks)
@@ -79,23 +81,25 @@ class DataManager:
     """
     async with aiohttp.ClientSession() as session:
       tasks = [
-        self._fetch_load_profile_data(session, config) for config in self.configs
+        self._fetch_data(session, config, 'load_profile') for config in self.configs
       ]
 
       try:
         results = await asyncio.gather(*tasks)
         for idx, config in enumerate(self.configs):
-          await self._process_load_profile_data(config, results[idx])
+          load_profile_data = results[idx]
+          if load_profile_data:
+            await self._process_load_profile_data(config, load_profile_data)
       except (aiohttp.ClientError, json.JSONDecodeError) as e:
         logger.error(f'Error fetching load profile data: {e}')
 
   @staticmethod
   @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=10))
-  async def _fetch_consumption_data(
-    session: aiohttp.ClientSession, config: ContainerConfig
+  async def _fetch_data(
+    session: aiohttp.ClientSession, config: ContainerConfig, data_type: str
   ) -> Optional[Dict[str, Any]]:
     """
-    Fetches consumption data from the container's REST API with retry logic.
+    Fetches data from the container's REST API with retry logic.
 
     Parameters
     ----------
@@ -103,41 +107,19 @@ class DataManager:
         The aiohttp client session.
     config : ContainerConfig
         The container configuration.
+    data_type : str
+        The type of data to fetch ('consumption' or 'load_profile').
 
     Returns
     -------
     Optional[Dict[str, Any]]
-        The fetched consumption data.
+        The fetched data.
     """
     env = os.getenv('DOCKER_ENVIRONMENT', Environment.DOCKER)
     is_local = env == Environment.LOCAL
     base_url = 'http://localhost' if is_local else config.vtn_self_host
-    consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
-    return await fetch_data_async(session, consumption_url)
-
-  @staticmethod
-  async def _fetch_load_profile_data(
-    session: aiohttp.ClientSession, config: ContainerConfig
-  ) -> Optional[Dict[str, Any]]:
-    """
-    Fetches load profile data from the container's REST API.
-
-    Parameters
-    ----------
-    session : aiohttp.ClientSession
-        The aiohttp client session.
-    config : ContainerConfig
-        The container configuration.
-
-    Returns
-    -------
-    Optional[Dict[str, Any]]
-        The fetched load profile data.
-    """
-    is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
-    base_url = 'http://localhost' if is_local else config.vtn_self_host
-    load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
-    return await fetch_data_async(session, load_profile_url)
+    url = f'{base_url}:{config.rest_api_port}/data/{data_type}'
+    return await fetch_data_async(session, url)
 
   async def _process_consumption_data(
     self, config: ContainerConfig, consumption_data: Dict[str, Any]
@@ -204,19 +186,29 @@ class DataManager:
     -------
     None
     """
+    schema = {
+      'type': 'object',
+      'properties': {
+        'value': {
+          'type': 'object',
+          'patternProperties': {'^[0-9]{2}:[0-9]{2}$': {'type': 'number'}},
+          'additionalProperties': False,
+        }
+      },
+      'required': ['value'],
+    }
+
     if not load_profile_data:
       logger.warning(f'No load profile data received for {config.container_name}')
       return
 
     async with self.lock:
       try:
+        validate(instance=load_profile_data, schema=schema)
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
         value_data = load_profile_data.get('value')
-        if not isinstance(value_data, dict):
-          raise ValueError(f'Expected dict for "value", got {type(value_data)}')
-
         valid_entries = [
           {'timestamp': time, 'value': value}
           for time, value in value_data.items()
@@ -228,6 +220,10 @@ class DataManager:
         if len(buffer['load_profile']) > self.max_buffer_size:
           buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
         logger.info(f'Updated buffer for {config.container_name} (load_profile)')
+      except ValidationError as e:
+        logger.error(
+          f'Invalid load profile data format for {config.container_name}: {e.message}. Data: {load_profile_data}'
+        )
       except Exception as e:
         logger.error(
           f'Error processing load profile data for {config.container_name}: {e}'
