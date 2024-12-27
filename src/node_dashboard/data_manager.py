@@ -9,191 +9,200 @@ from src.node_dashboard.helper.config import ContainerConfig
 
 logger = logging.getLogger(__name__)
 
-
 class DataManager:
-  """
-  Manages data fetching and buffering for container configurations.
-
-  Attributes
-  ----------
-  configs : List[ContainerConfig]
-      List of container configurations.
-  data_buffers : Dict[str, Dict[str, List[Dict[str, Any]]]]
-      Buffers to store fetched data.
-  max_buffer_size : int
-      Maximum size of the data buffers.
-  """
-
-  def __init__(self, configs: List[ContainerConfig], max_buffer_size: int):
     """
-    Initializes the DataManager with configurations and buffer size.
+    Manages data fetching and buffering for container configurations.
 
-    Parameters
+    Attributes
     ----------
     configs : List[ContainerConfig]
         List of container configurations.
+    data_buffers : Dict[str, Dict[str, List[Dict[str, Any]]]]
+        Buffers to store fetched data.
     max_buffer_size : int
         Maximum size of the data buffers.
     """
-    self.configs = configs
-    self.data_buffers: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
-    self.max_buffer_size = max_buffer_size
 
-  async def update_consumption_data(self) -> None:
-    """
-    Fetches and updates consumption data for each container.
+    def __init__(self, configs: List[ContainerConfig], max_buffer_size: int):
+        """
+        Initializes the DataManager with configurations and buffer size.
 
-    Returns
-    -------
-    None
-    """
-    async with aiohttp.ClientSession() as session:
-      tasks = [self._fetch_consumption_data(session, config) for config in self.configs]
+        Parameters
+        ----------
+        configs : List[ContainerConfig]
+            List of container configurations.
+        max_buffer_size : int
+            Maximum size of the data buffers.
+        """
+        self.configs = configs
+        self.data_buffers: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+        self.max_buffer_size = max_buffer_size
+        self.lock = asyncio.Lock()
 
-      try:
-        results = await asyncio.gather(*tasks)
-        for idx, config in enumerate(self.configs):
-          consumption_data = results[idx]
-          if consumption_data:
-            self._process_consumption_data(config, consumption_data)
-      except (aiohttp.ClientError, json.JSONDecodeError) as e:
-        logger.error(f'Error fetching consumption data: {e}')
+    async def update_consumption_data(self) -> None:
+        """
+        Fetches and updates consumption data for each container.
 
-      logger.info('Consumption data updated for all containers.')
+        Returns
+        -------
+        None
+        """
+        async with aiohttp.ClientSession() as session:
+            tasks = [self._fetch_consumption_data(session, config) for config in self.configs]
 
-  async def update_load_profile_data(self) -> None:
-    """
-    Fetches and updates load profile data for each container.
+            try:
+                results = await asyncio.gather(*tasks)
+                for idx, config in enumerate(self.configs):
+                    consumption_data = results[idx]
+                    if consumption_data:
+                        await self._process_consumption_data(config, consumption_data)
+            except (aiohttp.ClientError, json.JSONDecodeError) as e:
+                logger.error(f'Error fetching consumption data: {e}')
 
-    Returns
-    -------
-    None
-    """
-    async with aiohttp.ClientSession() as session:
-      tasks = [
-        self._fetch_load_profile_data(session, config) for config in self.configs
-      ]
-      results = await asyncio.gather(*tasks)
-      for idx, config in enumerate(self.configs):
-        self._process_load_profile_data(config, results[idx])
+            logger.info('Consumption data updated for all containers.')
 
-  @staticmethod
-  async def _fetch_consumption_data(
-    session: aiohttp.ClientSession, config: ContainerConfig
-  ) -> Optional[Dict[str, Any]]:
-    """
-    Fetches consumption data from the container's REST API.
+    async def update_load_profile_data(self) -> None:
+        """
+        Fetches and updates load profile data for each container.
 
-    Parameters
-    ----------
-    session : aiohttp.ClientSession
-        The aiohttp client session.
-    config : ContainerConfig
-        The container configuration.
+        Returns
+        -------
+        None
+        """
+        async with aiohttp.ClientSession() as session:
+            tasks = [self._fetch_load_profile_data(session, config) for config in self.configs]
 
-    Returns
-    -------
-    Optional[Dict[str, Any]]
-        The fetched consumption data.
-    """
-    is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
-    base_url = 'http://localhost' if is_local else config.vtn_self_host
-    consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
-    return await fetch_data_async(session, consumption_url)
+            try:
+                results = await asyncio.gather(*tasks)
+                for idx, config in enumerate(self.configs):
+                    await self._process_load_profile_data(config, results[idx])
+            except (aiohttp.ClientError, json.JSONDecodeError) as e:
+                logger.error(f'Error fetching load profile data: {e}')
 
-  @staticmethod
-  async def _fetch_load_profile_data(
-    session: aiohttp.ClientSession, config: ContainerConfig
-  ) -> Optional[Dict[str, Any]]:
-    """
-    Fetches load profile data from the container's REST API.
+    @staticmethod
+    async def _fetch_consumption_data(
+        session: aiohttp.ClientSession, config: ContainerConfig
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetches consumption data from the container's REST API.
 
-    Parameters
-    ----------
-    session : aiohttp.ClientSession
-        The aiohttp client session.
-    config : ContainerConfig
-        The container configuration.
+        Parameters
+        ----------
+        session : aiohttp.ClientSession
+            The aiohttp client session.
+        config : ContainerConfig
+            The container configuration.
 
-    Returns
-    -------
-    Optional[Dict[str, Any]]
-        The fetched load profile data.
-    """
-    is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
-    base_url = 'http://localhost' if is_local else config.vtn_self_host
-    load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
-    return await fetch_data_async(session, load_profile_url)
+        Returns
+        -------
+        Optional[Dict[str, Any]]
+            The fetched consumption data.
+        """
+        is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
+        base_url = 'http://localhost' if is_local else config.vtn_self_host
+        consumption_url = f'{base_url}:{config.rest_api_port}/data/consumption'
+        return await fetch_data_async(session, consumption_url)
 
-  def _process_consumption_data(
-    self, config: ContainerConfig, consumption_data: Dict[str, Any]
-  ) -> None:
-    """
-    Processes and buffers the fetched consumption data.
+    @staticmethod
+    async def _fetch_load_profile_data(
+        session: aiohttp.ClientSession, config: ContainerConfig
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Fetches load profile data from the container's REST API.
 
-    Parameters
-    ----------
-    config : ContainerConfig
-        The container configuration.
-    consumption_data : Dict[str, Any]
-        The fetched consumption data.
+        Parameters
+        ----------
+        session : aiohttp.ClientSession
+            The aiohttp client session.
+        config : ContainerConfig
+            The container configuration.
 
-    Returns
-    -------
-    None
-    """
-    try:
-      buffer = self.data_buffers.setdefault(
-        config.container_name, {'consumption': [], 'load_profile': []}
-      )
-      buffer['consumption'].append(consumption_data['consumption'])
-      if len(buffer['consumption']) > self.max_buffer_size:
-        buffer['consumption'].pop(0)
-      logger.info(f'Updated buffer for {config.container_name} (consumption)')
-    except KeyError as e:
-      logger.error(
-        f'Invalid consumption data format for {config.container_name}: Missing key {e}. Data: {consumption_data}'
-      )
+        Returns
+        -------
+        Optional[Dict[str, Any]]
+            The fetched load profile data.
+        """
+        is_local = os.getenv('DOCKER_ENVIRONMENT', 'true') == 'false'
+        base_url = 'http://localhost' if is_local else config.vtn_self_host
+        load_profile_url = f'{base_url}:{config.rest_api_port}/data/load_profile'
+        return await fetch_data_async(session, load_profile_url)
 
-  def _process_load_profile_data(
-    self, config: ContainerConfig, load_profile_data: Optional[Dict[str, Any]]
-  ) -> None:
-    """
-    Processes and buffers the fetched load profile data.
+    async def _process_consumption_data(
+        self, config: ContainerConfig, consumption_data: Dict[str, Any]
+    ) -> None:
+        """
+        Processes and buffers the fetched consumption data.
 
-    Parameters
-    ----------
-    config : ContainerConfig
-        The container configuration.
-    load_profile_data : Optional[Dict[str, Any]]
-        The fetched load profile data.
+        Parameters
+        ----------
+        config : ContainerConfig
+            The container configuration.
+        consumption_data : Dict[str, Any]
+            The fetched consumption data.
 
-    Returns
-    -------
-    None
-    """
-    if not load_profile_data:
-      logger.warning(f'No load profile data received for {config.container_name}')
-      return
+        Returns
+        -------
+        None
+        """
+        async with self.lock:
+            try:
+                buffer = self.data_buffers.setdefault(
+                    config.container_name, {'consumption': [], 'load_profile': []}
+                )
+                if 'consumption' in consumption_data and isinstance(consumption_data['consumption'], dict):
+                    buffer['consumption'].append(consumption_data['consumption'])
+                    if len(buffer['consumption']) > self.max_buffer_size:
+                        buffer['consumption'].pop(0)
+                    logger.info(f'Updated buffer for {config.container_name} (consumption)')
+                else:
+                    logger.error(f'Invalid consumption data format for {config.container_name}: {consumption_data}')
+            except KeyError as e:
+                logger.error(
+                    f'Invalid consumption data format for {config.container_name}: Missing key {e}. Data: {consumption_data}'
+                )
 
-    try:
-      buffer = self.data_buffers.setdefault(
-        config.container_name, {'consumption': [], 'load_profile': []}
-      )
-      value_data = load_profile_data.get('value')
-      if not isinstance(value_data, dict):
-        raise ValueError(f'Expected dict for "value", got {type(value_data)}')
+    async def _process_load_profile_data(
+        self, config: ContainerConfig, load_profile_data: Optional[Dict[str, Any]]
+    ) -> None:
+        """
+        Processes and buffers the fetched load profile data.
 
-      for time, value in value_data.items():
-        if not isinstance(value, (int, float)):
-          logger.warning(f'Skipping invalid value type for time {time}: {type(value)}')
-          continue
-        buffer['load_profile'].append({'timestamp': time, 'value': value})
+        Parameters
+        ----------
+        config : ContainerConfig
+            The container configuration.
+        load_profile_data : Optional[Dict[str, Any]]
+            The fetched load profile data.
 
-      if len(buffer['load_profile']) > self.max_buffer_size:
-        buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
-      logger.info(f'Updated buffer for {config.container_name} (load_profile)')
-    except Exception as e:
-      logger.error(
-        f'Error processing load profile data for {config.container_name}: {e}'
-      )
+        Returns
+        -------
+        None
+        """
+        if not load_profile_data:
+            logger.warning(f'No load profile data received for {config.container_name}')
+            return
+
+        async with self.lock:
+            try:
+                buffer = self.data_buffers.setdefault(
+                    config.container_name, {'consumption': [], 'load_profile': []}
+                )
+                value_data = load_profile_data.get('value')
+                if not isinstance(value_data, dict):
+                    raise ValueError(f'Expected dict for "value", got {type(value_data)}')
+
+                valid_entries = [
+                    {'timestamp': time, 'value': value}
+                    for time, value in value_data.items()
+                    if isinstance(value, (int, float))
+                ]
+
+                buffer['load_profile'].extend(valid_entries)
+
+                if len(buffer['load_profile']) > self.max_buffer_size:
+                    buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size:]
+                logger.info(f'Updated buffer for {config.container_name} (load_profile)')
+            except Exception as e:
+                logger.error(
+                    f'Error processing load profile data for {config.container_name}: {e}'
+                )

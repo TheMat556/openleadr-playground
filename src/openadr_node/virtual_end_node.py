@@ -11,6 +11,7 @@ from src.openadr_node.models import ReportConfiguration
 from src.openadr_node import logger
 from src.openadr_node.models.event import ResourceConsumption
 
+BASE_RESOURCE_ID = 'base'
 
 class VirtualEndNode(AdrBaseConfig):
   """
@@ -103,6 +104,9 @@ class VirtualEndNode(AdrBaseConfig):
     except TypeError as e:
       logger.error(f'Invalid report configuration: {e}')
       raise
+    except (ConnectionError, TimeoutError) as e:
+      logger.error(f'Network error while registering base report: {e}')
+      raise
     except Exception as e:
       logger.error(f'Failed to register base report: {e}')
       raise
@@ -149,8 +153,8 @@ class VirtualEndNode(AdrBaseConfig):
       for report in reports:
         callback = (
           self._wrap_callback(report.callback, report.resource_id)
-          if report.resource_id != 'base'
-          else report.callback
+          if report.resource_id != BASE_RESOURCE_ID
+          else rep#ort.callback
         )
         self._open_adr_client.add_report(
           resource_id=report.resource_id,

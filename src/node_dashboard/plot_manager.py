@@ -22,7 +22,7 @@ class PlotManager:
     self.plot_cache: Dict[str, go.Layout] = {}
 
   def create_combined_plot(
-    self, data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig
+    self, data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig, clear_existing: bool = True
   ) -> go.Figure:
     """
     Creates a combined plot of load profile and consumption data for a container.
@@ -33,6 +33,8 @@ class PlotManager:
         Data to be plotted.
     config : ContainerConfig
         Configuration of the container.
+    clear_existing : bool
+        Whether to clear existing traces or append new ones.
 
     Returns
     -------
@@ -40,7 +42,8 @@ class PlotManager:
         Plotly figure object containing the combined plot.
     """
     fig = self._get_or_create_figure(config)
-    fig.data = []  # Clear existing traces
+    if clear_existing:
+      fig.data = []  # Clear existing traces
 
     self._add_load_profile_trace(fig, data.get('load_profile', []))
     self._add_consumption_trace(fig, data.get('consumption', []))
@@ -174,7 +177,8 @@ class PlotManager:
         values.append(value)
 
     if times and values:
-      return zip(*sorted(zip(times, values)))
+      sorted_times, sorted_values = zip(*sorted(zip(times, values)))
+      return list(sorted_times), list(sorted_values)
     return [], []
 
   @staticmethod
