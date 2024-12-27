@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List
 import logging
 import sys
 
@@ -77,7 +77,9 @@ class GradioNodeDashboard:
     else:
       self.state = new_state
 
-  def set_state_to_single_config(self, config: ContainerConfig, keep_existing: bool = False) -> None:
+  def set_state_to_single_config(
+    self, config: ContainerConfig, keep_existing: bool = False
+  ) -> None:
     """
     Sets the state to a single configuration, with an option to keep existing configs.
 
@@ -93,7 +95,9 @@ class GradioNodeDashboard:
     None
     """
     if keep_existing:
-      self.state = [config] + [cfg for cfg in self.state if cfg.container_name != config.container_name]
+      self.state = [config] + [
+        cfg for cfg in self.state if cfg.container_name != config.container_name
+      ]
     else:
       self.state = [config]
 

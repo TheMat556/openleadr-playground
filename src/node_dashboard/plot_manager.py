@@ -1,8 +1,12 @@
+import logging
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 import plotly.graph_objs as go
 from .helper.config import ContainerConfig
 from .helper.utils import round_to_nearest_minute
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class PlotManager:
@@ -22,7 +26,10 @@ class PlotManager:
     self.plot_cache: Dict[str, go.Layout] = {}
 
   def create_combined_plot(
-    self, data: Dict[str, List[Dict[str, Any]]], config: ContainerConfig, clear_existing: bool = True
+    self,
+    data: Dict[str, List[Dict[str, Any]]],
+    config: ContainerConfig,
+    clear_existing: bool = True,
   ) -> go.Figure:
     """
     Creates a combined plot of load profile and consumption data for a container.
@@ -200,7 +207,11 @@ class PlotManager:
     """
     today_str = datetime.now().strftime('%Y-%m-%d')
     timestamp_str = f'{today_str}T{time_str}:00'
-    dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+    try:
+      dt = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S')
+    except ValueError as e:
+      logger.error(f'Invalid time string: {time_str}. Error: {e}')
+      return datetime.now()  # Return current datetime as a fallback
     if timezone:
       from zoneinfo import ZoneInfo
 

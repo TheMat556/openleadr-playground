@@ -13,6 +13,7 @@ from src.openadr_node.models.event import ResourceConsumption
 
 BASE_RESOURCE_ID = 'base'
 
+
 class VirtualEndNode(AdrBaseConfig):
   """
   Represents a Virtual End Node (VEN) in the OpenADR system.
@@ -132,8 +133,8 @@ class VirtualEndNode(AdrBaseConfig):
     :type ven_id: str
     :param resource_id: Resource ID.
     :type resource_id: str
-    :param data: Consumption data.
-    :type data: float
+    :param data: Tuple of timestamp and consumption data.
+    :type data: Tuple[datetime, float]
     :return: Resource consumption object.
     :rtype: ResourceConsumption
     """
@@ -154,7 +155,7 @@ class VirtualEndNode(AdrBaseConfig):
         callback = (
           self._wrap_callback(report.callback, report.resource_id)
           if report.resource_id != BASE_RESOURCE_ID
-          else rep#ort.callback
+          else report.callback
         )
         self._open_adr_client.add_report(
           resource_id=report.resource_id,
