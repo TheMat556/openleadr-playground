@@ -7,12 +7,3 @@ repos:
     - id: ruff
     # Run the formatter.
     - id: ruff-format
-
-- repo: local
-  hooks:
-    - id: remove-env-entries
-      name: Remove sensitive entries from .env
-      entry: bash -c 'sed -i "/^PRIVATE_MQTT_BROKER_URL=/d; /^PRIVATE_MQTT_USERNAME=/d; /^PRIVATE_MQTT_PASSWORD=/d" .env'
-      language: system
-      files: ^\.env$
-      stages: [push]
