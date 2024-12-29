@@ -7,3 +7,11 @@ repos:
     - id: ruff
     # Run the formatter.
     - id: ruff-format
+
+- repo: local
+  hooks:
+    - id: check-env-mqtt
+      name: Check for .env.mqtt file
+      entry: bash -c 'if git diff --cached --name-only | grep -q "^.env.mqtt$"; then echo ".env.mqtt file is staged for commit. Please remove it before pushing."; exit 1; fi'
+      language: system
+      stages: [pre-commit]
