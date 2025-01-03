@@ -27,6 +27,7 @@ def main() -> None:
   validate_config()
 
   node_manager = NodeManager(
+    node_id=os.getenv('NODE_ID'),
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
     http_port=int(os.getenv('VTN_PORT', 8080)),
     vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),

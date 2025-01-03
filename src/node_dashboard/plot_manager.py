@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo
 
 import plotly.graph_objs as go
 from .helper.config import ContainerConfig
-from .helper.utils import round_to_nearest_minute
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -191,61 +190,67 @@ class PlotManager:
     self, data: List[Dict[str, Any]]
   ) -> Tuple[List[datetime], List[float]]:
     """
-    Processes data points and returns sorted times and values.
+    Process data points for plotting.
 
     Parameters
     ----------
     data : List[Dict[str, Any]]
-        Data points.
+        List of data points to process.
 
     Returns
     -------
     Tuple[List[datetime], List[float]]
-        Sorted times and values from the data.
+        Tuple containing lists of timestamps and values.
     """
+    if not data:
+      return [], []
+
     times = []
     values = []
 
-    for entry in data:
-      timestamp = entry.get('timestamp')
-      value = entry.get('value')
-      if timestamp and value:
-        time = self._parse_timestamp(timestamp)
-        if time:
-          times.append(round_to_nearest_minute(time))
-          values.append(value)
+    for point in data:
+      # Check if this is load profile data (has 'signal_payload')
+      if 'signal_payload' in point:
+        timestamp = datetime.fromtimestamp(
+          point['timestamp'] / 1000
+        )  # Convert from milliseconds
+        value = point['signal_payload']
+      # Check if this is consumption data (has 'value')
+      elif 'value' in point:
+        timestamp = datetime.fromtimestamp(
+          int(point['timestamp']) / 1000
+        )  # Convert string timestamp from milliseconds
+        value = point['value']
+      else:
+        continue
 
-    if not times or not values:
-      return [], []
+      times.append(timestamp)
+      values.append(value)
 
-    # Sort data points in-place
-    data_points = list(zip(times, values))
-    data_points.sort(key=lambda x: x[0])
-    sorted_times, sorted_values = zip(*data_points)
-    return list(sorted_times), list(sorted_values)
+    return times, values
 
-  def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
+  @staticmethod
+  def _parse_timestamp(timestamp: str) -> Optional[datetime]:
     """
-    Parses a timestamp string into a datetime object.
+    Parses a Unix timestamp string in milliseconds into a datetime object.
 
     Parameters
     ----------
     timestamp : str
-        Timestamp string.
+        Unix timestamp string in milliseconds.
 
     Returns
     -------
     Optional[datetime]
         Parsed datetime object or None if parsing fails.
     """
-    for fmt in ('%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
-      try:
-        dt = datetime.strptime(timestamp, fmt)
-        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
-      except ValueError:
-        continue
     try:
-      return self.parse_time_to_datetime(timestamp)
+      # Check if the timestamp is a Unix timestamp in milliseconds
+      if timestamp.isdigit() and len(timestamp) == 13:
+        # Convert milliseconds to seconds and create a datetime object
+        return datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+      else:
+        raise ValueError(f'Invalid Unix timestamp format: {timestamp}')
     except ValueError as e:
       logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
       raise

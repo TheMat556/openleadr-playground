@@ -3,7 +3,7 @@ import os
 import sys
 import threading
 from datetime import timedelta
-from typing import Any, List
+from typing import Any, List, Optional
 
 import numpy as np
 from dotenv import load_dotenv
@@ -21,6 +21,7 @@ def run_mock_node(queue: Any) -> None:
   load_dotenv(dotenv_path='./development/simple/.env')
 
   mock_node = NodeManager(
+    node_id=os.getenv('DEV_NODE_ID'),
     vtn_name=os.getenv('DEV_VTN_NAME'),
     vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
     rest_api_port=int(os.getenv('DEV_MOCK_NODE_REST_API_PORT', 5000)),
@@ -72,7 +73,18 @@ def device_callback() -> float:
   return rng.random() * 10
 
 
-def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
+def run_house_node(
+  node_id: str,
+  ven_name: str,
+  vtn_url: str,
+  rest_api_port: str,
+  mqtt_broker: Optional[str] = None,
+  mqtt_port: Optional[int] = None,
+  mqtt_topic_load_profile: Optional[str] = None,
+  mqtt_topic_consumption: Optional[str] = None,
+  mqtt_username: Optional[str] = None,
+  mqtt_password: Optional[str] = None,
+) -> None:
   """Create and configure a house node."""
   reports: List[ReportConfiguration] = [
     ReportConfiguration(
@@ -84,9 +96,16 @@ def run_house_node(ven_name: str, vtn_url: str, rest_api_port: str) -> None:
     ),
   ]
   house_node = NodeManager(
+    node_id=node_id,
     ven_name=ven_name,
     vtn_url=vtn_url,
     rest_api_port=int(rest_api_port),
+    mqtt_broker=mqtt_broker,
+    mqtt_port=mqtt_port,
+    mqtt_topic_load_profile=mqtt_topic_load_profile,
+    mqtt_topic_consumption=mqtt_topic_consumption,
+    mqtt_username=mqtt_username,
+    mqtt_password=mqtt_password,
   )
   house_node.add_report(reports)
 

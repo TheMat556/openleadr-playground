@@ -1,40 +1,43 @@
 {
-  "mock_node": {
-    "VTN_NAME": "VTN_0",
-    "VTN_URL": "",
-    "VTN_PATH_PREFIX": "",
-    "VEN_NAME": "",
-    "GRADIO_PORT": "",
-    "GRADIO_SERVER_NAME": "",
+  "0_container": {
+    "NODE_ID": "0",
+    "VTN_NAME": "vtn_0",
+    "VTN_URL": "http://localhost:8080/0/OpenADR2/Simple/2.0b",
+    "VTN_PATH_PREFIX": "/0/OpenADR2/Simple/2.0b",
+    "VEN_NAME": "ven_0",
+    "GRADIO_PORT": "7862",
+    "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5000",
-    "VTN_PORT": "",
-    "VTN_SELF_HOST": "",
-    "LAYER": 0
+    "VTN_PORT": "8080",
+    "VTN_SELF_HOST": "http://172.18.0.2",
+    "LAYER": "0"
   },
-  "house_node": {
-    "VTN_NAME": "",
-    "VTN_URL": "",
-    "VTN_PATH_PREFIX": "",
-    "VEN_NAME": "VEN_1",
-    "GRADIO_PORT": "",
-    "GRADIO_SERVER_NAME": "",
+  "0_0_container": {
+    "NODE_ID": "0_0",
+    "VTN_NAME": "vtn_0_0",
+    "VTN_URL": "http://localhost:8081/0/0/OpenADR2/Simple/2.0b",
+    "VTN_PATH_PREFIX": "/0/0/OpenADR2/Simple/2.0b",
+    "VEN_NAME": "ven_0_0",
+    "GRADIO_PORT": "7863",
+    "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5001",
-    "VTN_PORT": "",
-    "VTN_SELF_HOST": "",
-    "CONNECT_VTN_URL": "",
-    "LAYER": 1
+    "VTN_PORT": "8081",
+    "VTN_SELF_HOST": "http://172.18.0.3",
+    "LAYER": "1",
+    "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b"
   },
-    "house_node_2": {
-    "VTN_NAME": "",
-    "VTN_URL": "",
-    "VTN_PATH_PREFIX": "",
-    "VEN_NAME": "VEN_1",
-    "GRADIO_PORT": "",
-    "GRADIO_SERVER_NAME": "",
+  "0_1_container": {
+    "NODE_ID": "0_1",
+    "VTN_NAME": "vtn_0_1",
+    "VTN_URL": "http://localhost:8082/0/1/OpenADR2/Simple/2.0b",
+    "VTN_PATH_PREFIX": "/0/1/OpenADR2/Simple/2.0b",
+    "VEN_NAME": "ven_0_1",
+    "GRADIO_PORT": "7864",
+    "GRADIO_SERVER_NAME": "0.0.0.0",
     "REST_API_PORT": "5002",
-    "VTN_PORT": "",
-    "VTN_SELF_HOST": "",
-    "CONNECT_VTN_URL": "",
-    "LAYER": 1
+    "VTN_PORT": "8082",
+    "VTN_SELF_HOST": "http://172.18.0.4",
+    "LAYER": "1",
+    "CONNECT_VTN_URL": "http://172.18.0.2:8080/0/OpenADR2/Simple/2.0b"
   }
 }

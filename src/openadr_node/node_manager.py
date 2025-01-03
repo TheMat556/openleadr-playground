@@ -1,21 +1,20 @@
 import asyncio
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Any, Dict, Callable
-
-import pandas as pd
-from flask import Flask, jsonify
 
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.decorator.rest_endpoint import rest_endpoint
+from src.openadr_node.database.database_manager import DatabaseManager
+from src.openadr_node.database.loadprofile_manager import LoadProfileManager
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.event import ResourceConsumption
+from src.openadr_node.protocols.mqtt_manager import MQTTManager
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
+from src.openadr_node.protocols import RestApiManager
 
 from pydispatch import dispatcher
-from threading import Thread
 
 
 class NodeManager(AdrBaseConfig):
@@ -25,6 +24,7 @@ class NodeManager(AdrBaseConfig):
 
   def __init__(
     self,
+    node_id: Optional[str] = None,
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
@@ -32,6 +32,12 @@ class NodeManager(AdrBaseConfig):
     http_port: Optional[int] = None,
     vtn_path_prefix: Optional[str] = None,
     rest_api_port: Optional[int] = None,
+    mqtt_broker: Optional[str] = None,
+    mqtt_port: Optional[int] = None,
+    mqtt_topic_load_profile: Optional[str] = None,
+    mqtt_topic_consumption: Optional[str] = None,
+    mqtt_username: Optional[str] = None,
+    mqtt_password: Optional[str] = None,
   ):
     """
     Initialize the NodeManager.
@@ -50,6 +56,18 @@ class NodeManager(AdrBaseConfig):
     :type vtn_path_prefix: Optional[str]
     :param rest_api_port: Port for the REST API.
     :type rest_api_port: Optional[int]
+    :param mqtt_broker: MQTT broker address.
+    :type mqtt_broker: Optional[str]
+    :param mqtt_port: MQTT broker port.
+    :type mqtt_port: Optional[int]
+    :param mqtt_topic_load_profile: MQTT topic for load profile.
+    :type mqtt_topic_load_profile: Optional[str]
+    :param mqtt_topic_consumption: MQTT topic for consumption.
+    :type mqtt_topic_consumption: Optional[str]
+    :param mqtt_username: MQTT username.
+    :type mqtt_username: Optional[str]
+    :param mqtt_password: MQTT password.
+    :type mqtt_password: Optional[str]
     """
     super().__init__()
     self._vtn_name = vtn_name
@@ -65,16 +83,40 @@ class NodeManager(AdrBaseConfig):
 
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
-    self._topics: Dict[str, Any] = {}
     self._subscribers: Dict[str, List[Callable]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption = 0
 
-    dispatcher.send(signal='on_ready', sender='system')
-    self.app = Flask(__name__)
+    self._rest_api = RestApiManager(self._rest_api_port)
 
-    self._init_routes()
-    self._start_flask()
+    if node_id:
+      self._load_profile_manager = LoadProfileManager(DatabaseManager(node_id + '.db'))
+      if self._rest_api_port:
+        self._rest_api = RestApiManager(self._rest_api_port)
+        self._rest_api.set_load_profile_manager(self._load_profile_manager)
+        self._rest_api.init_routes(self._rest_api)
+        self._rest_api.start()
+
+      if (
+        mqtt_broker
+        and mqtt_port
+        and mqtt_topic_load_profile
+        and mqtt_topic_consumption
+        and mqtt_username
+        and mqtt_password
+      ):
+        self._mqtt_manager = MQTTManager(
+          broker=mqtt_broker,
+          port=mqtt_port,
+          topic_load_profile=mqtt_topic_load_profile,
+          topic_consumption=mqtt_topic_consumption,
+          load_profile_manager=self._load_profile_manager,
+          username=mqtt_username,
+          password=mqtt_password,
+        )
+        self._mqtt_manager.start()
+
+    dispatcher.send(signal='on_ready', sender='system')
 
   def get_method(self, signal: str) -> Optional[Callable]:
     """
@@ -158,16 +200,16 @@ class NodeManager(AdrBaseConfig):
 
     transformed_data = [
       {
-        'time': interval['dtstart'].strftime('%H:%M'),
-        'value': interval['signal_payload'],
+        'dstart': int(interval['dtstart'].timestamp() * 1000),
+        'duration': int(interval['duration'].total_seconds() * 1000),
+        'signal_payload': interval['signal_payload'],
       }
       for interval in data
     ]
-    df = pd.DataFrame(transformed_data)
-    self._topics['load_profile'] = df
-    df.set_index('time', inplace=True)
 
-    dispatcher.send(sender='nm', signal='update_load_profile', data=data)
+    self._load_profile_manager.insert_load_profile(transformed_data)
+
+    dispatcher.send(sender='nm', signal='update_load_profile', data=transformed_data)
 
   def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
@@ -191,6 +233,16 @@ class NodeManager(AdrBaseConfig):
       for ven_id, resources in self._ven_data.items():
         for resource_id, value in resources.items():
           self._current_consumption += value
+
+      timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+      consumption_data = {
+        'timestamp': timestamp_ms,
+        'ven_id': data.ven_id,
+        'resource_id': data.resource_id,
+        'value': data.data[1],
+      }
+      self._load_profile_manager.insert_consumption(consumption_data)
+
       logger.debug(f'Updated consumption data - Total: {self._current_consumption}')
       dispatcher.send(
         sender='nm', signal='update_consumption_data', data=self._current_consumption
@@ -292,77 +344,6 @@ class NodeManager(AdrBaseConfig):
       self._ven.add_reports(list_of_reports)
     except Exception as e:
       logger.error(f'Error adding report: {e}')
-
-  def _init_routes(self) -> None:
-    """
-    Initialize the REST API routes.
-    """
-    for attr_name in dir(self):
-      attr = getattr(self, attr_name)
-      if callable(attr) and getattr(attr, '_rest_endpoint', False):
-        self.app.add_url_rule(attr._rest_path, view_func=attr, methods=['GET'])
-
-  def _start_flask(self) -> None:
-    """
-    Start the Flask server.
-    """
-
-    def run_flask() -> None:
-      port = self._rest_api_port
-      if self._rest_api_port is None:
-        logger.warning('REST API port not set, node manager executing will exit')
-        sys.exit(1)
-      try:
-        self.app.run(host='0.0.0.0', port=port)
-      except OSError as e:
-        logger.error(f'Failed to start Flask server: {e}')
-        raise
-
-    thread = Thread(target=run_flask)
-    thread.daemon = True
-    thread.start()
-
-  @rest_endpoint('/data/load_profile')
-  def get_load_profile(self) -> Any:
-    """
-    Get the load profile data.
-
-    :return: The load profile data in JSON format.
-    :rtype: Any
-    """
-    load_profile = self._topics.get('load_profile', None)
-    if load_profile is None:
-      return jsonify({'error': 'Load profile not found'}), 404
-    try:
-      return load_profile.to_json(), 200, {'Content-Type': 'application/json'}
-    except Exception as e:
-      logger.error(f'Failed to serialize load profile: {e}')
-      return jsonify({'error': 'Failed to serialize data'}), 500
-
-  @rest_endpoint('/data/consumption')
-  def get_current_consumption(self) -> Any:
-    """
-    Get the current consumption data.
-
-    :return: The current consumption data in JSON format.
-    :rtype: Any
-    """
-    try:
-      # Get the current time
-      now = datetime.now()
-
-      # Prepare the consumption data
-      consumption_data = {
-        'consumption': {
-          'value': self._current_consumption,
-          'timestamp': now.isoformat(),
-          'unit': 'kWh',
-        }
-      }
-      return jsonify(consumption_data), 200, {'Content-Type': 'application/json'}
-    except Exception as e:
-      logger.error(f'Failed to serialize consumption data: {e}')
-      return jsonify({'error': 'Failed to serialize data'}), 500
 
   def publish(self, signal: str, data: Any) -> None:
     """

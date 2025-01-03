@@ -15,3 +15,9 @@ repos:
       entry: bash -c 'if git diff --cached --name-only | grep -q "^.env.mqtt$"; then echo ".env.mqtt file is staged for commit. Please remove it before pushing."; exit 1; fi'
       language: system
       stages: [pre-commit]
+
+    - id: delete-docker-compose
+      name: Delete docker-compose.yml file
+      entry: bash -c 'rm -f docker-compose.yml'
+      language: system
+      stages: [pre-commit]

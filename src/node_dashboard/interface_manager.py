@@ -6,6 +6,7 @@ from typing import List, TYPE_CHECKING
 
 from .helper import constants
 from .helper.config import ContainerConfig
+from .hierarchy_plot_manager import HierarchyPlotManager
 
 if TYPE_CHECKING:
   from .dashboard import GradioNodeDashboard
@@ -33,7 +34,8 @@ class InterfaceManager:
         The dashboard instance containing configurations and state.
     """
     self.dashboard = dashboard
-    self._plot_components = {}  # Dictionary for easy lookup
+    self.hierarchy_plot_manager = HierarchyPlotManager(dashboard.configs)
+    self._plot_components = {'hierarchy': gr.Plot(visible=False)}
 
   def create_interface(self) -> gr.Blocks:
     """
@@ -105,6 +107,7 @@ class InterfaceManager:
         State variable for the Gradio interface.
     """
     with gr.Column(elem_id='sidebar', scale=1):
+      self._create_visualize_button(state_var)  # Moved above the accordion
       with gr.Accordion('Layers', open=True):
         self._create_overview_buttons(state_var)
         self._create_layer_buttons(state_var)
@@ -166,16 +169,24 @@ class InterfaceManager:
           outputs=state_var,
         )
 
+  def _create_visualize_button(self, state_var: gr.State) -> None:
+    gr.Button('Visualize Hierarchy').click(
+      lambda: 'hierarchy',
+      inputs=None,
+      outputs=state_var,
+    )
+
   def _create_main_content(self) -> None:
     """
     Creates the main content area with plot components.
     """
     with gr.Column(elem_id='main-content', scale=4):
       with gr.Blocks(elem_classes='plot-grid'):
-        # Create all plot components up front
         for config in self.dashboard.configs:
           plot = gr.Plot(visible=False)
           self._plot_components[config.container_name] = plot
+
+        self._plot_components['hierarchy'].render()
 
   def _setup_update_callbacks(self, state_var: gr.State) -> None:
     """
@@ -188,11 +199,10 @@ class InterfaceManager:
         self.dashboard.data_manager.update_load_profile_data(),
         self.dashboard.data_manager.update_consumption_data(),
       )
-      return None  # For Gradio compatibility
+      return None
 
     timer = gr.Timer(constants.LOAD_PROFILE_UPDATE_INTERVAL)
 
-    # Set up timer callbacks
     timer.tick(combined_update, inputs=[], outputs=[])
     timer.tick(
       self._update_plots,
@@ -212,18 +222,26 @@ class InterfaceManager:
     Returns
     -------
     List[gr.Plot]
+    List[gr.Plot]
         Updated list of plot components.
     """
     outputs = [gr.Plot(visible=False) for _ in self._plot_components.values()]
 
-    if not state:
-      return outputs
-
-    for idx, config in enumerate(state):
-      buffer = self.dashboard.data_manager.data_buffers.get(
-        config.container_name, {'consumption': [], 'load_profile': []}
-      )
-      plot = self.dashboard.plot_manager.create_combined_plot(buffer, config)
-      outputs[idx] = gr.Plot(value=plot, visible=True)
+    if state == 'hierarchy':
+      hierarchy_plot = self.hierarchy_plot_manager.visualize_hierarchy()
+      outputs[-1] = gr.Plot(value=hierarchy_plot, visible=True)
+    else:
+      for idx, config in enumerate(state):
+        buffer = self.dashboard.data_manager.data_buffers.get(
+          config.container_name, {'consumption': [], 'load_profile': []}
+        )
+        plot = self.dashboard.plot_manager.create_combined_plot(buffer, config)
+        outputs[idx] = gr.Plot(value=plot, visible=True)
 
     return outputs
+
+  def _get_parent_name(self, connect_vtn_url: str) -> str:
+    for config in self.dashboard.configs:
+      if config.VTN_URL == connect_vtn_url:
+        return config.container_name
+    return None

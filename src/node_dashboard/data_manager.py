@@ -5,14 +5,14 @@ from typing import Dict, Any, Optional, List
 import aiohttp
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
-
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
-
 from src.node_dashboard.helper.constants import Environment
 from src.node_dashboard.helper.utils import fetch_data_async
 from src.node_dashboard.helper.config import ContainerConfig
 
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -190,14 +190,17 @@ class DataManager:
     """
     schema = {
       'type': 'object',
-      'properties': {
-        'value': {
+      'patternProperties': {
+        '^[0-9]{13}$': {
           'type': 'object',
-          'patternProperties': {'^[0-9]{2}:[0-9]{2}$': {'type': 'number'}},
-          'additionalProperties': False,
+          'properties': {
+            'duration': {'type': 'number'},
+            'signal_payload': {'type': 'number'},
+          },
+          'required': ['duration', 'signal_payload'],
         }
       },
-      'required': ['value'],
+      'additionalProperties': False,
     }
 
     if not load_profile_data:
@@ -210,13 +213,17 @@ class DataManager:
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        value_data = load_profile_data.get('value')
         valid_entries = [
-          {'timestamp': time, 'value': value}
-          for time, value in value_data.items()
-          if isinstance(value, (int, float))
+          {
+            'timestamp': int(time),
+            'duration': value['duration'],
+            'signal_payload': value['signal_payload'],
+          }
+          for time, value in load_profile_data.items()
+          if isinstance(value, dict)
+          and 'duration' in value
+          and 'signal_payload' in value
         ]
-
         buffer['load_profile'].extend(valid_entries)
 
         if len(buffer['load_profile']) > self.max_buffer_size:

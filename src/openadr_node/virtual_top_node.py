@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict, Optional, List, Any, Tuple
 
@@ -216,17 +217,27 @@ class VirtualTopNode(AdrBaseConfig):
     :type signal: str
     :param sender: Signal sender.
     :type sender: str
-    :param data: Load profile data.
+    :param data: Load profile data with timestamps in milliseconds and duration in milliseconds.
     :type data: List[Dict[str, Any]]
     """
     if data:
+      # Transform the data into the required format
+      transformed_intervals = [
+        {
+          'dtstart': datetime.fromtimestamp(interval['dstart'] / 1000, tz=timezone.utc),
+          'duration': timedelta(milliseconds=interval['duration']),
+          'signal_payload': interval['signal_payload'],
+        }
+        for interval in data
+      ]
+
       for ven_id in self._ven_data.keys():
         try:
           self._open_adr_server.add_event(
             ven_id=ven_id,
             signal_type='level',
             signal_name='simple',
-            intervals=data,
+            intervals=transformed_intervals,
             callback=self._event_callback,
           )
           logger.info(f'Event added successfully for VEN: {ven_id}')

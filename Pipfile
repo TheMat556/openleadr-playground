@@ -14,13 +14,17 @@ pandas = "*"
 plotly = "*"
 python-dotenv = "*"
 dependency-injector = "*"
-pyopenssl = "24.2.1" #Important! verify is legacy in latest version, signxml not updated yet
+pyopenssl = "24.2.1" #Important! verify is deprecated in latest version, signxml not updated yet
 pydispatcher = "*"
 gradio = "*"
 nest-asyncio = "*"
 pyyaml = "*"
 flask = "*"
 "ruamel.yaml" = "*"
+igraph = "*"
+jsonschema = "*"
+cachetools = "*"
+"paho.mqtt" = "*"
 
 [dev-packages]
 ruff = "*"
