@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class AsyncGradioApp(AdrBaseConfig):
+  TIMEZONE = timezone(timedelta(hours=1))
   """
   A Gradio application for interactive slider-based load profile visualization.
 
@@ -64,6 +65,9 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     self._current_consumption = data
 
+  def log_slider_file_issue(self, message: str) -> None:
+    logger.warning(f'{message} Please create {self.slider_file} with integer values.')
+
   def load_slider_values(self, filename: str) -> List[int]:
     """
     Load slider values from a file or generate default values.
@@ -76,17 +80,16 @@ class AsyncGradioApp(AdrBaseConfig):
     try:
       base_path = Path(__file__).parent.parent.parent
       filepath = (base_path / filename).resolve()
-
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
       return values[: self.num_sliders] + [30] * (self.num_sliders - len(values))
     except FileNotFoundError:
-      logger.warning(
+      self.log_slider_file_issue(
         f'Slider values file not found at {filename}. Using default values.'
       )
       return [30] * self.num_sliders
     except ValueError as e:
-      logger.error(f'Invalid data in {filename}: {e}')
+      self.log_slider_file_issue(f'Invalid data in {filename}: {e}')
       return [30] * self.num_sliders
 
   def get_unix_timestamp_range(self) -> tuple:
@@ -96,8 +99,7 @@ class AsyncGradioApp(AdrBaseConfig):
     :return: Tuple of start and end Unix timestamps in milliseconds
     :rtype: tuple
     """
-    gmt_plus_1 = timezone(timedelta(hours=1))
-    now = datetime.now(gmt_plus_1)
+    now = datetime.now(self.TIMEZONE)
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_day = start_of_day + timedelta(days=1)
     return int(start_of_day.timestamp() * 1000), int(end_of_day.timestamp() * 1000)
@@ -112,8 +114,7 @@ class AsyncGradioApp(AdrBaseConfig):
     :rtype: int
     """
     if dt.tzinfo is None:
-      gmt_plus_1 = timezone(timedelta(hours=1))
-      dt = dt.replace(tzinfo=gmt_plus_1)
+      dt = dt.replace(tzinfo=self.TIMEZONE)
     return int(dt.timestamp() * 1000)
 
   def interpolate_slider_values(self, slider_values: List[int]) -> pd.DataFrame:
@@ -125,29 +126,25 @@ class AsyncGradioApp(AdrBaseConfig):
     :return: Interpolated DataFrame with 15-minute resolution
     :rtype: pandas.DataFrame
     """
-    start_timestamp, end_timestamp = self.get_unix_timestamp_range()
-    gmt_plus_1 = timezone(timedelta(hours=1))
-    start_dt = datetime.fromtimestamp(start_timestamp / 1000).replace(tzinfo=gmt_plus_1)
-
-    # Create time index
-    time_index = pd.date_range(start=start_dt, periods=96, freq='15min', tz=gmt_plus_1)
-
-    # Create original hourly index
-    original_time_index = pd.date_range(
-      start=start_dt, periods=24, freq='1h', tz=gmt_plus_1
+    start_timestamp, _end_timestamp = self.get_unix_timestamp_range()
+    start_dt = datetime.fromtimestamp(start_timestamp / 1000).replace(
+      tzinfo=self.TIMEZONE
     )
 
-    # Create DataFrame with original values
+    time_index = pd.date_range(
+      start=start_dt, periods=96, freq='15min', tz=self.TIMEZONE
+    )
+    original_time_index = pd.date_range(
+      start=start_dt, periods=24, freq='1h', tz=self.TIMEZONE
+    )
+
     df_original = pd.DataFrame(
       {'Time': original_time_index, SLIDER_VALUE: slider_values}
     )
     df_original.set_index('Time', inplace=True)
 
-    # Interpolate to 15-minute intervals
     df_interpolated = df_original.reindex(time_index).interpolate(method='linear')
-
-    # Add Unix timestamps in milliseconds
-    df_interpolated['unix_timestamp'] = df_interpolated.index.astype('int64') // 10**6
+    df_interpolated['unix_timestamp'] = df_interpolated.index.view('int64') // 10**6
     df_interpolated['display_time'] = df_interpolated.index.strftime('%H:%M')
 
     return df_interpolated[[SLIDER_VALUE, 'unix_timestamp', 'display_time']]

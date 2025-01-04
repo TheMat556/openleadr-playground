@@ -12,12 +12,14 @@ repos:
   hooks:
     - id: check-env-mqtt
       name: Check for .env.mqtt file
-      entry: bash -c 'if git diff --cached --name-only | grep -q "^.env.mqtt$"; then echo ".env.mqtt file is staged for commit. Please remove it before pushing."; exit 1; fi'
+      entry: |
+        bash -c 'if git diff --cached --name-only | grep -q "^.env.mqtt$"; then echo ".env.mqtt file is staged for commit. Please remove it before pushing."; exit 1; fi'
       language: system
       stages: [pre-commit]
 
     - id: delete-docker-compose
       name: Delete docker-compose.yml file
-      entry: bash -c 'rm -f docker-compose.yml'
+      entry: |
+        bash -c 'if [ -f docker-compose.yml ]; then if git diff --quiet docker-compose.yml; then rm docker-compose.yml && echo "Removed generated docker-compose.yml"; else echo "Warning: docker-compose.yml contains uncommitted changes. Please commit or stash changes before proceeding." && exit 1; fi; fi'
       language: system
       stages: [pre-commit]

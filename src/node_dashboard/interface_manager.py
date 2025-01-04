@@ -1,8 +1,9 @@
 import asyncio
+import logging
 from pathlib import Path
 
 import gradio as gr
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Optional
 
 from .helper import constants
 from .helper.config import ContainerConfig
@@ -10,6 +11,9 @@ from .hierarchy_plot_manager import HierarchyPlotManager
 
 if TYPE_CHECKING:
   from .dashboard import GradioNodeDashboard
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class InterfaceManager:
@@ -169,7 +173,8 @@ class InterfaceManager:
           outputs=state_var,
         )
 
-  def _create_visualize_button(self, state_var: gr.State) -> None:
+  @staticmethod
+  def _create_visualize_button(state_var: gr.State) -> None:
     gr.Button('Visualize Hierarchy').click(
       lambda: 'hierarchy',
       inputs=None,
@@ -222,12 +227,11 @@ class InterfaceManager:
     Returns
     -------
     List[gr.Plot]
-    List[gr.Plot]
         Updated list of plot components.
     """
     outputs = [gr.Plot(visible=False) for _ in self._plot_components.values()]
 
-    if state == 'hierarchy':
+    if isinstance(state, str) and state == 'hierarchy':
       hierarchy_plot = self.hierarchy_plot_manager.visualize_hierarchy()
       outputs[-1] = gr.Plot(value=hierarchy_plot, visible=True)
     else:
@@ -240,8 +244,14 @@ class InterfaceManager:
 
     return outputs
 
-  def _get_parent_name(self, connect_vtn_url: str) -> str:
+  def _get_parent_name(self, connect_vtn_url: str) -> Optional[str]:
+    if not connect_vtn_url:
+      logger.warning('connect_vtn_url is None or empty')
+      return None
+
     for config in self.dashboard.configs:
       if config.VTN_URL == connect_vtn_url:
         return config.container_name
+
+    logger.warning(f'No matching parent config found for URL: {connect_vtn_url}')
     return None

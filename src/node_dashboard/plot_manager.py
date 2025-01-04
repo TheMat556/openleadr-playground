@@ -169,6 +169,7 @@ class PlotManager:
     None
     """
     if not data:
+      # Early return to avoid unnecessary processing
       return
 
     times, values = self._process_data_points(data)
@@ -232,12 +233,12 @@ class PlotManager:
   @staticmethod
   def _parse_timestamp(timestamp: str) -> Optional[datetime]:
     """
-    Parses a Unix timestamp string in milliseconds into a datetime object.
+    Parses a Unix timestamp string into a datetime object.
 
     Parameters
     ----------
     timestamp : str
-        Unix timestamp string in milliseconds.
+        Unix timestamp string.
 
     Returns
     -------
@@ -245,10 +246,19 @@ class PlotManager:
         Parsed datetime object or None if parsing fails.
     """
     try:
-      # Check if the timestamp is a Unix timestamp in milliseconds
-      if timestamp.isdigit() and len(timestamp) == 13:
-        # Convert milliseconds to seconds and create a datetime object
-        return datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+      if timestamp.isdigit():
+        length = len(timestamp)
+        if length == 13:
+          # Convert milliseconds to seconds
+          return datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+        elif length == 10:
+          # Convert seconds to datetime
+          return datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+        elif length == 16:
+          # Convert microseconds to seconds
+          return datetime.fromtimestamp(int(timestamp) / 1_000_000, tz=timezone.utc)
+        else:
+          raise ValueError(f'Unexpected Unix timestamp length: {length}')
       else:
         raise ValueError(f'Invalid Unix timestamp format: {timestamp}')
     except ValueError as e:

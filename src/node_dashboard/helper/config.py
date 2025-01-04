@@ -149,7 +149,7 @@ class ConfigManager:
       )
       return None
 
-    def validate_port(port: str) -> bool:
+    def validate_port(port: Any) -> bool:
       if not port:
         return True
       try:
@@ -173,9 +173,9 @@ class ConfigManager:
         'vtn_url': values['VTN_URL'],
         'vtn_path_prefix': values['VTN_PATH_PREFIX'],
         'ven_name': values['VEN_NAME'],
-        'gradio_port': gradio_port,
+        'gradio_port': int(gradio_port),
         'gradio_server_name': values['GRADIO_SERVER_NAME'],
-        'rest_api_port': rest_api_port,
+        'rest_api_port': int(rest_api_port),
         'vtn_self_host': values['VTN_SELF_HOST'],
         'layer': layer,
         'container_name': container_name,

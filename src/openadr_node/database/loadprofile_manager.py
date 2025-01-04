@@ -72,20 +72,71 @@ class LoadProfileManager:
 
   def insert_load_profile(self, data: List[Dict[str, Any]]) -> None:
     """
-    Insert the load profile data into the database.
+    Insert the load profile data into the database using batch processing.
 
     Args:
-        data (Dict[str, Any]): Dictionary with Unix timestamps as keys and signal payloads as values.
+        data (List[Dict[str, Any]]): List of dictionaries containing load profile data
+            with 'dstart', 'duration', and 'signal_payload' keys.
     """
+    if not data:
+      logger.warning('No data provided for insertion')
+      return
 
-    # Insert values into the database
-    for interval in data:
-      self.db_manager.insert_values(
+    try:
+      # Prepare batch values
+      batch_values = [
+        [interval['dstart'], interval['duration'], interval['signal_payload']]
+        for interval in data
+      ]
+
+      # Perform batch insert
+      self.db_manager.insert_values_batch(
         table_name='load_profiles',
         columns=['dstart', 'duration', 'signal_payload'],
-        values=[interval['dstart'], interval['duration'], interval['signal_payload']],
+        batch_values=batch_values,
         replace=True,
+        batch_size=1000,  # Adjust this value based on your needs
       )
+
+      logger.info(f'Successfully inserted {len(data)} load profile records')
+
+    except (DatabaseError, KeyError) as e:
+      logger.error(f'Failed to insert load profile batch: {str(e)}')
+      raise
+
+  def insert_consumption_batch(self, data: List[Dict[str, Any]]) -> None:
+    """
+    Insert multiple consumption records into the database using batch processing.
+
+    Args:
+        data (List[Dict[str, Any]]): List of dictionaries containing consumption data
+            with 'timestamp', 'ven_id', 'resource_id', and 'value' keys.
+    """
+    if not data:
+      logger.warning('No consumption data provided for insertion')
+      return
+
+    try:
+      # Prepare batch values
+      batch_values = [
+        [record['timestamp'], record['ven_id'], record['resource_id'], record['value']]
+        for record in data
+      ]
+
+      # Perform batch insert
+      self.db_manager.insert_values_batch(
+        table_name='consumption',
+        columns=['timestamp', 'ven_id', 'resource_id', 'value'],
+        batch_values=batch_values,
+        replace=True,
+        batch_size=1000,  # Adjust this value based on your needs
+      )
+
+      logger.info(f'Successfully inserted {len(data)} consumption records')
+
+    except (DatabaseError, KeyError) as e:
+      logger.error(f'Failed to insert consumption batch: {str(e)}')
+      raise
 
   def get_load_profile(self) -> pd.DataFrame:
     """
@@ -95,10 +146,8 @@ class LoadProfileManager:
         pd.DataFrame: Load profile DataFrame
     """
     query = 'SELECT dstart, duration, signal_payload FROM load_profiles'
-    connection, cursor = self.db_manager._get_connection()
-    cursor.execute(query)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['dstart', 'duration', 'signal_payload'])
+    rows = self.db_manager.execute_query(query)
+    df = pd.DataFrame(rows)
 
     if not df.empty:
       df.set_index('dstart', inplace=True)
@@ -106,19 +155,12 @@ class LoadProfileManager:
 
   def insert_consumption(self, data: Dict[str, Any]) -> None:
     """
-    Insert the consumption data into the database.
+    Insert a single consumption record into the database.
 
     Args:
         data (Dict[str, Any]): Dictionary with consumption data.
     """
-
-    # Insert values into the database
-    self.db_manager.insert_values(
-      table_name='consumption',
-      columns=['timestamp', 'ven_id', 'resource_id', 'value'],
-      values=[data['timestamp'], data['ven_id'], data['resource_id'], data['value']],
-      replace=True,
-    )
+    self.insert_consumption_batch([data])
 
   def get_consumption(self) -> pd.DataFrame:
     """
@@ -128,10 +170,8 @@ class LoadProfileManager:
         pd.DataFrame: Consumption DataFrame
     """
     query = 'SELECT timestamp, ven_id, resource_id, value FROM consumption'
-    connection, cursor = self.db_manager._get_connection()
-    cursor.execute(query)
-    rows = cursor.fetchall()
-    df = pd.DataFrame(rows, columns=['timestamp', 'ven_id', 'resource_id', 'value'])
+    rows = self.db_manager.execute_query(query)
+    df = pd.DataFrame(rows)
 
     if not df.empty:
       df.set_index('timestamp', inplace=True)

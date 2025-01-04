@@ -1,47 +1,83 @@
-"""
-MQTT Manager Module for handling MQTT communications.
-
-This module provides a robust MQTT client implementation with automatic reconnection,
-load profile publishing, and consumption data handling.
-"""
-
 import json
 import logging
 import ssl
 import time
-from threading import Event, Thread
-from typing import Optional, Dict, Any
+from threading import Event, Thread, Lock
+from typing import Optional, Dict, Any, List
 
 import paho.mqtt.client as mqtt
 
 from src.openadr_node.database.loadprofile_manager import LoadProfileManager
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+class MQTTManagerState:
+  """Thread-safe state container for MQTT Manager"""
+
+  def __init__(self):
+    self._connected = False
+    self._connection_rc = None
+    self._lock = Lock()
+
+  @property
+  def connected(self) -> bool:
+    with self._lock:
+      return self._connected
+
+  @connected.setter
+  def connected(self, value: bool) -> None:
+    with self._lock:
+      self._connected = value
+
+  @property
+  def connection_rc(self) -> Optional[int]:
+    with self._lock:
+      return self._connection_rc
+
+  @connection_rc.setter
+  def connection_rc(self, value: Optional[int]) -> None:
+    with self._lock:
+      self._connection_rc = value
+
+
 class MQTTManager:
   """
-  Manages MQTT communications for load profile and consumption data.
+  Thread-safe MQTT communications manager for load profile and consumption data.
 
-  This class handles MQTT connections, message publishing/subscribing, and automatic
-  reconnection in case of connection failures.
+  This class safely handles MQTT connections, message publishing/subscribing, and automatic
+  reconnection across multiple threads. Only one instance should be running at a time
+  per broker connection.
+
+  Thread Safety:
+  - All shared state is protected by locks
+  - Methods are reentrant and thread-safe
+  - Start/Stop operations are atomic and idempotent
+
+  Usage:
+      manager = MQTTManager(...)
+      try:
+          manager.start()  # Start MQTT client and worker threads
+          # ... application code ...
+      finally:
+          manager.stop()   # Cleanup resources
 
   Args:
-      broker (str): MQTT broker address
-      port (int): MQTT broker port
-      topic_load_profile (str): Topic for publishing load profile data
-      topic_consumption (str): Topic for receiving consumption data
-      load_profile_manager (LoadProfileManager): Manager for handling load profiles
-      username (str): MQTT authentication username
-      password (str): MQTT authentication password
-      use_tls (bool, optional): Enable TLS encryption. Defaults to True.
-      ca_certs (Optional[str], optional): Path to CA certificates. Defaults to None.
+      broker: MQTT broker address
+      port: MQTT broker port
+      topic_load_profile: Topic for publishing load profile data
+      topic_consumption: Topic for receiving consumption data
+      load_profile_manager: Manager for handling load profiles
+      username: MQTT authentication username
+      password: MQTT authentication password
+      use_tls: Enable TLS encryption (default: True)
+      ca_certs: Path to CA certificates (default: None)
 
-  Attributes:
-      connected (bool): Current connection status
-      connection_rc (Optional[int]): Last connection return code
+  Raises:
+      ValueError: If required parameters are invalid
+      RuntimeError: If client is already running
+      ConnectionError: If broker connection fails
   """
 
   CONNECTION_RESPONSES = {
@@ -65,7 +101,11 @@ class MQTTManager:
     use_tls: bool = True,
     ca_certs: Optional[str] = None,
   ) -> None:
-    """Initialize the MQTT Manager with the given configuration."""
+    """Initialize MQTT Manager with thread-safe state."""
+    self._validate_init_params(
+      broker, port, topic_load_profile, topic_consumption, username, password
+    )
+
     self.broker = broker
     self.port = port
     self.topic_load_profile = topic_load_profile
@@ -73,33 +113,41 @@ class MQTTManager:
     self.load_profile_manager = load_profile_manager
     self.username = username
     self.password = password
-    self.connected = False
-    self.connection_rc = None
-    self._stop_event = Event()
 
-    # Create MQTT client with a unique ID
+    # Thread-safe state
+    self._state = MQTTManagerState()
+    self._stop_event = Event()
+    self._start_lock = Lock()
+    self._threads: List[Thread] = []
+
+    # Initialize MQTT client
     client_id = f'{username}_{int(time.time())}'
     self.client = mqtt.Client(client_id=client_id, clean_session=True)
-
     self._configure_client(use_tls, ca_certs)
 
-  def _configure_client(self, use_tls: bool, ca_certs: Optional[str]) -> None:
-    """
-    Configure MQTT client with authentication and TLS settings.
+  def _validate_init_params(
+    self,
+    broker: str,
+    port: int,
+    topic_load_profile: str,
+    topic_consumption: str,
+    username: str,
+    password: str,
+  ) -> None:
+    """Validate initialization parameters."""
+    if not all([broker, topic_load_profile, topic_consumption, username, password]):
+      raise ValueError('All string parameters must be non-empty')
+    if not isinstance(port, int) or port < 1 or port > 65535:
+      raise ValueError('Port must be an integer between 1 and 65535')
 
-    Args:
-        use_tls (bool): Whether to enable TLS
-        ca_certs (Optional[str]): Path to CA certificates
-    """
+  def _configure_client(self, use_tls: bool, ca_certs: Optional[str]) -> None:
+    """Configure MQTT client with provided settings."""
     try:
       if self.username and self.password:
         self.client.username_pw_set(self.username, self.password)
 
       if use_tls:
-        self.client.tls_set(
-          ca_certs=ca_certs,
-          tls_version=ssl.PROTOCOL_TLS,
-        )
+        self.client.tls_set(ca_certs=ca_certs, tls_version=ssl.PROTOCOL_TLSv1_2)
         self.client.tls_insecure_set(False)
 
       self.client.on_connect = self._on_connect
@@ -108,42 +156,27 @@ class MQTTManager:
 
     except Exception as e:
       logger.error(f'Failed to configure MQTT client: {e}', exc_info=True)
-      raise
+      raise RuntimeError(f'MQTT client configuration failed: {str(e)}')
 
   def _on_connect(
     self, client: mqtt.Client, userdata: Any, flags: Dict, rc: int
   ) -> None:
-    """
-    Handle connection callback from MQTT broker.
-
-    Args:
-        client: MQTT client instance
-        userdata: User defined data
-        flags: Response flags from broker
-        rc: Return code
-    """
-    self.connection_rc = rc
+    """Handle connection callback from broker."""
+    self._state.connection_rc = rc
     if rc == 0:
-      self.connected = True
+      self._state.connected = True
       logger.info(f'Connected successfully to {self.broker}')
       self.client.subscribe(self.topic_consumption)
     else:
-      self.connected = False
+      self._state.connected = False
       error_message = self.CONNECTION_RESPONSES.get(
         rc, f'Connection failed with code {rc}'
       )
       logger.error(error_message)
 
   def _on_disconnect(self, client: mqtt.Client, userdata: Any, rc: int) -> None:
-    """
-    Handle disconnection events.
-
-    Args:
-        client: MQTT client instance
-        userdata: User defined data
-        rc: Return code
-    """
-    self.connected = False
+    """Handle disconnection events."""
+    self._state.connected = False
     if rc != 0:
       logger.warning(f'Unexpected disconnection (RC: {rc}). Attempting reconnection...')
       self._reconnect()
@@ -151,20 +184,13 @@ class MQTTManager:
   def _on_message(
     self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
   ) -> None:
-    """
-    Process incoming MQTT messages.
-
-    Args:
-        client: MQTT client instance
-        userdata: User defined data
-        msg: Received message
-    """
+    """Process incoming MQTT messages."""
     try:
       data = json.loads(msg.payload)
       self.load_profile_manager.insert_consumption(data)
       logger.debug(f'Processed consumption data: {data}')
     except json.JSONDecodeError as e:
-      logger.error(f'Failed to decode message payload: {e}', exc_info=True)
+      logger.error(f'Failed to decode message payload: {e}')
     except Exception as e:
       logger.error(f'Failed to process message: {e}', exc_info=True)
 
@@ -172,7 +198,7 @@ class MQTTManager:
     """Continuously publish load profile data while connected."""
     while not self._stop_event.is_set():
       try:
-        if not self.connected:
+        if not self._state.connected:
           logger.warning('Not connected. Waiting for connection...')
           time.sleep(5)
           continue
@@ -181,6 +207,7 @@ class MQTTManager:
         if df.empty:
           continue
 
+        # Convert timestamps safely
         current_time_ms = int(time.time() * 1000)
         nearest_idx = df.index[abs(df.index.astype(int) - current_time_ms).argmin()]
         nearest_row = df.loc[nearest_idx]
@@ -199,11 +226,14 @@ class MQTTManager:
     Attempt to reconnect to the MQTT broker.
 
     Args:
-        max_retries (int): Maximum number of reconnection attempts
-        retry_delay (int): Delay between attempts in seconds
+        max_retries: Maximum number of reconnection attempts
+        retry_delay: Delay between attempts in seconds
 
     Returns:
-        bool: True if reconnection successful, False otherwise
+        bool: True if reconnection successful
+
+    Raises:
+        ConnectionError: If all reconnection attempts fail
     """
     for attempt in range(max_retries):
       try:
@@ -213,34 +243,60 @@ class MQTTManager:
       except Exception as e:
         logger.error(f'Reconnection attempt failed: {e}')
         time.sleep(retry_delay)
-    return False
+
+    raise ConnectionError('All reconnection attempts failed')
 
   def start(self) -> None:
     """
     Start the MQTT client and associated threads.
 
+    Thread-safe and idempotent - only one instance will start.
+
     Raises:
-        Exception: If client fails to start
+        RuntimeError: If client fails to start
+        ConnectionError: If broker connection fails
     """
-    try:
-      self.client.connect(self.broker, self.port, keepalive=60)
-      Thread(
-        target=self._publish_load_profile, name='PublishThread', daemon=True
-      ).start()
-      Thread(
-        target=self.client.loop_forever, name='MQTTLoopThread', daemon=True
-      ).start()
-      logger.info('MQTT client started successfully')
-    except Exception as e:
-      logger.error(f'Failed to start MQTT client: {e}', exc_info=True)
-      raise
+    with self._start_lock:
+      if self._threads:
+        logger.warning('MQTT Manager already running')
+        return
+
+      try:
+        self.client.connect(self.broker, self.port, keepalive=60)
+
+        self._threads = [
+          Thread(target=self._publish_load_profile, name='PublishThread', daemon=True),
+          Thread(target=self.client.loop_forever, name='MQTTLoopThread', daemon=True),
+        ]
+
+        for thread in self._threads:
+          thread.start()
+
+        logger.info('MQTT client started successfully')
+
+      except Exception as e:
+        logger.error(f'Failed to start MQTT client: {e}', exc_info=True)
+        self.stop()  # Cleanup any partial startup
+        raise RuntimeError(f'MQTT client failed to start: {str(e)}')
 
   def stop(self) -> None:
-    """Gracefully stop the MQTT client and all associated threads."""
-    try:
-      self._stop_event.set()
-      self.client.disconnect()
-      self.connected = False
-      logger.info('MQTT client stopped successfully')
-    except Exception as e:
-      logger.error(f'Error stopping MQTT client: {e}', exc_info=True)
+    """
+    Gracefully stop the MQTT client and all associated threads.
+
+    Thread-safe and idempotent - can be called multiple times safely.
+    """
+    with self._start_lock:
+      try:
+        self._stop_event.set()
+        self.client.disconnect()
+        self._state.connected = False
+
+        for thread in self._threads:
+          thread.join(timeout=5.0)
+
+        self._threads.clear()
+        logger.info('MQTT client stopped successfully')
+
+      except Exception as e:
+        logger.error(f'Error stopping MQTT client: {e}', exc_info=True)
+        raise RuntimeError(f'Failed to stop MQTT client: {str(e)}')

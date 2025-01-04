@@ -8,6 +8,8 @@ import numpy as np
 from dotenv import load_dotenv
 
 from src.openadr_node.models import ReportConfiguration
+from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.models.rest_config import RestApiConfig
 from src.openadr_node.node_manager import NodeManager
 
 # Configure logging
@@ -48,18 +50,25 @@ def main() -> None:
     ),
   ]
 
+  mqtt_config = MQTTConfig(
+    broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
+    port=int(os.getenv('PRIVATE_MQTT_PORT')),
+    topic_load_profile=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
+    topic_consumption=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'),
+    username=os.getenv('PRIVATE_MQTT_USERNAME'),
+    password=os.getenv('PRIVATE_MQTT_PASSWORD'),
+  )
+
+  rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
+
   node_manager = NodeManager(
     node_id=os.getenv('NODE_ID'),
     ven_name=os.getenv('VEN_NAME'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
-    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
-    mqtt_broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
-    mqtt_port=int(os.getenv('PRIVATE_MQTT_PORT')),
-    mqtt_topic_load_profile=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
-    mqtt_topic_consumption=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'),
-    mqtt_username=os.getenv('PRIVATE_MQTT_USERNAME'),
-    mqtt_password=os.getenv('PRIVATE_MQTT_PASSWORD'),
+    mqtt_config=mqtt_config,
+    rest_api_config=rest_api_config,
   )
+
   node_manager.add_report(reports)
   try:
     node_manager.run_node()

@@ -1,3 +1,5 @@
+import logging
+
 import ruamel.yaml
 import argparse
 import sys
@@ -6,6 +8,10 @@ from ruamel.yaml.scalarstring import SingleQuotedScalarString
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 import os
+
+# Set up logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env.mqtt file
 load_dotenv('.env.mqtt')
@@ -16,6 +22,14 @@ yaml.preserve_quotes = True  # Preserve existing quotes
 yaml.default_flow_style = False  # Use block style
 yaml.allow_unicode = True  # Allow Unicode characters
 MQTT_CONFIG_WRITTEN = False
+
+# Validate MQTT environment variables
+required_mqtt_vars = [
+  'PRIVATE_MQTT_BROKER_URL',
+  'PRIVATE_MQTT_USERNAME',
+  'PRIVATE_MQTT_PASSWORD',
+  'PRIVATE_MQTT_PORT',
+]
 
 
 class PortRegistry:
@@ -107,6 +121,16 @@ def generate_node(
       f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
+  missing_vars = [var for var in required_mqtt_vars if not os.getenv(var)]
+  if missing_vars:
+    logger.warning(
+      f"Missing required MQTT environment variables: {', '.join(missing_vars)}"
+    )
+    raise ValueError(
+      'Required MQTT environment variables are missing. Please check .env.mqtt file'
+    )
+
+  # Update environment with MQTT configuration if all variables are present
   if layer == max_layers - 1 and not MQTT_CONFIG_WRITTEN:
     MQTT_CONFIG_WRITTEN = True
     environment.update(

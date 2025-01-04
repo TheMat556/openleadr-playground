@@ -1,14 +1,15 @@
 import asyncio
 import sys
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Optional, List, Any, Dict, Callable
 
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.database.database_manager import DatabaseManager
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.event import ResourceConsumption
+from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.models.rest_config import RestApiConfig
 from src.openadr_node.protocols.mqtt_manager import MQTTManager
 from src.openadr_node.virtual_end_node import VirtualEndNode
 from src.openadr_node.virtual_top_node import VirtualTopNode
@@ -28,95 +29,115 @@ class NodeManager(AdrBaseConfig):
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
-    http_host: Optional[str] = None,
-    http_port: Optional[int] = None,
-    vtn_path_prefix: Optional[str] = None,
-    rest_api_port: Optional[int] = None,
-    mqtt_broker: Optional[str] = None,
-    mqtt_port: Optional[int] = None,
-    mqtt_topic_load_profile: Optional[str] = None,
-    mqtt_topic_consumption: Optional[str] = None,
-    mqtt_username: Optional[str] = None,
-    mqtt_password: Optional[str] = None,
+    openadr_http_host: Optional[str] = None,
+    openadr_http_port: Optional[int] = None,
+    openadr_vtn_path_prefix: Optional[str] = None,
+    mqtt_config: Optional[MQTTConfig] = None,
+    rest_api_config: Optional[RestApiConfig] = None,
   ):
     """
-    Initialize the NodeManager.
+    Initialize the NodeManager with the given configuration.
 
-    :param vtn_name: Name of the Virtual Top Node.
-    :type vtn_name: Optional[str]
-    :param ven_name: Name of the Virtual End Node.
-    :type ven_name: Optional[str]
-    :param vtn_url: URL of the Virtual Top Node.
-    :type vtn_url: Optional[str]
-    :param http_host: HTTP host for the server.
-    :type http_host: Optional[str]
-    :param http_port: HTTP port for the server.
-    :type http_port: Optional[int]
-    :param vtn_path_prefix: Path prefix for the VTN.
-    :type vtn_path_prefix: Optional[str]
-    :param rest_api_port: Port for the REST API.
-    :type rest_api_port: Optional[int]
-    :param mqtt_broker: MQTT broker address.
-    :type mqtt_broker: Optional[str]
-    :param mqtt_port: MQTT broker port.
-    :type mqtt_port: Optional[int]
-    :param mqtt_topic_load_profile: MQTT topic for load profile.
-    :type mqtt_topic_load_profile: Optional[str]
-    :param mqtt_topic_consumption: MQTT topic for consumption.
-    :type mqtt_topic_consumption: Optional[str]
-    :param mqtt_username: MQTT username.
-    :type mqtt_username: Optional[str]
-    :param mqtt_password: MQTT password.
-    :type mqtt_password: Optional[str]
+    Parameters
+    ----------
+    node_id : Optional[str], optional
+        Node identifier for database management.
+    vtn_name : Optional[str], optional
+        Name of the Virtual Top Node.
+    ven_name : Optional[str], optional
+        Name of the Virtual End Node.
+    vtn_url : Optional[str], optional
+        URL of the Virtual Top Node.
+    openadr_http_host : Optional[str], optional
+        HTTP host for the OpenADR server.
+    openadr_http_port : Optional[int], optional
+        HTTP port for the OpenADR server.
+    openadr_vtn_path_prefix : Optional[str], optional
+        Path prefix for the VTN.
+    mqtt_config : Optional[MQTTConfig], optional
+        Configuration for MQTT.
+    rest_api_config : Optional[RestApiConfig], optional
+        Configuration for REST API.
     """
     super().__init__()
     self._vtn_name = vtn_name
     self._vtn_url = vtn_url
     self._ven_name = ven_name
-    self._http_host = http_host
-    self._http_port = http_port
-    self._vtn_path_prefix = vtn_path_prefix
-    self._rest_api_port = rest_api_port
+    self._openadr_http_host = openadr_http_host
+    self._openadr_http_port = openadr_http_port
+    self._openadr_vtn_path_prefix = openadr_vtn_path_prefix
+    self._mqtt_config = mqtt_config
+    self._rest_api_config = rest_api_config
 
     self._ven = None
     self._vtn = None
 
+    # Initialize the event loop
     self._loop = asyncio.get_event_loop()
     self._create_node_tasks()
     self._subscribers: Dict[str, List[Callable]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption = 0
+    self._load_profile_manager = None
+    self._lock = Lock()
 
-    self._rest_api = RestApiManager(self._rest_api_port)
+    print(
+      'OpenADR',
+      self._openadr_http_host,
+      self._openadr_http_port,
+      self._openadr_vtn_path_prefix,
+      self._vtn_url,
+      self._vtn_name,
+      self._ven_name,
+    )
+    print('MQTT', self._mqtt_config)
+    print('REST', self._rest_api_config)
 
-    if node_id:
-      self._load_profile_manager = LoadProfileManager(DatabaseManager(node_id + '.db'))
-      if self._rest_api_port:
-        self._rest_api = RestApiManager(self._rest_api_port)
-        self._rest_api.set_load_profile_manager(self._load_profile_manager)
-        self._rest_api.init_routes(self._rest_api)
-        self._rest_api.start()
-
-      if (
-        mqtt_broker
-        and mqtt_port
-        and mqtt_topic_load_profile
-        and mqtt_topic_consumption
-        and mqtt_username
-        and mqtt_password
-      ):
-        self._mqtt_manager = MQTTManager(
-          broker=mqtt_broker,
-          port=mqtt_port,
-          topic_load_profile=mqtt_topic_load_profile,
-          topic_consumption=mqtt_topic_consumption,
-          load_profile_manager=self._load_profile_manager,
-          username=mqtt_username,
-          password=mqtt_password,
-        )
-        self._mqtt_manager.start()
+    # if node_id:
+    #   self._load_profile_manager = LoadProfileManager(DatabaseManager(f'{node_id}.db'))
+    #
+    # if self._rest_api_config:
+    #   self._initialize_rest_api_manager(self._rest_api_config)
+    #
+    # if self._mqtt_config:
+    #   self._initialize_mqtt_manager(self._mqtt_config)
 
     dispatcher.send(signal='on_ready', sender='system')
+
+  def _initialize_rest_api_manager(self, config: RestApiConfig) -> None:
+    """
+    Initialize the REST API manager.
+
+    Args:
+        config (RestApiConfig): Configuration for the REST API.
+    """
+    self._rest_api = RestApiManager(config.port)
+    self._rest_api.set_load_profile_manager(self._load_profile_manager)
+    self._rest_api.init_routes(self._rest_api)
+    self._rest_api.start()
+
+  def _initialize_mqtt_manager(self, config: MQTTConfig) -> None:
+    """
+    Initialize the MQTT manager.
+
+    Args:
+        config (MQTTConfig): Configuration for MQTT.
+    """
+    if config.is_valid():
+      self._mqtt_manager = MQTTManager(
+        broker=config.broker,
+        port=config.port,
+        topic_load_profile=config.topic_load_profile,
+        topic_consumption=config.topic_consumption,
+        load_profile_manager=self._load_profile_manager,
+        username=config.username,
+        password=config.password,
+      )
+      self._mqtt_manager.start()
+    else:
+      logger.warning(
+        'Incomplete MQTT configuration provided. MQTT manager will not be initialized.'
+      )
 
   def get_method(self, signal: str) -> Optional[Callable]:
     """
@@ -226,27 +247,28 @@ class NodeManager(AdrBaseConfig):
       return
 
     try:
-      self._current_consumption = 0.0
-      if data.ven_id not in self._ven_data:
-        self._ven_data[data.ven_id] = {}
-      self._ven_data[data.ven_id][data.resource_id] = data.data[1]
-      for ven_id, resources in self._ven_data.items():
-        for resource_id, value in resources.items():
-          self._current_consumption += value
+      with self._lock:  # Use the lock to ensure thread safety
+        self._current_consumption = 0.0
+        if data.ven_id not in self._ven_data:
+          self._ven_data[data.ven_id] = {}
+        self._ven_data[data.ven_id][data.resource_id] = data.data[1]
+        for ven_id, resources in self._ven_data.items():
+          for resource_id, value in resources.items():
+            self._current_consumption += value
 
-      timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-      consumption_data = {
-        'timestamp': timestamp_ms,
-        'ven_id': data.ven_id,
-        'resource_id': data.resource_id,
-        'value': data.data[1],
-      }
-      self._load_profile_manager.insert_consumption(consumption_data)
+        timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        consumption_data = {
+          'timestamp': timestamp_ms,
+          'ven_id': data.ven_id,
+          'resource_id': data.resource_id,
+          'value': data.data[1],
+        }
+        self._load_profile_manager.insert_consumption(consumption_data)
 
-      logger.debug(f'Updated consumption data - Total: {self._current_consumption}')
-      dispatcher.send(
-        sender='nm', signal='update_consumption_data', data=self._current_consumption
-      )
+        logger.debug(f'Updated consumption data - Total: {self._current_consumption}')
+        dispatcher.send(
+          sender='nm', signal='update_consumption_data', data=self._current_consumption
+        )
     except (AttributeError, IndexError) as e:
       logger.error(f'Error processing consumption data: {e}')
       raise
@@ -255,6 +277,14 @@ class NodeManager(AdrBaseConfig):
     """
     Create tasks for the VTN and VEN nodes.
     """
+
+    print(
+      'TEST123',
+      self._vtn_name,
+      self._openadr_http_host,
+      self._openadr_http_host,
+      self._openadr_vtn_path_prefix,
+    )
 
     async def run_with_notification(
       coro: Callable,
@@ -270,9 +300,9 @@ class NodeManager(AdrBaseConfig):
     if self._vtn_name:
       self._vtn = VirtualTopNode(
         server_name=self._vtn_name,
-        http_host=self._http_host,
-        http_port=self._http_port,
-        path_prefix=self._vtn_path_prefix,
+        http_host=self._openadr_http_host,
+        http_port=self._openadr_http_port,
+        path_prefix=self._openadr_vtn_path_prefix,
       )
       self._loop.create_task(
         run_with_notification(

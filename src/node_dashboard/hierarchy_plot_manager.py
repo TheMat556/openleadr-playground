@@ -101,19 +101,20 @@ class HierarchyPlotManager:
       raise
 
   def _create_visualization(
-    self, graph: Graph, vertices: List[str]
+    self, graph: Graph, vertices: List[str], layout_type: str
   ) -> Tuple[go.Figure, dict]:
     """Create visualization traces and layout.
 
     Args:
         graph: iGraph Graph object
         vertices: List of vertex labels
+        layout_type: Type of layout to use for graph positioning
 
     Returns:
         Tuple of Plotly figure and layout settings
     """
     try:
-      layout = graph.layout_sugiyama()
+      layout = graph.layout(layout_type)
       node_positions = {i: layout[i] for i in range(len(vertices))}
 
       # Prepare node coordinates
@@ -132,8 +133,8 @@ class HierarchyPlotManager:
       logger.error(f'Failed to create visualization: {e}')
       raise
 
+  @staticmethod
   def _create_plotly_figure(
-    self,
     x_nodes: List[float],
     y_nodes: List[float],
     x_edges: List[float],
@@ -211,8 +212,11 @@ class HierarchyPlotManager:
 
     return fig
 
-  def visualize_hierarchy(self) -> go.Figure:
+  def visualize_hierarchy(self, layout_type: str = 'sugiyama') -> go.Figure:
     """Create a hierarchical visualization of the container relationships.
+
+    Args:
+        layout_type: Type of layout to use for graph positioning
 
     Returns:
         Plotly figure object containing the visualization
@@ -231,7 +235,7 @@ class HierarchyPlotManager:
         [(vertices.index(parent), vertices.index(child)) for parent, child in edges]
       )
 
-      return self._create_visualization(graph, vertices)
+      return self._create_visualization(graph, vertices, layout_type)
     except Exception as e:
       logger.error(f'Failed to create hierarchy visualization: {e}')
       raise RuntimeError(f'Visualization creation failed: {str(e)}') from e
