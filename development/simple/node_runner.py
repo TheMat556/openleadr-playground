@@ -23,12 +23,11 @@ rng = np.random.default_rng(seed)
 
 
 def load_environment(env_path: str) -> None:
-  """Load environment variables from a .env file.
+  """
+  Load environment variables from a .env file.
 
-  Parameters
-  ----------
-  env_path : str
-      Path to the .env file.
+  :param env_path: Path to the .env file.
+  :type env_path: str
   """
   load_dotenv(dotenv_path=env_path)
 
@@ -36,30 +35,25 @@ def load_environment(env_path: str) -> None:
 def create_rest_api_config(
   port_env_var: str, default_port: int = 5000
 ) -> RestApiConfig:
-  """Create a RestApiConfig instance from environment variables.
+  """
+  Create a RestApiConfig instance from environment variables.
 
-  Parameters
-  ----------
-  port_env_var : str
-      Environment variable name for the REST API port.
-  default_port : int, optional
-      Default port if the environment variable is not set, by default 5000.
-
-  Returns
-  -------
-  RestApiConfig
-      The REST API configuration.
+  :param port_env_var: Environment variable name for the REST API port.
+  :type port_env_var: str
+  :param default_port: Default port if the environment variable is not set, defaults to 5000.
+  :type default_port: int, optional
+  :return: The REST API configuration.
+  :rtype: RestApiConfig
   """
   return RestApiConfig(port=int(os.getenv(port_env_var, default_port)))
 
 
 def create_mqtt_config() -> MQTTConfig:
-  """Create an MQTTConfig instance from environment variables.
+  """
+  Create an MQTTConfig instance from environment variables.
 
-  Returns
-  -------
-  MQTTConfig
-      The MQTT configuration.
+  :return: The MQTT configuration.
+  :rtype: MQTTConfig
   """
   return MQTTConfig(
     broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
@@ -72,12 +66,11 @@ def create_mqtt_config() -> MQTTConfig:
 
 
 def run_gradio(interface: Any) -> None:
-  """Run Gradio in a separate process.
+  """
+  Run Gradio in a separate process.
 
-  Parameters
-  ----------
-  interface : Any
-      The Gradio interface to launch.
+  :param interface: The Gradio interface to launch.
+  :type interface: Any
   """
   try:
     interface.launch(
@@ -89,24 +82,22 @@ def run_gradio(interface: Any) -> None:
 
 
 def device_callback() -> float:
-  """Simulate a device callback.
+  """
+  Simulate a device callback.
 
-  Returns
-  -------
-  float
-      Simulated device data.
+  :return: Simulated device data.
+  :rtype: float
   """
   print('Device callback called')
   return rng.random() * 10
 
 
 def run_mock_node(queue: Any) -> None:
-  """Run the mock node.
+  """
+  Run the mock node.
 
-  Parameters
-  ----------
-  queue : Any
-      Queue for inter-process communication.
+  :param queue: Queue for inter-process communication.
+  :type queue: Any
   """
   load_environment('./development/simple/.env')
   rest_api_config = create_rest_api_config('DEV_MOCK_NODE_REST_API_PORT')
@@ -155,30 +146,29 @@ def run_house_node(
   mqtt_username: Optional[str] = None,
   mqtt_password: Optional[str] = None,
 ) -> None:
-  """Create and configure a house node.
+  """
+  Create and configure a house node.
 
-  Parameters
-  ----------
-  node_id : str
-      The ID of the node.
-  ven_name : str
-      The name of the VEN.
-  vtn_url : str
-      The URL of the VTN.
-  rest_api_port : str
-      The REST API port.
-  mqtt_broker : Optional[str], optional
-      The MQTT broker URL, by default None.
-  mqtt_port : Optional[int], optional
-      The MQTT broker port, by default None.
-  mqtt_topic_load_profile : Optional[str], optional
-      The MQTT topic for load profile, by default None.
-  mqtt_topic_consumption : Optional[str], optional
-      The MQTT topic for consumption, by default None.
-  mqtt_username : Optional[str], optional
-      The MQTT username, by default None.
-  mqtt_password : Optional[str], optional
-      The MQTT password, by default None.
+  :param node_id: The ID of the node.
+  :type node_id: str
+  :param ven_name: The name of the VEN.
+  :type ven_name: str
+  :param vtn_url: The URL of the VTN.
+  :type vtn_url: str
+  :param rest_api_port: The REST API port.
+  :type rest_api_port: str
+  :param mqtt_broker: The MQTT broker URL, defaults to None.
+  :type mqtt_broker: Optional[str], optional
+  :param mqtt_port: The MQTT broker port, defaults to None.
+  :type mqtt_port: Optional[int], optional
+  :param mqtt_topic_load_profile: The MQTT topic for load profile, defaults to None.
+  :type mqtt_topic_load_profile: Optional[str], optional
+  :param mqtt_topic_consumption: The MQTT topic for consumption, defaults to None.
+  :type mqtt_topic_consumption: Optional[str], optional
+  :param mqtt_username: The MQTT username, defaults to None.
+  :type mqtt_username: Optional[str], optional
+  :param mqtt_password: The MQTT password, defaults to None.
+  :type mqtt_password: Optional[str], optional
   """
   reports: List[ReportConfiguration] = [
     ReportConfiguration(
@@ -223,7 +213,9 @@ def run_house_node(
 
 
 def run_node_dashboard() -> None:
-  """Run the node dashboard."""
+  """
+  Run the node dashboard.
+  """
   dashboard = GradioNodeDashboard(file_path='./development/simple/env_variables.json')
   interface = dashboard.create_interface()
   interface.launch(
@@ -233,6 +225,5 @@ def run_node_dashboard() -> None:
   )
 
 
-# Example of how to use the functions
 if __name__ == '__main__':
   run_node_dashboard()

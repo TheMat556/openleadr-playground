@@ -192,7 +192,10 @@ class MQTTManager:
     self._state.connected = False  # This will clear the ready event
     if rc != 0:
       logger.warning(f'Unexpected disconnection (RC: {rc}). Attempting reconnection...')
-      self._reconnect()
+      try:
+        self._reconnect()
+      except ConnectionError as e:
+        logger.error(f'Failed to reconnect: {e}')
 
   def _on_message(
     self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
@@ -214,7 +217,8 @@ class MQTTManager:
         # Check readiness instead of just connected state
         if not self._state.is_ready():
           logger.warning('Not ready for publishing. Waiting for connection...')
-          time.sleep(5)
+          if self._stop_event.wait(5):
+            break
           continue
 
         df = self.load_profile_manager.get_load_profile()
@@ -233,7 +237,8 @@ class MQTTManager:
       except Exception as e:
         logger.error(f'Failed to publish load profile: {e}', exc_info=True)
 
-      time.sleep(5)
+      if self._stop_event.wait(5):
+        break
 
   def _reconnect(self, max_retries: int = 5, retry_delay: int = 5) -> bool:
     """

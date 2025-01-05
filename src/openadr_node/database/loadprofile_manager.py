@@ -9,13 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 class LoadProfileManager:
-  def __init__(self, db_manager: DatabaseManager):
+  def __init__(self, db_manager: DatabaseManager, batch_size: int = 1000):
     """
     Initialize the LoadProfileManager
 
     Args:
         db_manager (DatabaseManager): An instance of DatabaseManager
     """
+    self.batch_size = batch_size
     self.db_manager = db_manager
     self._initialize_database()
 
@@ -70,7 +71,10 @@ class LoadProfileManager:
     df.set_index('dstart', inplace=True)  # Set the Unix timestamp as the index
     return df
 
-  def insert_load_profile(self, data: List[Dict[str, Any]]) -> None:
+  def insert_load_profile(self, data: List[Dict[str, Any]]) -> dict[
+                                                                 str, int | list[Any]] | \
+                                                               dict[
+                                                                 str, int | list[Any]]:
     """
     Insert the load profile data into the database using batch processing.
 
@@ -80,29 +84,48 @@ class LoadProfileManager:
     """
     if not data:
       logger.warning('No data provided for insertion')
-      return
+      return {"success": 0, "failed": 0, "errors": []}
 
-    try:
-      # Prepare batch values
-      batch_values = [
-        [interval['dstart'], interval['duration'], interval['signal_payload']]
-        for interval in data
-      ]
+    results = {"success": 0, "failed": 0, "errors": []}
 
-      # Perform batch insert
-      self.db_manager.insert_values_batch(
-        table_name='load_profiles',
-        columns=['dstart', 'duration', 'signal_payload'],
-        batch_values=batch_values,
-        replace=True,
-        batch_size=1000,  # Adjust this value based on your needs
-      )
+    for i in range(0, len(data), self.batch_size):
+      batch = data[i:i + self.batch_size]
+      batch_values = []
 
-      logger.info(f'Successfully inserted {len(data)} load profile records')
+      for interval in batch:
+        try:
+          # Validate data before adding to batch
+          if not all(k in interval for k in ['dstart', 'duration', 'signal_payload']):
+            raise ValueError(f"Missing required fields in record: {interval}")
 
-    except (DatabaseError, KeyError) as e:
-      logger.error(f'Failed to insert load profile batch: {str(e)}')
-      raise
+          batch_values.append([
+            interval['dstart'],
+            interval['duration'],
+            interval['signal_payload']
+          ])
+        except Exception as e:
+          results["failed"] += 1
+          results["errors"].append({"data": interval, "error": str(e)})
+          logger.error(f"Failed to process record: {str(e)}")
+          continue
+
+      if batch_values:
+        try:
+          self.db_manager.insert_values_batch(
+            table_name='load_profiles',
+            columns=['dstart', 'duration', 'signal_payload'],
+            batch_values=batch_values,
+            replace=True
+          )
+          results["success"] += len(batch_values)
+        except DatabaseError as e:
+          results["failed"] += len(batch_values)
+          results["errors"].append({"batch": batch_values, "error": str(e)})
+          logger.error(f"Failed to insert batch: {str(e)}")
+
+    logger.info(
+      f"Insertion complete. Succeeded: {results['success']}, Failed: {results['failed']}")
+    return results
 
   def insert_consumption_batch(self, data: List[Dict[str, Any]]) -> None:
     """
@@ -129,7 +152,7 @@ class LoadProfileManager:
         columns=['timestamp', 'ven_id', 'resource_id', 'value'],
         batch_values=batch_values,
         replace=True,
-        batch_size=1000,  # Adjust this value based on your needs
+        batch_size=self.batch_size,  # Adjust this value based on your needs
       )
 
       logger.info(f'Successfully inserted {len(data)} consumption records')
@@ -139,16 +162,27 @@ class LoadProfileManager:
       raise
 
   def get_load_profile(
-    self, limit: Optional[int] = None, offset: Optional[int] = None
+    self,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    order_by: str = 'dstart ASC'
   ) -> pd.DataFrame:
     """
-    Retrieve the load profile data from the database.
+    Retrieve the load profile data from the database with ordered pagination.
 
     Args:
-      limit: Optional[int] - Maximum number of records to return
-      offset: Optional[int] - Number of records to skip
+        limit: Optional[int] - Maximum number of records to return
+        offset: Optional[int] - Number of records to skip
+        order_by: str - Column and direction to order by (default: 'dstart ASC')
+
+    Returns:
+        pd.DataFrame: Load profile data
     """
-    query = 'SELECT dstart, duration, signal_payload FROM load_profiles'
+    query = '''
+            SELECT dstart, duration, signal_payload
+            FROM load_profiles
+            ORDER BY {}
+        '''.format(order_by)
 
     if limit is not None:
       query += f' LIMIT {limit}'
@@ -156,12 +190,16 @@ class LoadProfileManager:
     if offset is not None:
       query += f' OFFSET {offset}'
 
-    rows = self.db_manager.execute_query(query)
-    df = pd.DataFrame(rows)
+    try:
+      rows = self.db_manager.execute_query(query)
+      df = pd.DataFrame(rows)
 
-    if not df.empty:
-      df.set_index('dstart', inplace=True)
-    return df
+      if not df.empty:
+        df.set_index('dstart', inplace=True)
+      return df
+    except DatabaseError as e:
+      logger.error(f"Failed to retrieve load profile data: {str(e)}")
+      raise
 
   def insert_consumption(self, data: Dict[str, Any]) -> None:
     """
