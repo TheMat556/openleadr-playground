@@ -210,7 +210,7 @@ class MQTTManager:
     except Exception as e:
       logger.error(f'Failed to process message: {e}', exc_info=True)
 
-  def _publish_load_profile(self) -> None:
+  def publish_load_profile(self) -> None:
     """Continuously publish load profile data while connected."""
     while not self._stop_event.is_set():
       try:
@@ -265,21 +265,16 @@ class MQTTManager:
 
     raise ConnectionError('All reconnection attempts failed')
 
-  def start(self, connection_timeout: float = 10.0) -> None:
+  def start(self) -> None:
     """
-    Start the MQTT client and associated threads.
-
-    Thread-safe and idempotent - only one instance will start.
-
-    Args:
-        connection_timeout: Maximum time to wait for initial connection in seconds
+    Start the MQTT client.
 
     Raises:
         RuntimeError: If client fails to start
         ConnectionError: If broker connection fails or connection timeout occurs
     """
     with self._start_lock:
-      if self._threads:
+      if self._state.connected:
         logger.warning('MQTT Manager already running')
         return
 
@@ -290,20 +285,7 @@ class MQTTManager:
 
         # Connect asynchronously
         self.client.connect_async(self.broker, self.port, keepalive=60)
-
-        self._threads = [
-          Thread(target=self._publish_load_profile, name='PublishThread', daemon=True),
-          Thread(target=self.client.loop_forever, name='MQTTLoopThread', daemon=True),
-        ]
-
-        for thread in self._threads:
-          thread.start()
-
-        # Wait for connection to be established
-        if not self._state.wait_for_ready(timeout=connection_timeout):
-          raise ConnectionError('Timed out waiting for MQTT connection')
-
-        logger.info('MQTT client started and connected successfully')
+        logger.info('MQTT client started and connecting...')
 
       except Exception as e:
         logger.error(f'Failed to start MQTT client: {e}', exc_info=True)
@@ -312,7 +294,7 @@ class MQTTManager:
 
   def stop(self) -> None:
     """
-    Gracefully stop the MQTT client and all associated threads.
+    Gracefully stop the MQTT client.
 
     Thread-safe and idempotent - can be called multiple times safely.
     """
@@ -321,11 +303,6 @@ class MQTTManager:
         self._stop_event.set()
         self.client.disconnect()
         self._state.connected = False
-
-        for thread in self._threads:
-          thread.join(timeout=5.0)
-
-        self._threads.clear()
         logger.info('MQTT client stopped successfully')
 
       except Exception as e:

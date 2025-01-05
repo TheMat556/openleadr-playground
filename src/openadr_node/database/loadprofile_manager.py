@@ -71,10 +71,9 @@ class LoadProfileManager:
     df.set_index('dstart', inplace=True)  # Set the Unix timestamp as the index
     return df
 
-  def insert_load_profile(self, data: List[Dict[str, Any]]) -> dict[
-                                                                 str, int | list[Any]] | \
-                                                               dict[
-                                                                 str, int | list[Any]]:
+  def insert_load_profile(
+    self, data: List[Dict[str, Any]]
+  ) -> dict[str, int | list[Any]] | dict[str, int | list[Any]]:
     """
     Insert the load profile data into the database using batch processing.
 
@@ -84,29 +83,27 @@ class LoadProfileManager:
     """
     if not data:
       logger.warning('No data provided for insertion')
-      return {"success": 0, "failed": 0, "errors": []}
+      return {'success': 0, 'failed': 0, 'errors': []}
 
-    results = {"success": 0, "failed": 0, "errors": []}
+    results = {'success': 0, 'failed': 0, 'errors': []}
 
     for i in range(0, len(data), self.batch_size):
-      batch = data[i:i + self.batch_size]
+      batch = data[i : i + self.batch_size]
       batch_values = []
 
       for interval in batch:
         try:
           # Validate data before adding to batch
           if not all(k in interval for k in ['dstart', 'duration', 'signal_payload']):
-            raise ValueError(f"Missing required fields in record: {interval}")
+            raise ValueError(f'Missing required fields in record: {interval}')
 
-          batch_values.append([
-            interval['dstart'],
-            interval['duration'],
-            interval['signal_payload']
-          ])
+          batch_values.append(
+            [interval['dstart'], interval['duration'], interval['signal_payload']]
+          )
         except Exception as e:
-          results["failed"] += 1
-          results["errors"].append({"data": interval, "error": str(e)})
-          logger.error(f"Failed to process record: {str(e)}")
+          results['failed'] += 1
+          results['errors'].append({'data': interval, 'error': str(e)})
+          logger.error(f'Failed to process record: {str(e)}')
           continue
 
       if batch_values:
@@ -115,16 +112,17 @@ class LoadProfileManager:
             table_name='load_profiles',
             columns=['dstart', 'duration', 'signal_payload'],
             batch_values=batch_values,
-            replace=True
+            replace=True,
           )
-          results["success"] += len(batch_values)
+          results['success'] += len(batch_values)
         except DatabaseError as e:
-          results["failed"] += len(batch_values)
-          results["errors"].append({"batch": batch_values, "error": str(e)})
-          logger.error(f"Failed to insert batch: {str(e)}")
+          results['failed'] += len(batch_values)
+          results['errors'].append({'batch': batch_values, 'error': str(e)})
+          logger.error(f'Failed to insert batch: {str(e)}')
 
     logger.info(
-      f"Insertion complete. Succeeded: {results['success']}, Failed: {results['failed']}")
+      f"Insertion complete. Succeeded: {results['success']}, Failed: {results['failed']}"
+    )
     return results
 
   def insert_consumption_batch(self, data: List[Dict[str, Any]]) -> None:
@@ -165,7 +163,7 @@ class LoadProfileManager:
     self,
     limit: Optional[int] = None,
     offset: Optional[int] = None,
-    order_by: str = 'dstart ASC'
+    order_by: str = 'dstart ASC',
   ) -> pd.DataFrame:
     """
     Retrieve the load profile data from the database with ordered pagination.
@@ -178,11 +176,11 @@ class LoadProfileManager:
     Returns:
         pd.DataFrame: Load profile data
     """
-    query = '''
+    query = """
             SELECT dstart, duration, signal_payload
             FROM load_profiles
             ORDER BY {}
-        '''.format(order_by)
+        """.format(order_by)
 
     if limit is not None:
       query += f' LIMIT {limit}'
@@ -198,7 +196,7 @@ class LoadProfileManager:
         df.set_index('dstart', inplace=True)
       return df
     except DatabaseError as e:
-      logger.error(f"Failed to retrieve load profile data: {str(e)}")
+      logger.error(f'Failed to retrieve load profile data: {str(e)}')
       raise
 
   def insert_consumption(self, data: Dict[str, Any]) -> None:
