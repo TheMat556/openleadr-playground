@@ -6,6 +6,8 @@ from typing import Optional, List, Any, Dict, Callable
 
 from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.database.database_manager import DatabaseManager
+from src.openadr_node.database.loadprofile_manager import LoadProfileManager
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.event import ResourceConsumption
 from src.openadr_node.models.mqtt_config import MQTTConfig
@@ -93,14 +95,14 @@ class NodeManager(AdrBaseConfig):
     print('MQTT', self._mqtt_config)
     print('REST', self._rest_api_config)
 
-    # if node_id:
-    #   self._load_profile_manager = LoadProfileManager(DatabaseManager(f'{node_id}.db'))
-    #
-    # if self._rest_api_config:
-    #   self._initialize_rest_api_manager(self._rest_api_config)
-    #
-    # if self._mqtt_config:
-    #   self._initialize_mqtt_manager(self._mqtt_config)
+    if node_id:
+      self._load_profile_manager = LoadProfileManager(DatabaseManager(f'{node_id}.db'))
+
+    if self._rest_api_config:
+      self._initialize_rest_api_manager(self._rest_api_config)
+
+    if self._mqtt_config:
+      self._initialize_mqtt_manager(self._mqtt_config)
 
     dispatcher.send(signal='on_ready', sender='system')
 

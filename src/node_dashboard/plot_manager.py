@@ -169,7 +169,7 @@ class PlotManager:
     None
     """
     if not data:
-      # Early return to avoid unnecessary processing
+      logger.debug(f'No data to add for trace: {name}')
       return
 
     times, values = self._process_data_points(data)
@@ -187,8 +187,9 @@ class PlotManager:
         )
       )
 
+  @staticmethod
   def _process_data_points(
-    self, data: List[Dict[str, Any]]
+    data: List[Dict[str, Any]],
   ) -> Tuple[List[datetime], List[float]]:
     """
     Process data points for plotting.
@@ -266,7 +267,7 @@ class PlotManager:
       raise
 
   @staticmethod
-  def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
+  def parse_time_to_datetime(time_str: str, tz_info: Optional[str] = None) -> datetime:
     """
     Parses a time string in 'HH:MM' format to a datetime object with today's date.
 
@@ -274,7 +275,7 @@ class PlotManager:
     ----------
     time_str : str
         Time string in 'HH:MM' format.
-    timezone : Optional[str], optional
+    tz_info : Optional[str], optional
         Timezone information to be applied, by default None.
 
     Returns
@@ -289,6 +290,6 @@ class PlotManager:
     except ValueError as e:
       logger.error(f'Invalid time string: {time_str}. Error: {e}')
       raise
-    if timezone:
-      dt = dt.replace(tzinfo=ZoneInfo(timezone))
+    if tz_info:
+      dt = dt.replace(tzinfo=ZoneInfo(tz_info))
     return dt

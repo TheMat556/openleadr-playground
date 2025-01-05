@@ -20,6 +20,7 @@ class MQTTManagerState:
     self._connected = False
     self._connection_rc = None
     self._lock = Lock()
+    self._ready = Event()  # New: Ready state for connection completion
 
   @property
   def connected(self) -> bool:
@@ -30,6 +31,10 @@ class MQTTManagerState:
   def connected(self, value: bool) -> None:
     with self._lock:
       self._connected = value
+      if value:
+        self._ready.set()
+      else:
+        self._ready.clear()
 
   @property
   def connection_rc(self) -> Optional[int]:
@@ -40,6 +45,14 @@ class MQTTManagerState:
   def connection_rc(self, value: Optional[int]) -> None:
     with self._lock:
       self._connection_rc = value
+
+  def wait_for_ready(self, timeout: Optional[float] = None) -> bool:
+    """Wait for the connection to be ready."""
+    return self._ready.wait(timeout=timeout)
+
+  def is_ready(self) -> bool:
+    """Check if the connection is ready."""
+    return self._ready.is_set()
 
 
 class MQTTManager:
@@ -164,11 +177,11 @@ class MQTTManager:
     """Handle connection callback from broker."""
     self._state.connection_rc = rc
     if rc == 0:
-      self._state.connected = True
+      self._state.connected = True  # This will also set the ready event
       logger.info(f'Connected successfully to {self.broker}')
       self.client.subscribe(self.topic_consumption)
     else:
-      self._state.connected = False
+      self._state.connected = False  # This will clear the ready event
       error_message = self.CONNECTION_RESPONSES.get(
         rc, f'Connection failed with code {rc}'
       )
@@ -176,7 +189,7 @@ class MQTTManager:
 
   def _on_disconnect(self, client: mqtt.Client, userdata: Any, rc: int) -> None:
     """Handle disconnection events."""
-    self._state.connected = False
+    self._state.connected = False  # This will clear the ready event
     if rc != 0:
       logger.warning(f'Unexpected disconnection (RC: {rc}). Attempting reconnection...')
       self._reconnect()
@@ -198,8 +211,9 @@ class MQTTManager:
     """Continuously publish load profile data while connected."""
     while not self._stop_event.is_set():
       try:
-        if not self._state.connected:
-          logger.warning('Not connected. Waiting for connection...')
+        # Check readiness instead of just connected state
+        if not self._state.is_ready():
+          logger.warning('Not ready for publishing. Waiting for connection...')
           time.sleep(5)
           continue
 
@@ -246,15 +260,18 @@ class MQTTManager:
 
     raise ConnectionError('All reconnection attempts failed')
 
-  def start(self) -> None:
+  def start(self, connection_timeout: float = 10.0) -> None:
     """
     Start the MQTT client and associated threads.
 
     Thread-safe and idempotent - only one instance will start.
 
+    Args:
+        connection_timeout: Maximum time to wait for initial connection in seconds
+
     Raises:
         RuntimeError: If client fails to start
-        ConnectionError: If broker connection fails
+        ConnectionError: If broker connection fails or connection timeout occurs
     """
     with self._start_lock:
       if self._threads:
@@ -262,7 +279,12 @@ class MQTTManager:
         return
 
       try:
-        self.client.connect(self.broker, self.port, keepalive=60)
+        # Reset state
+        self._state.connected = False
+        self._stop_event.clear()
+
+        # Connect asynchronously
+        self.client.connect_async(self.broker, self.port, keepalive=60)
 
         self._threads = [
           Thread(target=self._publish_load_profile, name='PublishThread', daemon=True),
@@ -272,7 +294,11 @@ class MQTTManager:
         for thread in self._threads:
           thread.start()
 
-        logger.info('MQTT client started successfully')
+        # Wait for connection to be established
+        if not self._state.wait_for_ready(timeout=connection_timeout):
+          raise ConnectionError('Timed out waiting for MQTT connection')
+
+        logger.info('MQTT client started and connected successfully')
 
       except Exception as e:
         logger.error(f'Failed to start MQTT client: {e}', exc_info=True)

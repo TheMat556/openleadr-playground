@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import pandas as pd
 
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
@@ -138,14 +138,24 @@ class LoadProfileManager:
       logger.error(f'Failed to insert consumption batch: {str(e)}')
       raise
 
-  def get_load_profile(self) -> pd.DataFrame:
+  def get_load_profile(
+    self, limit: Optional[int] = None, offset: Optional[int] = None
+  ) -> pd.DataFrame:
     """
     Retrieve the load profile data from the database.
 
-    Returns:
-        pd.DataFrame: Load profile DataFrame
+    Args:
+      limit: Optional[int] - Maximum number of records to return
+      offset: Optional[int] - Number of records to skip
     """
     query = 'SELECT dstart, duration, signal_payload FROM load_profiles'
+
+    if limit is not None:
+      query += f' LIMIT {limit}'
+
+    if offset is not None:
+      query += f' OFFSET {offset}'
+
     rows = self.db_manager.execute_query(query)
     df = pd.DataFrame(rows)
 

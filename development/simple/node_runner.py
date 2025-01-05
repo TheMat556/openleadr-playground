@@ -190,7 +190,8 @@ def run_house_node(
     ),
   ]
 
-  rest_api_config = create_rest_api_config(rest_api_port)
+  rest_api_config = RestApiConfig(port=int(rest_api_port))
+
   mqtt_config = MQTTConfig(
     broker=mqtt_broker,
     port=mqtt_port,

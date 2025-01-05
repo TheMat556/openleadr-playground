@@ -232,8 +232,12 @@ class InterfaceManager:
     outputs = [gr.Plot(visible=False) for _ in self._plot_components.values()]
 
     if isinstance(state, str) and state == 'hierarchy':
-      hierarchy_plot = self.hierarchy_plot_manager.visualize_hierarchy()
-      outputs[-1] = gr.Plot(value=hierarchy_plot, visible=True)
+      try:
+        hierarchy_plot = self.hierarchy_plot_manager.visualize_hierarchy()
+        outputs[-1] = gr.Plot(value=hierarchy_plot, visible=True)
+      except Exception as e:
+        logger.error(f'Failed to create hierarchy visualization: {e}')
+        outputs[-1] = gr.Plot(visible=False)
     else:
       for idx, config in enumerate(state):
         buffer = self.dashboard.data_manager.data_buffers.get(
