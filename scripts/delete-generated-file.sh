@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e  # Exit on error
 if [ "$#" -ne 1 ]; then
     echo "Error: Expected exactly one argument (filename)"
     echo "Usage: $0 <filename>"
@@ -11,8 +11,6 @@ if [[ ! "$1" =~ ^[a-zA-Z0-9._-]+$ ]]; then
 fi
 
 filename="$1"
-if [ -f "$filename" ]; then
-  set -e  # Exit on error
   if ! git rev-parse --git-dir > /dev/null 2>&1; then
       echo "Error: Not in a git repository"
       exit 1
@@ -34,5 +32,4 @@ if [ -f "$filename" ]; then
           echo "Error: Failed to remove $filename"
           exit 1
       fi
-  fi
 fi

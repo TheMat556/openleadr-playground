@@ -81,6 +81,7 @@ class NodeController(AdrBaseConfig):
       openadr_http_port=self._openadr_http_port,
       openadr_vtn_path_prefix=self._openadr_vtn_path_prefix,
     )
+    self.create_node_tasks()
 
     self._subscribers: Dict[str, List[Callable]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}

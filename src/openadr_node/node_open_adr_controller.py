@@ -102,14 +102,17 @@ class NodeOpenADRController:
       )
       self._tasks.append(task)
 
+    def _on_ven_ready():
+      self._register_base_report()
+      self.publish('ven_ready', {'status': 'ready'})
+
     if self._ven_name and self._vtn_url:
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
-      self._register_base_report()
       task = self._loop.create_task(
         run_with_notification(
           self._ven.get_open_adr_server_run(),
           start_callback=lambda: logger.info('VEN task started'),
-          end_callback=lambda: self.publish('ven_ready', {'status': 'ready'}),
+          end_callback=lambda: _on_ven_ready(),
         )
       )
       self._tasks.append(task)
@@ -149,6 +152,9 @@ class NodeOpenADRController:
         self._ven.add_reports(list_of_reports)
       else:
         self._report_queue.put_nowait(list_of_reports)
+        self.subscribe(
+          'ven_ready', lambda _: self._loop.create_task(self._process_report_queue())
+        )
         logger.info('Reports queued until VEN is available')
     except Exception as e:
       logger.error(f'Error adding report: {e}')
@@ -191,3 +197,18 @@ class NodeOpenADRController:
       self._subscribers[signal] = []
     self._subscribers[signal].append(callback)
     logger.info(f'Subscribed to signal: {signal} with callback: {callback.__name__}')
+
+  def unsubscribe(self, signal: str, callback: Callable) -> None:
+    """
+    Unsubscribe from a signal.
+
+    Parameters
+    ----------
+    signal : str
+        The signal name.
+    callback : Callable
+        The callback function to remove.
+    """
+    if signal in self._subscribers and callback in self._subscribers[signal]:
+      self._subscribers[signal].remove(callback)
+      logger.info(f'Unsubscribed from signal: {signal}')
