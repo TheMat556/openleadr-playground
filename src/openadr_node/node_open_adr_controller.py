@@ -133,7 +133,7 @@ class NodeOpenADRController:
       logger.error(f'Failed to register base report: {e}')
       raise
 
-  def add_report(
+  def add_reports(
     self, list_of_reports: Optional[List[ReportConfiguration]] = None
   ) -> None:
     """

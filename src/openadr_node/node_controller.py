@@ -81,7 +81,6 @@ class NodeController(AdrBaseConfig):
       openadr_http_port=self._openadr_http_port,
       openadr_vtn_path_prefix=self._openadr_vtn_path_prefix,
     )
-    self._node_task_manager.create_node_tasks()
 
     self._subscribers: Dict[str, List[Callable]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
@@ -102,6 +101,12 @@ class NodeController(AdrBaseConfig):
       self._initialize_mqtt_manager(self._mqtt_config)
 
     dispatcher.send(signal='on_ready', sender='system')
+
+  def create_node_tasks(self) -> None:
+    """
+    Create and start tasks for the VTN and VEN nodes.
+    """
+    self._node_task_manager.create_node_tasks()
 
   def _initialize_rest_api_manager(self, config: RestApiConfig) -> None:
     """
@@ -205,7 +210,7 @@ class NodeController(AdrBaseConfig):
         List of report configurations.
     """
     try:
-      self._node_task_manager.add_report(list_of_reports)
+      self._node_task_manager.add_reports(list_of_reports)
     except Exception as e:
       logger.error(f'Error adding report: {e}')
 
