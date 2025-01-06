@@ -107,7 +107,12 @@ class NodeController(AdrBaseConfig):
     """
     Create and start tasks for the VTN and VEN nodes.
     """
-    self._node_task_manager.create_node_tasks()
+    try:
+      self._node_task_manager.create_node_tasks()
+      logger.info('Node tasks created successfully')
+    except Exception as e:
+      logger.error(f'Failed to create node tasks: {e}')
+      raise
 
   def _initialize_rest_api_manager(self, config: RestApiConfig) -> None:
     """
@@ -211,15 +216,33 @@ class NodeController(AdrBaseConfig):
         List of report configurations.
     """
     try:
+      logger.debug(f'Adding reports: {list_of_reports}')
       self._node_task_manager.add_reports(list_of_reports)
+      logger.info('Reports added successfully')
     except Exception as e:
       logger.error(f'Error adding report: {e}')
+      logger.error(f'Error adding report: {e}', exc_info=True)
+      raise RuntimeError(f'Failed to add reports: {e}') from e
 
   def publish(self, signal: str, data: Any) -> None:
     """
     Publish a signal to subscribers.
     """
-    self._node_task_manager.publish(signal, data)
+    try:
+      self._node_task_manager.publish(signal, data)
+    except Exception as e:
+      logger.error(f'Failed to publish signal {signal}: {e}')
+      raise
+
+  def subscribe(self, signal: str, callback: Callable) -> None:
+    """
+    Subscribe to a signal.
+    """
+    try:
+      self._node_task_manager.subscribe(signal, callback)
+    except Exception as e:
+      logger.error(f'Failed to subscribe to signal {signal}: {e}')
+      raise
 
   def subscribe(self, signal: str, callback: Callable) -> None:
     """

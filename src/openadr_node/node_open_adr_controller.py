@@ -32,8 +32,8 @@ class NodeOpenADRController:
       Instance of the Virtual End Node.
   subscribers : Dict[str, List[Callable]]
       Dictionary to store subscribers for signals.
-   _report_queue : Queue
-        Queue to store reports until the VEN is available.
+  _report_queue : asyncio.Queue
+      Queue to store reports until the VEN is available.
   """
 
   def __init__(
@@ -70,22 +70,22 @@ class NodeOpenADRController:
   def ven(self) -> Optional[VirtualEndNode]:
     return self._ven
 
+  async def _run_with_notification(
+    self,
+    coro: Callable,
+    start_callback: Optional[Callable[[], None]],
+    end_callback: Optional[Callable[[], None]],
+  ) -> None:
+    if start_callback:
+      start_callback()
+    await coro
+    if end_callback:
+      end_callback()
+
   def create_node_tasks(self) -> None:
     """
     Create and start tasks for the VTN and VEN nodes.
     """
-
-    async def run_with_notification(
-      coro: Callable,
-      start_callback: Optional[Callable[[], None]],
-      end_callback: Optional[Callable[[], None]],
-    ) -> None:
-      if start_callback:
-        start_callback()
-      await coro
-      if end_callback:
-        end_callback()
-
     if self._vtn_name:
       self._vtn = VirtualTopNode(
         server_name=self._vtn_name,
@@ -94,7 +94,7 @@ class NodeOpenADRController:
         path_prefix=self._openadr_vtn_path_prefix,
       )
       task = self._loop.create_task(
-        run_with_notification(
+        self._run_with_notification(
           self._vtn.get_open_adr_server_run(),
           start_callback=lambda: logger.info('VTN task started'),
           end_callback=lambda: self.publish('vtn_created', {'status': 'created'}),
@@ -109,7 +109,7 @@ class NodeOpenADRController:
     if self._ven_name and self._vtn_url:
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
       task = self._loop.create_task(
-        run_with_notification(
+        self._run_with_notification(
           self._ven.get_open_adr_server_run(),
           start_callback=lambda: logger.info('VEN task started'),
           end_callback=lambda: _on_ven_ready(),
@@ -118,9 +118,12 @@ class NodeOpenADRController:
       self._tasks.append(task)
 
   def shutdown(self) -> None:
+    logger.info('Initiating shutdown of OpenADR controller...')
     for task in self._tasks:
+      logger.debug(f'Cancelling task: {task.get_name()}')
       task.cancel()
     self._loop.run_until_complete(asyncio.gather(*self._tasks, return_exceptions=True))
+    logger.info('OpenADR controller shutdown completed')
 
   def _register_base_report(self) -> None:
     """
@@ -175,9 +178,13 @@ class NodeOpenADRController:
     """
     Publish a signal to subscribers.
     """
+    logger.debug(f'Publishing signal: {signal} with data: {data}')
     if signal in self._subscribers:
       for callback in self._subscribers[signal]:
-        callback(data)
+        try:
+          callback(data)
+        except Exception as e:
+          logger.error(f'Error in callback for signal {signal}: {e}')
     logger.info(f'Published signal: {signal} with data: {data}')
 
   def subscribe(self, signal: str, callback: Callable) -> None:
@@ -195,6 +202,9 @@ class NodeOpenADRController:
       raise TypeError('callback must be callable')
     if signal not in self._subscribers:
       self._subscribers[signal] = []
+    if callback in self._subscribers[signal]:
+      logger.warning(f'Callback {callback.__name__} already subscribed to {signal}')
+      return
     self._subscribers[signal].append(callback)
     logger.info(f'Subscribed to signal: {signal} with callback: {callback.__name__}')
 
