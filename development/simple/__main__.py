@@ -67,7 +67,6 @@ if __name__ == '__main__':
     create_process(run_mock_node, queue=queue),
     create_process(run_node_dashboard),
   ]
-
   with manage_processes(processes):
     try:
       while True:

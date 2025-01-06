@@ -208,7 +208,7 @@ class VirtualTopNode(AdrBaseConfig):
 
   @SignalConnector('update_load_profile', 'nm')
   def _on_update_load_profile(
-    self, signal: str, sender: str, data: List[Dict[str, Any]]
+    self, signal: str, sender: str, data: Dict[str, List[Dict[str, Any]]]
   ) -> None:
     """
     Update the load profile.
@@ -217,21 +217,22 @@ class VirtualTopNode(AdrBaseConfig):
     :type signal: str
     :param sender: Signal sender.
     :type sender: str
-    :param data: Load profile data with timestamps in milliseconds and duration in milliseconds.
-    :type data: List[Dict[str, Any]]
+    :param data: Load profile data with ven_id as keys and intervals as values.
+    :type data: Dict[str, List[Dict[str, Any]]]
     """
     if data:
-      # Transform the data into the required format
-      transformed_intervals = [
-        {
-          'dtstart': datetime.fromtimestamp(interval['dstart'] / 1000, tz=timezone.utc),
-          'duration': timedelta(milliseconds=interval['duration']),
-          'signal_payload': interval['signal_payload'],
-        }
-        for interval in data
-      ]
+      for ven_id, intervals in data.items():
+        transformed_intervals = [
+          {
+            'dtstart': datetime.fromtimestamp(
+              interval['dstart'] / 1000, tz=timezone.utc
+            ),
+            'duration': timedelta(milliseconds=interval['duration']),
+            'signal_payload': interval['signal_payload'],
+          }
+          for interval in intervals
+        ]
 
-      for ven_id in self._ven_data.keys():
         try:
           self._open_adr_server.add_event(
             ven_id=ven_id,

@@ -5,7 +5,7 @@ import sys
 from dotenv import load_dotenv
 
 from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.node_manager import NodeManager
+from src.openadr_node.node_controller import NodeController
 
 
 def validate_config() -> None:
@@ -29,7 +29,7 @@ def main() -> None:
 
   rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
 
-  node_manager = NodeManager(
+  node_manager = NodeController(
     node_id=os.getenv('NODE_ID'),
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
     openadr_http_port=int(os.getenv('VTN_PORT', 8080)),

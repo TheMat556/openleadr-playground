@@ -13,7 +13,7 @@ from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.node_manager import NodeManager
+from src.openadr_node.node_controller import NodeController
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def run_mock_node(queue: Any) -> None:
   load_environment('./development/simple/.env')
   rest_api_config = create_rest_api_config('DEV_MOCK_NODE_REST_API_PORT')
 
-  mock_node = NodeManager(
+  mock_node = NodeController(
     node_id=os.getenv('DEV_NODE_ID'),
     vtn_name=os.getenv('DEV_VTN_NAME'),
     openadr_vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
@@ -112,6 +112,8 @@ def run_mock_node(queue: Any) -> None:
   )
 
   def notify_main_process(data: Any) -> None:
+    print('Notify main process')
+    print('Notify main process')
     queue.put('vtn_created')
 
   mock_node.subscribe('vtn_created', notify_main_process)
@@ -191,7 +193,7 @@ def run_house_node(
     password=mqtt_password,
   )
 
-  house_node = NodeManager(
+  house_node = NodeController(
     node_id=node_id,
     ven_name=ven_name,
     vtn_url=vtn_url,

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.node_manager import NodeManager
+from src.openadr_node.node_controller import NodeController
 
 
 def run_gradio_thread(interface: AsyncGradioApp) -> None:
@@ -29,7 +29,7 @@ def main() -> None:
 
   rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
 
-  node_manager = NodeManager(
+  node_manager = NodeController(
     node_id=os.getenv('NODE_ID'),
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
     openadr_vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),

@@ -190,7 +190,6 @@ class AsyncGradioApp(AdrBaseConfig):
         'signal_payload': row[SLIDER_VALUE],
       }
       intervals.append(interval)
-
     return intervals
 
   def get_current_allowed_consumption(self) -> str:
