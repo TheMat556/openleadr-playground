@@ -1,6 +1,9 @@
 from pydispatch import dispatcher
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, TYPE_CHECKING
 from src.openadr_node import logger
+
+if TYPE_CHECKING:
+  from src.openadr_node import NodeController
 
 
 class NodeDispatcherController:
@@ -10,20 +13,20 @@ class NodeDispatcherController:
 
   Attributes
   ----------
-  node_manager : NodeManager
+  node_controller : NodeController
       Instance of NodeManager that contains signal handling methods.
   """
 
-  def __init__(self, node_manager):
+  def __init__(self, node_controller: 'NodeController'):
     """
     Initialize the DispatcherManager with a reference to the NodeManager instance.
 
     Parameters
     ----------
-    node_manager : NodeManager
+    node_controller : NodeManager
         Instance of NodeManager that contains signal handling methods.
     """
-    self._node_manager = node_manager
+    self._node_manager = node_controller
 
   def get_method(self, signal: str) -> Optional[Callable]:
     """
@@ -42,7 +45,9 @@ class NodeDispatcherController:
     method_name = f'_on_{signal}'
     return getattr(self._node_manager, method_name, None)
 
-  def register_dispatcher(self, sender: str, signal: str, data: str) -> None:
+  def register_dispatcher(
+    self, sender: str, signal: str, dispatcher_signal: str
+  ) -> None:
     """
     Register a dispatcher for a signal.
 
@@ -52,20 +57,25 @@ class NodeDispatcherController:
         The sender of the signal.
     signal : str
         The signal name.
-    data : str
-        The data associated with the signal.
+    dispatcher_signal : str
+        The dispatcher signal name.
     """
-    method = self.get_method(data)
+    method = self.get_method(dispatcher_signal)
     if callable(method):
-      dispatcher.connect(self._call_method, signal=data, sender=dispatcher.Any)
+      dispatcher.connect(
+        self._call_method, signal=dispatcher_signal, sender=dispatcher.Any
+      )
     else:
-      dispatcher.connect(self._forward_dispatcher, signal=data, sender=sender)
+      dispatcher.connect(
+        self._forward_dispatcher, signal=dispatcher_signal, sender=sender
+      )
 
     logger.info(
-      f'DispatcherManager - Connected _on{signal} to signal: {data} with sender: {sender}'
+      f'DispatcherManager - Connected _on{signal} to signal: {dispatcher_signal} with sender: {sender}'
     )
 
-  def _forward_dispatcher(self, sender: str, signal: str, data: Any) -> None:
+  @staticmethod
+  def _forward_dispatcher(sender: str, signal: str, data: Any) -> None:
     """
     Forward a dispatcher signal using the node manager's methods.
 
@@ -101,5 +111,7 @@ class NodeDispatcherController:
       try:
         method(sender, data)
       except Exception as e:
-        logger.error(f'Error calling method {signal}: {e}')
+        logger.error(
+          f'Error calling method {signal} from sender {sender} with data {data}: {e}'
+        )
         raise

@@ -26,7 +26,7 @@ class NodeController(AdrBaseConfig):
 
   def __init__(
     self,
-    node_id: Optional[str] = None,
+    node_id: str = None,
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
@@ -37,7 +37,7 @@ class NodeController(AdrBaseConfig):
     rest_api_config: Optional[RestApiConfig] = None,
   ):
     """
-    Initialize the NodeManager with the given configuration.
+    Initialize the NodeController with the given configuration.
     """
     super().__init__()
     self._vtn_name = vtn_name

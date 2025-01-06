@@ -222,6 +222,10 @@ class VirtualTopNode(AdrBaseConfig):
     """
     if data:
       for ven_id, intervals in data.items():
+        if not isinstance(intervals, list):
+          logger.error(f'Invalid intervals data for VEN {ven_id}: expected list')
+          continue
+
         transformed_intervals = [
           {
             'dtstart': datetime.fromtimestamp(
@@ -231,6 +235,7 @@ class VirtualTopNode(AdrBaseConfig):
             'signal_payload': interval['signal_payload'],
           }
           for interval in intervals
+          if all(key in interval for key in ['dstart', 'duration', 'signal_payload'])
         ]
 
         try:

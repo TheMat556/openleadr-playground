@@ -51,7 +51,13 @@ class NodeResourceController:
     """
     if not isinstance(data, list):
       logger.error('Invalid data format: expected list of intervals')
-      return
+      raise ValueError('Invalid data format: expected list of intervals')
+
+    # Validate that each interval contains the required fields
+    for interval in data:
+      if not all(key in interval for key in ['dtstart', 'duration', 'signal_payload']):
+        logger.error('Incomplete interval data: missing required fields')
+        raise ValueError('Incomplete interval data: missing required fields')
 
     transformed_data = [
       {
@@ -63,6 +69,7 @@ class NodeResourceController:
     ]
 
     new_data_structure = {}
+    #put the logic for fair distribution here
     for ven_id in self._ven_data.keys():
       ven_transformed_data = [
         {
@@ -112,5 +119,7 @@ class NodeResourceController:
           sender='nm', signal='update_consumption_data', data=self._current_consumption
         )
     except (AttributeError, IndexError) as e:
-      logger.error(f'Error processing consumption data: {e}')
+      logger.error(
+        f'Error processing consumption data from sender {sender} with data {data}: {e}'
+      )
       raise

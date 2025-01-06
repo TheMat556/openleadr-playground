@@ -33,6 +33,8 @@ class NodeOpenADRController:
       Instance of the Virtual End Node.
   subscribers : Dict[str, List[Callable]]
       Dictionary to store subscribers for signals.
+   _report_queue : Queue
+        Queue to store reports until the VEN is available.
   """
 
   def __init__(

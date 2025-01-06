@@ -18,8 +18,8 @@ from src.openadr_node.node_controller import NodeController
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-seed = 42
-rng = np.random.default_rng(seed)
+RANDOM_SEED = int(os.getenv('DEV_RANDOM_SEED', 42))
+rng = np.random.default_rng(RANDOM_SEED)
 
 
 def load_environment(env_path: str) -> None:
@@ -112,8 +112,6 @@ def run_mock_node(queue: Any) -> None:
   )
 
   def notify_main_process(data: Any) -> None:
-    print('Notify main process')
-    print('Notify main process')
     queue.put('vtn_created')
 
   mock_node.subscribe('vtn_created', notify_main_process)

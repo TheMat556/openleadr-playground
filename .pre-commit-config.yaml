@@ -23,3 +23,10 @@ repos:
         bash -c 'if [ -f docker-compose.yml ]; then if git diff --quiet docker-compose.yml; then rm docker-compose.yml && echo "Removed generated docker-compose.yml"; else echo "Warning: docker-compose.yml contains uncommitted changes. Please commit or stash changes before proceeding." && exit 1; fi; fi'
       language: system
       stages: [pre-commit]
+
+    - id: delete-env-variables
+      name: Delete env_variables.json file
+      entry: |
+        bash -c 'if [ -f env_variables.json ]; then if git diff --quiet env_variables.json; then rm env_variables.json && echo "Removed generated env_variables.json"; else echo "Warning: env_variables.json contains uncommitted changes. Please commit or stash changes before proceeding." && exit 1; fi; fi'
+      language: system
+      stages: [pre-commit]
