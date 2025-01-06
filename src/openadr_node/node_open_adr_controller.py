@@ -1,6 +1,5 @@
 import asyncio
 from typing import Optional, Callable, Dict, List, Any
-from queue import Queue
 from src.openadr_node import logger
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.virtual_end_node import VirtualEndNode
@@ -60,7 +59,8 @@ class NodeOpenADRController:
     self._vtn = None
     self._ven = None
     self._subscribers: Dict[str, List[Callable]] = {}
-    self._report_queue = Queue()
+    self._report_queue = asyncio.Queue()
+    self._tasks = []
 
   @property
   def vtn(self) -> Optional[VirtualTopNode]:
@@ -93,24 +93,31 @@ class NodeOpenADRController:
         http_port=self._openadr_http_port,
         path_prefix=self._openadr_vtn_path_prefix,
       )
-      self._loop.create_task(
+      task = self._loop.create_task(
         run_with_notification(
           self._vtn.get_open_adr_server_run(),
           start_callback=lambda: logger.info('VTN task started'),
           end_callback=lambda: self.publish('vtn_created', {'status': 'created'}),
         )
       )
+      self._tasks.append(task)
 
     if self._ven_name and self._vtn_url:
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
       self._register_base_report()
-      self._loop.create_task(
+      task = self._loop.create_task(
         run_with_notification(
           self._ven.get_open_adr_server_run(),
           start_callback=lambda: logger.info('VEN task started'),
           end_callback=lambda: self.publish('ven_ready', {'status': 'ready'}),
         )
       )
+      self._tasks.append(task)
+
+  def shutdown(self) -> None:
+    for task in self._tasks:
+      task.cancel()
+    self._loop.run_until_complete(asyncio.gather(*self._tasks, return_exceptions=True))
 
   def _register_base_report(self) -> None:
     """
@@ -141,18 +148,18 @@ class NodeOpenADRController:
       if self._ven:
         self._ven.add_reports(list_of_reports)
       else:
-        self._report_queue.put(list_of_reports)
+        self._report_queue.put_nowait(list_of_reports)
         logger.info('Reports queued until VEN is available')
     except Exception as e:
       logger.error(f'Error adding report: {e}')
 
-  def _process_report_queue(self, data: Any) -> None:
+  async def _process_report_queue(self) -> None:
     """
     Process the queued reports when the VEN is available.
     """
     try:
       while not self._report_queue.empty():
-        reports = self._report_queue.get()
+        reports = await self._report_queue.get()
         self._ven.add_reports(reports)
         logger.info('Queued reports added to VEN')
     except Exception as e:

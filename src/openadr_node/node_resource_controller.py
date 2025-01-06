@@ -69,7 +69,7 @@ class NodeResourceController:
     ]
 
     new_data_structure = {}
-    #put the logic for fair distribution here
+    # put the logic for fair distribution here
     for ven_id in self._ven_data.keys():
       ven_transformed_data = [
         {

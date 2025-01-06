@@ -26,7 +26,7 @@ class NodeController(AdrBaseConfig):
 
   def __init__(
     self,
-    node_id: str = None,
+    node_id: Optional[str] = None,
     vtn_name: Optional[str] = None,
     ven_name: Optional[str] = None,
     vtn_url: Optional[str] = None,
@@ -38,6 +38,27 @@ class NodeController(AdrBaseConfig):
   ):
     """
     Initialize the NodeController with the given configuration.
+
+    Parameters
+    ----------
+    node_id : Optional[str]
+        The ID of the node.
+    vtn_name : Optional[str]
+        Name of the Virtual Top Node (VTN).
+    ven_name : Optional[str]
+        Name of the Virtual End Node (VEN).
+    vtn_url : Optional[str]
+        URL of the VTN.
+    openadr_http_host : Optional[str]
+        HTTP host for OpenADR.
+    openadr_http_port : Optional[int]
+        HTTP port for OpenADR.
+    openadr_vtn_path_prefix : Optional[str]
+        Path prefix for the VTN.
+    mqtt_config : Optional[MQTTConfig]
+        Configuration for MQTT.
+    rest_api_config : Optional[RestApiConfig]
+        Configuration for REST API.
     """
     super().__init__()
     self._vtn_name = vtn_name

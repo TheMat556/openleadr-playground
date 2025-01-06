@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class NodeDispatcherController:
   """
   Manages PyDispatch signal handling and routing for the OpenADR node system.
-  Works in conjunction with NodeManager to handle signal dispatching.
+  Works in conjunction with NodeController to handle signal dispatching.
 
   Attributes
   ----------

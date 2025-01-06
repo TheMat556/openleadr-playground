@@ -15,13 +15,18 @@ from development.simple.node_runner import (
 
 
 def signal_handler(signum, frame):
+  global processes
   logging.info('Received shutdown signal, terminating processes...')
   for p in processes:
-    if p.is_alive():
-      p.terminate()
-      p.join(timeout=5)
+    try:
       if p.is_alive():
-        p.kill()
+        p.terminate()
+        p.join(timeout=5)
+        if p.is_alive():
+          logging.warning(f'Process {p.pid} did not terminate gracefully, forcing kill')
+          p.kill()
+    except Exception as e:
+      logging.error(f'Error terminating process {p.pid}: {e}')
   sys.exit(0)
 
 
