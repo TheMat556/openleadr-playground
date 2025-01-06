@@ -243,9 +243,3 @@ class NodeController(AdrBaseConfig):
     except Exception as e:
       logger.error(f'Failed to subscribe to signal {signal}: {e}')
       raise
-
-  def subscribe(self, signal: str, callback: Callable) -> None:
-    """
-    Subscribe to a signal.
-    """
-    self._node_task_manager.subscribe(signal, callback)
