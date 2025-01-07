@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate Docker Compose
+        run: pipenv run generate-docker-compose -c 3 -l 3
       - name: Build Docker images
         run: |
           docker build -f src/docker/top_node/Dockerfile .

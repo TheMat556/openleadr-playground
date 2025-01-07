@@ -73,7 +73,7 @@ class LoadProfileManager:
 
   def insert_load_profile(
     self, data: List[Dict[str, Any]]
-  ) -> dict[str, int | list[Any]] | dict[str, int | list[Any]]:
+  ) -> Dict[str, int | List[Any]]:
     """
     Insert the load profile data into the database using batch processing.
 
@@ -176,20 +176,23 @@ class LoadProfileManager:
     Returns:
         pd.DataFrame: Load profile data
     """
-    query = """
-            SELECT dstart, duration, signal_payload
-            FROM load_profiles
-            ORDER BY {}
-        """.format(order_by)
+    base_query = f"""
+                SELECT dstart, duration, signal_payload
+                FROM load_profiles
+                ORDER BY {order_by}
+            """
 
+    params = []
     if limit is not None:
-      query += f' LIMIT {limit}'
+      base_query += ' LIMIT ?'
+      params.append(limit)
 
     if offset is not None:
-      query += f' OFFSET {offset}'
+      base_query += ' OFFSET ?'
+      params.append(offset)
 
     try:
-      rows = self.db_manager.execute_query(query)
+      rows = self.db_manager.execute_query(base_query, params)
       df = pd.DataFrame(rows)
 
       if not df.empty:

@@ -111,7 +111,8 @@ class DatabaseManager:
     """Build the INSERT query with proper quoting"""
     columns_str = ', '.join(f'"{col}"' for col in columns)
     placeholders = ', '.join(['?' for _ in columns])
-    return f'INSERT {"OR REPLACE" if replace else ""} INTO "{table_name}" ({columns_str}) VALUES ({placeholders})'
+    query = 'INSERT OR REPLACE' if replace else 'INSERT'
+    return f'{query} INTO "{table_name}" ({columns_str}) VALUES ({placeholders})'
 
   def insert_values(
     self, table_name: str, columns: List[str], values: List[Any], replace: bool = False

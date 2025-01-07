@@ -1,4 +1,4 @@
-import random
+import secrets
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 from threading import Lock
@@ -101,7 +101,7 @@ class NodeResourceController:
         {
           'dstart': interval['dstart'],
           'duration': interval['duration'],
-          'signal_payload': interval['signal_payload'] * random.random(),
+          'signal_payload': interval['signal_payload'] * secrets.randbelow(100) / 100,
         }
         for interval in transformed_data
       ]
