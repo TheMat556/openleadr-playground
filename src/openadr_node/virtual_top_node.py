@@ -11,6 +11,7 @@ from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models.event import ResourceConsumption
+from src.openadr_node.node_resource_controller import NodeResourceController
 
 
 class VirtualTopNode(AdrBaseConfig):
@@ -225,6 +226,15 @@ class VirtualTopNode(AdrBaseConfig):
         if not isinstance(intervals, list):
           logger.error(f'Invalid intervals data for VEN {ven_id}: expected list')
           continue
+
+        # Check if the data is already formatted
+        if not all(
+          'dstart' in interval
+          and 'duration' in interval
+          and 'signal_payload' in interval
+          for interval in intervals
+        ):
+          intervals = NodeResourceController.process_load_profile_data(intervals)
 
         transformed_intervals = [
           {

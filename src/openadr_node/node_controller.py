@@ -93,7 +93,7 @@ class NodeController(AdrBaseConfig):
       self._load_profile_manager = LoadProfileManager(DatabaseManager(f'{node_id}.db'))
 
     if self._load_profile_manager:
-      self._data_updater = NodeResourceController(self._load_profile_manager)
+      self.node_resource_controller = NodeResourceController(self._load_profile_manager)
 
     if self._rest_api_config:
       self._initialize_rest_api_manager(self._rest_api_config)
@@ -180,13 +180,13 @@ class NodeController(AdrBaseConfig):
     """
     Handle the update load profile signal.
     """
-    self._data_updater.update_load_profile(sender, data)
+    self.node_resource_controller.update_load_profile(sender, data)
 
   def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
     Handle the update consumption data signal.
     """
-    self._data_updater.update_consumption_data(sender, data)
+    self.node_resource_controller.update_consumption_data(sender, data)
 
   def add_task(self, task: Callable) -> None:
     """

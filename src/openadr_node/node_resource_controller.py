@@ -38,16 +38,20 @@ class NodeResourceController:
     self._current_consumption = 0.0
     self._lock = Lock()
 
-  def update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
+  @staticmethod
+  def process_load_profile_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Update the load profile with the provided data.
+    Process the load profile data.
 
     Parameters
     ----------
-    sender : str
-        The sender of the data.
     data : List[Dict[str, Any]]
         List of intervals containing load profile data.
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Transformed load profile data.
     """
     if not isinstance(data, list):
       logger.error('Invalid data format: expected list of intervals')
@@ -67,6 +71,28 @@ class NodeResourceController:
       }
       for interval in data
     ]
+
+    return transformed_data
+
+  def update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
+    """
+    Update the load profile with the provided data.
+
+    Parameters
+    ----------
+    sender : str
+        The sender of the data.
+    data : List[Dict[str, Any]]
+        List of intervals containing load profile data.
+    """
+    # Check if the data is already formatted
+    if not all(
+      'dstart' in interval and 'duration' in interval and 'signal_payload' in interval
+      for interval in data
+    ):
+      transformed_data = self.process_load_profile_data(data)
+    else:
+      transformed_data = data
 
     new_data_structure = {}
     # put the logic for fair distribution here

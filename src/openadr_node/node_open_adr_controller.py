@@ -103,11 +103,11 @@ class NodeOpenADRController:
       self._tasks.append(task)
 
     def _on_ven_ready():
-      self._register_base_report()
       self.publish('ven_ready', {'status': 'ready'})
 
     if self._ven_name and self._vtn_url:
       self._ven = VirtualEndNode(self._ven_name, self._vtn_url)
+      self._register_base_report()
       task = self._loop.create_task(
         self._run_with_notification(
           self._ven.get_open_adr_server_run(),
