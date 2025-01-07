@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 import sys
 import threading
 from datetime import timedelta
@@ -111,6 +112,19 @@ def run_mock_node(queue: Any) -> None:
   run_node(mock_node, queue)
 
 
+def create_report_configurations() -> List[ReportConfiguration]:
+  reports: List[ReportConfiguration] = [
+    ReportConfiguration(
+      resource_id=f'res_{random.randint(100, 999)}',
+      measurement='energy',
+      sampling_rate=timedelta(seconds=5),
+      callback=device_callback,
+      additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
+    ),
+  ]
+  return reports
+
+
 def run_house_node(
   node_id: str,
   ven_name: str,
@@ -124,15 +138,6 @@ def run_house_node(
   mqtt_password: Optional[str] = None,
 ) -> None:
   """Create and configure a house node."""
-  reports: List[ReportConfiguration] = [
-    ReportConfiguration(
-      resource_id='res_123',
-      measurement='energy',
-      sampling_rate=timedelta(seconds=5),
-      callback=device_callback,
-      additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
-    ),
-  ]
 
   rest_api_config = RestApiConfig(port=int(rest_api_port))
 
@@ -152,7 +157,8 @@ def run_house_node(
     rest_api_config=rest_api_config,
     mqtt_config=mqtt_config,
   )
-  house_node.add_report(reports)
+  house_node.add_report(create_report_configurations())
+  house_node.add_report(create_report_configurations())
 
   run_node(house_node)
 

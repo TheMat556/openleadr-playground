@@ -225,3 +225,50 @@ class LoadProfileManager:
     if not df.empty:
       df.set_index('timestamp', inplace=True)
     return df
+
+  def get_unique_vens(self) -> int:
+    """
+    Retrieve the number of unique VENs in the consumption data.
+
+    Returns:
+        int: Number of unique VENs
+    """
+    query = 'SELECT DISTINCT ven_id FROM consumption'
+    rows = self.db_manager.execute_query(query)
+    print('ROWS', rows)
+    return len(rows)
+
+  def get_closest_point(self, target_timestamp):
+    query = """
+        SELECT dstart, duration, signal_payload
+        FROM load_profiles
+        ORDER BY ABS(dstart - ?) ASC
+        LIMIT 1
+    """
+    params = (target_timestamp,)
+    rows = self.db_manager.execute_query(query, params)
+    return rows[0] if rows else None
+
+  def get_closest_consumption_points(self, target_timestamp):
+    """
+    Retrieve the nearest consumption point for each unique ven_id to the given timestamp.
+
+    Args:
+        target_timestamp (int): The target timestamp to search for.
+
+    Returns:
+        List[Dict[str, Any]]: A list of the nearest consumption point records for each unique ven_id.
+    """
+    query = """
+        SELECT t1.timestamp, t1.ven_id, t1.resource_id, t1.value
+        FROM consumption t1
+        INNER JOIN (
+            SELECT ven_id, MIN(ABS(timestamp - ?)) AS min_diff
+            FROM consumption
+            GROUP BY ven_id
+        ) t2
+        ON t1.ven_id = t2.ven_id AND ABS(t1.timestamp - ?) = t2.min_diff
+    """
+    params = (target_timestamp, target_timestamp)
+    rows = self.db_manager.execute_query(query, params)
+    return rows if rows else []

@@ -1,7 +1,9 @@
-import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any
 from threading import Lock
+
+import pandas as pd
+
 from src.openadr_node import logger
 from src.openadr_node.models.event import ResourceConsumption
 from src.openadr_node.database.loadprofile_manager import LoadProfileManager
@@ -37,6 +39,8 @@ class NodeResourceController:
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption = 0.0
     self._lock = Lock()
+
+    self._z = None
 
   @staticmethod
   def process_load_profile_data(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -95,17 +99,75 @@ class NodeResourceController:
       transformed_data = data
 
     new_data_structure = {}
-    # put the logic for fair distribution here
-    for ven_id in self._ven_data.keys():
-      ven_transformed_data = [
-        {
-          'dstart': interval['dstart'],
-          'duration': interval['duration'],
-          'signal_payload': interval['signal_payload'] * secrets.randbelow(100) / 100,
-        }
-        for interval in transformed_data
-      ]
-      new_data_structure[ven_id] = ven_transformed_data
+
+    current_unix_timestamp: int = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+    current_allowed_consumption = self._load_profile_manager.get_closest_point(
+      current_unix_timestamp
+    )
+    current_consumption = self._load_profile_manager.get_closest_consumption_points(
+      current_unix_timestamp
+    )
+    if current_consumption:
+      current_consumption_df = pd.DataFrame(current_consumption)
+      current_consumption_df = (
+        current_consumption_df.groupby('ven_id')['value'].sum().reset_index()
+      )
+      current_consumption_df = current_consumption_df.rename(columns={'value': 'b'})
+      df = current_consumption_df
+
+    def correction_factor(G_i):
+      return (5 * (G_i**2)) / 1.5 - (5 * G_i) / 1.5 + 1.085
+
+    if current_allowed_consumption and current_consumption:
+      try:
+        # Step 1
+        if self._z is None:
+          unique_vens = self._load_profile_manager.get_unique_vens()
+          self._z = current_allowed_consumption['signal_payload'] / unique_vens
+
+        df['v'] = current_allowed_consumption['signal_payload']
+        df['z'] = self._z
+        df['g'] = df['z'] / df['b']
+        df['w'] = (1 - df['g']) * df['b'] * correction_factor(df['g'])
+        df['w_total'] = df['w'].sum()
+        df['z_neu'] = df['w'] / df['w_total'] * df['v']
+
+        print('-------')
+        print(df)
+
+        # Generate 95 intervals (15 minutes each) starting from current time
+        base_time = datetime.now(timezone.utc)
+        intervals = []
+        for i in range(95):
+          interval_time = base_time + timedelta(minutes=15 * i)
+          intervals.append(
+            {
+              'dstart': int(interval_time.timestamp() * 1000),
+              'duration': 900000,  # 15 minutes in milliseconds
+              'signal_payload': 0,  # Default value, will be updated with z_neu
+            }
+          )
+
+        # Create new_data_structure based on df values
+        for _, row in df.iterrows():
+          ven_id = row['ven_id']
+          z_neu = row['z_neu']
+
+          # Create a copy of intervals with the specific z_neu value
+          ven_transformed_data = [
+            {
+              'dstart': interval['dstart'],
+              'duration': interval['duration'],
+              'signal_payload': z_neu,  # Use z_neu instead of random value
+            }
+            for interval in intervals
+          ]
+          new_data_structure[ven_id] = ven_transformed_data
+
+      except Exception as e:
+        print(f'Error123: {e}')
+        raise
 
     self._load_profile_manager.insert_load_profile(transformed_data)
     dispatcher.send(sender='nm', signal='update_load_profile', data=new_data_structure)
