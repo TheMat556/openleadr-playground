@@ -1,0 +1,13 @@
+name: Docker Build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker images
+        run: |
+          docker build -f src/docker/top_node/Dockerfile .
+          docker build -f src/docker/middle_node/Dockerfile .
+          docker build -f src/docker/bottom_node/Dockerfile .
+          docker build -f src/docker/node_dashboard/Dockerfile .
