@@ -10,7 +10,7 @@ from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
-from src.openadr_node.models.event import ResourceConsumption
+from src.openadr_node.models.event import ResourceConsumption, Interval
 from src.openadr_node.node_resource_controller import NodeResourceController
 
 
@@ -209,7 +209,7 @@ class VirtualTopNode(AdrBaseConfig):
 
   @SignalConnector('update_load_profile', 'nm')
   def _on_update_load_profile(
-    self, signal: str, sender: str, data: Dict[str, List[Dict[str, Any]]]
+    self, signal: str, sender: str, data: Dict[str, List[Interval]]
   ) -> None:
     """
     Update the load profile.
@@ -219,12 +219,14 @@ class VirtualTopNode(AdrBaseConfig):
     :param sender: Signal sender.
     :type sender: str
     :param data: Load profile data with ven_id as keys and intervals as values.
-    :type data: Dict[str, List[Dict[str, Any]]]
+    :type data: Dict[str, List[Interval]]
     """
     if data:
       for ven_id, intervals in data.items():
         if not isinstance(intervals, list):
-          logger.error(f'Invalid intervals data for VEN {ven_id}: expected list')
+          logger.error(
+            f'Invalid intervals data for VEN {ven_id}: expected list, got {type(intervals)}'
+          )
           continue
 
         # Check if the data is already formatted
@@ -234,6 +236,14 @@ class VirtualTopNode(AdrBaseConfig):
           and 'signal_payload' in interval
           for interval in intervals
         ):
+          missing_fields = [
+            field
+            for field in ['dstart', 'duration', 'signal_payload']
+            if not all(field in interval for interval in intervals)
+          ]
+          logger.error(
+            f'Missing required fields for VEN {ven_id}: {", ".join(missing_fields)}'
+          )
           intervals = NodeResourceController.process_load_profile_data(intervals)
 
         transformed_intervals = [
@@ -256,9 +266,17 @@ class VirtualTopNode(AdrBaseConfig):
             intervals=transformed_intervals,
             callback=self._event_callback,
           )
-          logger.info(f'Event added successfully for VEN: {ven_id}')
+          logger.info(
+            f'Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
+            f' from {transformed_intervals[0]["dtstart"]} to {transformed_intervals[-1]["dtstart"]}'
+          )
+        except ValueError as e:
+          logger.error(f'Invalid data in event for VEN {ven_id}: {e}')
+        except ConnectionError as e:
+          logger.error(f'Failed to connect to OpenADR server for VEN {ven_id}: {e}')
         except Exception as e:
           logger.error(f'Failed to add event for VEN {ven_id}: {e}')
+          logger.debug(f'Event details: {transformed_intervals}', exc_info=True)
 
   def get_open_adr_server_run(self) -> Any:
     """

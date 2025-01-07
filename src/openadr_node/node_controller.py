@@ -180,13 +180,15 @@ class NodeController(AdrBaseConfig):
     """
     Handle the update load profile signal.
     """
-    self.node_resource_controller.update_load_profile(sender, data)
+    if self.node_resource_controller:
+      self.node_resource_controller.update_load_profile(sender, data)
 
   def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
     Handle the update consumption data signal.
     """
-    self.node_resource_controller.update_consumption_data(sender, data)
+    if self.node_resource_controller:
+      self.node_resource_controller.update_consumption_data(sender, data)
 
   def add_task(self, task: Callable) -> None:
     """

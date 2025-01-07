@@ -1,6 +1,11 @@
 import os
 import sys
 import subprocess
+import logging
+
+logging.basicConfig(
+  level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 
 def main(filename):
@@ -9,32 +14,32 @@ def main(filename):
 
   result = subprocess.run(['git', 'diff', '--quiet', filename], capture_output=True)
   if result.returncode != 0:
-    print(
+    logging.warning(
       f'Warning: {filename} contains uncommitted changes. Please commit or stash changes before proceeding.'
     )
     sys.exit(1)
 
   if not os.access(filename, os.W_OK):
-    print(f'Error: No write permission for {filename}')
+    logging.error(f'Error: No write permission for {filename}')
     sys.exit(1)
 
   try:
     os.remove(filename)
-    print(f'Removed generated {filename}')
+    logging.info(f'Successfully removed generated file: {filename}')
   except OSError as e:
-    print(f'Error: Failed to remove {filename}: {e}')
+    logging.error(f'Failed to remove {filename}: {e}')
     sys.exit(1)
 
 
 if __name__ == '__main__':
   if len(sys.argv) != 2:
-    print('Error: Expected exactly one argument (filename)')
-    print('Usage: python delete_generated_file.py <filename>')
+    logging.error('Error: Expected exactly one argument (filename)')
+    logging.info('Usage: python delete_generated_file.py <filename>')
     sys.exit(1)
 
   filename = sys.argv[1]
   if not all(c.isalnum() or c in '._-' for c in filename):
-    print('Error: Filename contains invalid characters')
+    logging.error('Error: Filename contains invalid characters')
     sys.exit(1)
 
   main(filename)
