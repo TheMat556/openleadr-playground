@@ -126,9 +126,6 @@ def generate_node(
     logger.warning(
       f"Missing required MQTT environment variables: {', '.join(missing_vars)}"
     )
-    raise ValueError(
-      'Required MQTT environment variables are missing. Please check .env.mqtt file'
-    )
 
   # Update environment with MQTT configuration if all variables are present
   if layer == max_layers - 1 and not MQTT_CONFIG_WRITTEN:
