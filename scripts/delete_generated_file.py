@@ -12,7 +12,13 @@ def main(filename):
   if not os.path.isfile(filename):
     return
 
-  result = subprocess.run(['git', 'diff', '--quiet', filename], capture_output=True)
+  try:
+    result = subprocess.run(
+      ['git', 'diff', '--quiet', filename], capture_output=True, text=True, check=False
+    )
+  except FileNotFoundError:
+    logging.warning('Git is not installed or not in PATH. Skipping git diff check.')
+    return
   if result.returncode != 0:
     logging.warning(
       f'Warning: {filename} contains uncommitted changes. Please commit or stash changes before proceeding.'
@@ -38,7 +44,11 @@ if __name__ == '__main__':
     sys.exit(1)
 
   filename = sys.argv[1]
-  if not all(c.isalnum() or c in '._-' for c in filename):
+  # Prevent path traversal
+  clean_filename = os.path.basename(filename)
+  if filename != clean_filename or not all(
+    c.isalnum() or c in '._-' for c in clean_filename
+  ):
     logging.error('Error: Filename contains invalid characters')
     sys.exit(1)
 

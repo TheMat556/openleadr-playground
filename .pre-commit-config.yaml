@@ -31,3 +31,11 @@ repos:
       pass_filenames: false
       always_run: true
       stages: [pre-commit]
+
+    - id: delete-slider-values
+      name: Delete slider_values.txt files
+      entry: python scripts/delete_slider_values.py
+      language: python
+      pass_filenames: false
+      always_run: true
+      stages: [pre-commit]

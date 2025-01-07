@@ -256,7 +256,15 @@ class VirtualTopNode(AdrBaseConfig):
           }
           for interval in intervals
           if all(key in interval for key in ['dstart', 'duration', 'signal_payload'])
+          and isinstance(interval['dstart'], (int, float))
+          and isinstance(interval['duration'], (int, float))
+          and interval['dstart'] > 0
+          and interval['duration'] > 0
         ]
+        if len(transformed_intervals) != len(intervals):
+          logger.error(
+            f'Failed to transform some intervals for VEN {ven_id} due to invalid timestamp data'
+          )
 
         try:
           self._open_adr_server.add_event(
@@ -266,6 +274,9 @@ class VirtualTopNode(AdrBaseConfig):
             intervals=transformed_intervals,
             callback=self._event_callback,
           )
+          if not transformed_intervals:
+            logger.error(f'No valid intervals to process for VEN {ven_id}')
+            return
           logger.info(
             f'Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
             f' from {transformed_intervals[0]["dtstart"]} to {transformed_intervals[-1]["dtstart"]}'
@@ -276,7 +287,12 @@ class VirtualTopNode(AdrBaseConfig):
           logger.error(f'Failed to connect to OpenADR server for VEN {ven_id}: {e}')
         except Exception as e:
           logger.error(f'Failed to add event for VEN {ven_id}: {e}')
-          logger.debug(f'Event details: {transformed_intervals}', exc_info=True)
+          logger.debug(
+            f'Event processing failed for VEN {ven_id} with {len(transformed_intervals)} '
+            f'intervals spanning {transformed_intervals[0]["dtstart"]} to '
+            f'{transformed_intervals[-1]["dtstart"]}',
+            exc_info=True,
+          )
 
   def get_open_adr_server_run(self) -> Any:
     """
