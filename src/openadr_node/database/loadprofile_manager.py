@@ -50,7 +50,7 @@ class LoadProfileManager:
           'timestamp': 'INTEGER NOT NULL',
           'ven_id': 'TEXT NOT NULL',
           'z_value': 'FLOAT NOT NULL',
-          'PRIMARY KEY': '(timestamp, ven_id)'
+          'PRIMARY KEY': '(timestamp, ven_id)',
         },
       )
     except DatabaseError as e:
@@ -285,32 +285,33 @@ class LoadProfileManager:
     rows = self.db_manager.execute_query(query, params)
     return rows if rows else []
 
-  def insert_z_values(self, ven_ids: np.ndarray, z_values: np.ndarray,
-                        timestamp: int) -> None:
-      """
-      Insert z-values for multiple VENs into the database.
+  def insert_z_values(
+    self, ven_ids: np.ndarray, z_values: np.ndarray, timestamp: int
+  ) -> None:
+    """
+    Insert z-values for multiple VENs into the database.
 
-      Args:
-          ven_ids (np.ndarray): Array of VEN IDs
-          z_values (np.ndarray): Array of z-values corresponding to the VEN IDs
-          timestamp (int): Current timestamp in milliseconds
-      """
-      try:
-        batch_values = [
-          [timestamp, str(ven_id), float(z_value)]
-          for ven_id, z_value in zip(ven_ids, z_values)
-        ]
+    Args:
+        ven_ids (np.ndarray): Array of VEN IDs
+        z_values (np.ndarray): Array of z-values corresponding to the VEN IDs
+        timestamp (int): Current timestamp in milliseconds
+    """
+    try:
+      batch_values = [
+        [timestamp, str(ven_id), float(z_value)]
+        for ven_id, z_value in zip(ven_ids, z_values)
+      ]
 
-        self.db_manager.insert_values_batch(
-          table_name='z_values',
-          columns=['timestamp', 'ven_id', 'z_value'],
-          batch_values=batch_values,
-          replace=True
-        )
-        logger.info(f'Successfully inserted {len(batch_values)} z-values')
-      except DatabaseError as e:
-        logger.error(f'Failed to insert z-values: {str(e)}')
-        raise
+      self.db_manager.insert_values_batch(
+        table_name='z_values',
+        columns=['timestamp', 'ven_id', 'z_value'],
+        batch_values=batch_values,
+        replace=True,
+      )
+      logger.info(f'Successfully inserted {len(batch_values)} z-values')
+    except DatabaseError as e:
+      logger.error(f'Failed to insert z-values: {str(e)}')
+      raise
 
   def get_latest_z_values(self) -> List[Dict[str, Any]]:
     """

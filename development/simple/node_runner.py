@@ -117,7 +117,7 @@ def create_report_configurations() -> List[ReportConfiguration]:
     ReportConfiguration(
       resource_id=f'res_{random.randint(100, 999)}',
       measurement='energy',
-      sampling_rate=timedelta(seconds=5),
+      sampling_rate=timedelta(seconds=30),
       callback=device_callback,
       additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
     ),
