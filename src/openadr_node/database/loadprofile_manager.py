@@ -2,7 +2,6 @@ import logging
 from typing import List, Dict, Any, Optional
 
 import numpy as np
-import pandas as pd
 
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
 
@@ -57,7 +56,7 @@ class LoadProfileManager:
       logger.error(f'Failed to initialize database: {e}')
       raise
 
-  def convert_load_profile(self, data: List[Dict[str, Any]]) -> pd.DataFrame:
+  def convert_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, np.ndarray]:
     """
     Generate a load profile DataFrame from the given data
 
@@ -67,21 +66,27 @@ class LoadProfileManager:
     Returns:
         pd.DataFrame: Transformed load profile DataFrame
     """
-    transformed_data = [
-      {
-        'dstart': int(
-          interval['dtstart'].timestamp() * 1000
-        ),  # Convert to Unix timestamp in milliseconds
-        'duration': int(
-          interval['duration'].total_seconds() * 1000
-        ),  # Convert duration to milliseconds
-        'signal_payload': interval['signal_payload'],
+    if not data:
+      return {
+        'dstart': np.array([]),
+        'duration': np.array([]),
+        'signal_payload': np.array([]),
       }
-      for interval in data
-    ]
-    df = pd.DataFrame(transformed_data)
-    df.set_index('dstart', inplace=True)  # Set the Unix timestamp as the index
-    return df
+
+    dstart = np.array(
+      [int(interval['dtstart'].timestamp() * 1000) for interval in data]
+    )
+    duration = np.array(
+      [int(interval['duration'].total_seconds() * 1000) for interval in data]
+    )
+    signal_payload = np.array([interval['signal_payload'] for interval in data])
+
+    sort_idx = np.argsort(dstart)
+    return {
+      'dstart': dstart[sort_idx],
+      'duration': duration[sort_idx],
+      'signal_payload': signal_payload[sort_idx],
+    }
 
   def insert_load_profile(
     self, data: List[Dict[str, Any]]
@@ -176,7 +181,7 @@ class LoadProfileManager:
     limit: Optional[int] = None,
     offset: Optional[int] = None,
     order_by: str = 'dstart ASC',
-  ) -> pd.DataFrame:
+  ) -> Dict[str, np.ndarray]:
     """
     Retrieve the load profile data from the database with ordered pagination.
 
@@ -186,13 +191,13 @@ class LoadProfileManager:
         order_by: str - Column and direction to order by (default: 'dstart ASC')
 
     Returns:
-        pd.DataFrame: Load profile data
+        Dict[str, np.ndarray]: Load profile data
     """
     base_query = f"""
-                SELECT dstart, duration, signal_payload
-                FROM load_profiles
-                ORDER BY {order_by}
-            """
+                    SELECT dstart, duration, signal_payload
+                    FROM load_profiles
+                    ORDER BY {order_by}
+                """
 
     params = []
     if limit is not None:
@@ -204,12 +209,23 @@ class LoadProfileManager:
       params.append(offset)
 
     try:
-      rows = self.db_manager.execute_query(base_query, params)
-      df = pd.DataFrame(rows)
+      rows = self.db_manager.execute_query(base_query, tuple(params))
+      print('DB-ROWS', rows)
+      if not rows:
+        return {
+          'dstart': np.array([]),
+          'duration': np.array([]),
+          'signal_payload': np.array([]),
+        }
 
-      if not df.empty:
-        df.set_index('dstart', inplace=True)
-      return df
+      columns = ['dstart', 'duration', 'signal_payload']
+      rows_as_lists = [[d[col] for col in columns] for d in rows]
+      data = list(zip(*rows_as_lists))
+      return {
+        'dstart': np.array(data[0], dtype=int),
+        'duration': np.array(data[1], dtype=int),
+        'signal_payload': np.array(data[2], dtype=float),
+      }
     except DatabaseError as e:
       logger.error(f'Failed to retrieve load profile data: {str(e)}')
       raise
@@ -223,20 +239,34 @@ class LoadProfileManager:
     """
     self.insert_consumption_batch([data])
 
-  def get_consumption(self) -> pd.DataFrame:
+  def get_consumption(self) -> Dict[str, np.ndarray]:
     """
     Retrieve the consumption data from the database.
 
     Returns:
-        pd.DataFrame: Consumption DataFrame
+        Dict[str, np.ndarray]: Consumption data
     """
     query = 'SELECT timestamp, ven_id, resource_id, value FROM consumption'
-    rows = self.db_manager.execute_query(query)
-    df = pd.DataFrame(rows)
+    try:
+      rows = self.db_manager.execute_query(query)
+      if not rows:
+        return {
+          'timestamp': np.array([]),
+          'ven_id': np.array([]),
+          'resource_id': np.array([]),
+          'value': np.array([]),
+        }
 
-    if not df.empty:
-      df.set_index('timestamp', inplace=True)
-    return df
+      data = list(zip(*rows))
+      return {
+        'timestamp': np.array(data[0]),
+        'ven_id': np.array(data[1]),
+        'resource_id': np.array(data[2]),
+        'value': np.array(data[3]),
+      }
+    except DatabaseError as e:
+      logger.error(f'Failed to retrieve consumption data: {str(e)}')
+      raise
 
   def get_unique_vens(self) -> int:
     """
@@ -247,7 +277,6 @@ class LoadProfileManager:
     """
     query = 'SELECT DISTINCT ven_id FROM consumption'
     rows = self.db_manager.execute_query(query)
-    print('ROWS', rows)
     return len(rows)
 
   def get_closest_point(self, target_timestamp):

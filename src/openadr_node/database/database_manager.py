@@ -224,7 +224,7 @@ class DatabaseManager:
     """
     connection, cursor = self._get_connection()
     try:
-      cursor.execute(query, params)
+      cursor.execute(query, tuple(params))
       rows = cursor.fetchall()
       columns = [desc[0] for desc in cursor.description]
       return [dict(zip(columns, row)) for row in rows]

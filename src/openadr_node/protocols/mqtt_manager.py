@@ -5,6 +5,7 @@ import time
 from threading import Event, Thread, Lock
 from typing import Optional, Dict, Any, List
 
+import numpy as np
 import paho.mqtt.client as mqtt
 
 from src.openadr_node.database.loadprofile_manager import LoadProfileManager
@@ -217,27 +218,35 @@ class MQTTManager:
         # Check readiness instead of just connected state
         if not self._state.is_ready():
           logger.warning('Not ready for publishing. Waiting for connection...')
+          print('STEP0.8')
           if self._stop_event.wait(5):
             break
           continue
 
-        df = self.load_profile_manager.get_load_profile()
-        if df.empty:
+        print('STEP0.9')
+        load_profile = self.load_profile_manager.get_load_profile()
+        print(load_profile)
+        if not load_profile['dstart'].size:
+          if self._stop_event.wait(10):
+            break
           continue
 
+        print('STEP1')
         # Convert timestamps safely
         current_time_ms = int(time.time() * 1000)
-        nearest_idx = df.index[abs(df.index.astype(int) - current_time_ms).argmin()]
-        nearest_row = df.loc[nearest_idx]
+        nearest_idx = np.abs(load_profile['dstart'] - current_time_ms).argmin()
+        nearest_row = {key: load_profile[key][nearest_idx] for key in load_profile}
 
+        print('STEP2')
         payload = float(nearest_row['signal_payload'])
+        print('Payload: ', payload)
         self.client.publish(self.topic_load_profile, payload)
-        logger.debug(f'Published load profile: {payload}')
+        logger.info(f'Published load profile: {payload}')
 
       except Exception as e:
         logger.error(f'Failed to publish load profile: {e}', exc_info=True)
 
-      if self._stop_event.wait(5):
+      if self._stop_event.wait(30):
         break
 
   def _reconnect(self, max_retries: int = 5, retry_delay: int = 5) -> bool:

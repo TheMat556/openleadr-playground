@@ -1,5 +1,6 @@
+import numpy as np
 from flask import Flask, jsonify
-from typing import Any
+from typing import Any, Dict
 import logging
 
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
@@ -62,29 +63,23 @@ class RestApiManager:
       return jsonify({'error': 'Load profile manager not initialized'}), 500
     return None
 
-  def _check_data_exists(self, df: Any, data_type: str) -> Any:
+  def _check_data_exists(self, data: Dict[str, np.ndarray], data_type: str) -> Any:
     """
     Check if the data exists.
 
-    :param df: DataFrame to check.
-    :type df: Any
+    :param data: Dictionary of numpy arrays to check.
+    :type data: Dict[str, np.ndarray]
     :param data_type: Type of data being checked.
     :type data_type: str
     :return: JSON response if data not found, otherwise None.
     :rtype: Any
     """
-    if df is None or df.empty:
+    if data is None or not any(arr.size for arr in data.values()):
       return jsonify({'error': f'{data_type} not found'}), 404
     return None
 
   @rest_endpoint('/data/load_profile')
   def get_load_profile(self) -> Any:
-    """
-    Get the load profile data.
-
-    :return: The load profile data in JSON format.
-    :rtype: Any
-    """
     try:
       response = self._check_manager_initialized()
       if response:
@@ -95,13 +90,13 @@ class RestApiManager:
       if response:
         return response
 
-      load_profile_dict = df.to_dict(orient='index')
+      print('DATA123', df)
       formatted_data = {
-        str(timestamp): {
-          'duration': values['duration'],
-          'signal_payload': values['signal_payload'],
+        str(int(df['dstart'][i])): {
+          'duration': int(df['duration'][i]),
+          'signal_payload': float(df['signal_payload'][i]),
         }
-        for timestamp, values in load_profile_dict.items()
+        for i in range(len(df['dstart']))
       }
 
       return jsonify(formatted_data), 200, {'Content-Type': 'application/json'}
