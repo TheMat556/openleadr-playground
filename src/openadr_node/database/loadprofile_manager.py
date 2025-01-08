@@ -1,5 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
+
+import numpy as np
 import pandas as pd
 
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
@@ -21,7 +23,7 @@ class LoadProfileManager:
     self._initialize_database()
 
   def _initialize_database(self):
-    """Initialize the database tables for load profiles and consumption"""
+    """Initialize the database tables for load profiles, consumption, and z-values"""
     try:
       self.db_manager.connect()
       self.db_manager.create_table(
@@ -39,6 +41,16 @@ class LoadProfileManager:
           'ven_id': 'TEXT NOT NULL',
           'resource_id': 'TEXT NOT NULL',
           'value': 'FLOAT NOT NULL',
+        },
+      )
+      # New table for z-values
+      self.db_manager.create_table(
+        'z_values',
+        {
+          'timestamp': 'INTEGER NOT NULL',
+          'ven_id': 'TEXT NOT NULL',
+          'z_value': 'FLOAT NOT NULL',
+          'PRIMARY KEY': '(timestamp, ven_id)'
         },
       )
     except DatabaseError as e:
@@ -272,3 +284,54 @@ class LoadProfileManager:
     params = (target_timestamp, target_timestamp)
     rows = self.db_manager.execute_query(query, params)
     return rows if rows else []
+
+  def insert_z_values(self, ven_ids: np.ndarray, z_values: np.ndarray,
+                        timestamp: int) -> None:
+      """
+      Insert z-values for multiple VENs into the database.
+
+      Args:
+          ven_ids (np.ndarray): Array of VEN IDs
+          z_values (np.ndarray): Array of z-values corresponding to the VEN IDs
+          timestamp (int): Current timestamp in milliseconds
+      """
+      try:
+        batch_values = [
+          [timestamp, str(ven_id), float(z_value)]
+          for ven_id, z_value in zip(ven_ids, z_values)
+        ]
+
+        self.db_manager.insert_values_batch(
+          table_name='z_values',
+          columns=['timestamp', 'ven_id', 'z_value'],
+          batch_values=batch_values,
+          replace=True
+        )
+        logger.info(f'Successfully inserted {len(batch_values)} z-values')
+      except DatabaseError as e:
+        logger.error(f'Failed to insert z-values: {str(e)}')
+        raise
+
+  def get_latest_z_values(self) -> List[Dict[str, Any]]:
+    """
+    Retrieve the most recent z-value for each VEN.
+
+    Returns:
+        List[Dict[str, Any]]: List of dictionaries containing the latest z-values
+    """
+    query = """
+          SELECT t1.timestamp, t1.ven_id, t1.z_value
+          FROM z_values t1
+          INNER JOIN (
+              SELECT ven_id, MAX(timestamp) as max_timestamp
+              FROM z_values
+              GROUP BY ven_id
+          ) t2
+          ON t1.ven_id = t2.ven_id AND t1.timestamp = t2.max_timestamp
+      """
+    try:
+      rows = self.db_manager.execute_query(query)
+      return rows
+    except DatabaseError as e:
+      logger.error(f'Failed to retrieve latest z-values: {str(e)}')
+      raise

@@ -139,59 +139,76 @@ class NodeResourceController:
         }
 
     def update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
-        """Update the load profile with the provided data."""
-        transformed_data = (
-            self.process_load_profile_data(data)
-            if not all(
-                "dstart" in interval
-                and "duration" in interval
-                and "signal_payload" in interval
-                for interval in data
+      """Update the load profile with the provided data."""
+      # Fetch and print latest z-values at the beginning
+      try:
+        latest_z_values = self._load_profile_manager.get_latest_z_values()
+        if latest_z_values:
+          logger.info("Current Z-values for VENs:")
+          for z_value in latest_z_values:
+            logger.info(f"VEN: {z_value['ven_id']}, Z-value: {z_value['z_value']}")
+        else:
+          logger.info("No previous Z-values found in database")
+      except Exception as e:
+        logger.error(f"Error retrieving Z-values: {e}")
+
+      transformed_data = (
+        self.process_load_profile_data(data)
+        if not all(
+          "dstart" in interval
+          and "duration" in interval
+          and "signal_payload" in interval
+          for interval in data
+        )
+        else data
+      )
+
+      current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
+      current_allowed_consumption, current_consumption = self._get_current_data(
+        current_timestamp
+      )
+
+      new_data_structure = {}
+      if current_allowed_consumption and current_consumption:
+        try:
+          # Prepare consumption data using NumPy
+          ven_ids, consumption_values = self._prepare_consumption_array(
+            current_consumption
+          )
+
+          if len(ven_ids) > 0:
+            # Calculate initial Z value if needed
+            self._z = self._calculate_z_value(
+              current_allowed_consumption, len(ven_ids)
             )
-            else data
-        )
 
-        current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
-        current_allowed_consumption, current_consumption = self._get_current_data(
-            current_timestamp
-        )
+            # Calculate load distribution using NumPy operations
+            ven_ids, z_neu = self._calculate_load_distribution(
+              ven_ids,
+              consumption_values,
+              current_allowed_consumption["signal_payload"],
+            )
 
-        new_data_structure = {}
-        if current_allowed_consumption and current_consumption:
-            try:
-                # Prepare consumption data using NumPy
-                ven_ids, consumption_values = self._prepare_consumption_array(
-                    current_consumption
-                )
+            # Store the calculated z-values in the database
+            self._load_profile_manager.insert_z_values(
+              ven_ids, z_neu, current_timestamp
+            )
 
-                if len(ven_ids) > 0:
-                    # Calculate initial Z value if needed
-                    self._z = self._calculate_z_value(
-                        current_allowed_consumption, len(ven_ids)
-                    )
+            # Generate time intervals and create VEN profiles
+            intervals = self.generate_time_intervals(datetime.now(timezone.utc))
+            new_data_structure = self._create_ven_profiles(
+              ven_ids, z_neu, intervals
+            )
 
-                    # Calculate load distribution using NumPy operations
-                    ven_ids, z_neu = self._calculate_load_distribution(
-                        ven_ids,
-                        consumption_values,
-                        current_allowed_consumption["signal_payload"],
-                    )
+        except Exception as e:
+          logger.error(f"Error calculating load distribution: {e}")
+          raise
 
-                    # Generate time intervals and create VEN profiles
-                    intervals = self.generate_time_intervals(datetime.now(timezone.utc))
-                    new_data_structure = self._create_ven_profiles(
-                        ven_ids, z_neu, intervals
-                    )
-
-            except Exception as e:
-                logger.error(f"Error calculating load distribution: {e}")
-                raise
-
-        # Update database and dispatch signal
-        self._load_profile_manager.insert_load_profile(transformed_data)
-        dispatcher.send(
-            sender="nm", signal="update_load_profile", data=new_data_structure
-        )
+      # Update database and dispatch signal
+      self._load_profile_manager.insert_load_profile(transformed_data)
+      dispatcher.send(
+        sender="nm", signal="update_load_profile", data=new_data_structure
+      )
 
     def update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
         """
