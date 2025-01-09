@@ -134,7 +134,13 @@ class DataManager:
     config : ContainerConfig
         The container configuration.
     consumption_data : Dict[str, Any]
-        The fetched consumption data.
+        The fetched consumption data in the format:
+        {
+            "overall_value": float,
+            "timestamp": int,
+            "unit": str,
+            "ven_id": str
+        }
 
     Returns
     -------
@@ -143,25 +149,37 @@ class DataManager:
     schema = {
       'type': 'object',
       'properties': {
-        'consumption': {
-          'type': 'object',
-          'properties': {'timestamp': {'type': 'string'}, 'value': {'type': 'number'}},
-          'required': ['timestamp', 'value'],
-        }
+        'overall_value': {'type': 'number'},
+        'timestamp': {'type': 'integer'},
+        'unit': {'type': 'string'},
+        'ven_id': {'type': 'string'},
       },
-      'required': ['consumption'],
+      'required': ['overall_value', 'timestamp', 'unit', 'ven_id'],
     }
+
+    logger.info(f'Processing consumption data: {consumption_data}')
 
     async with self.lock:
       try:
         validate(instance=consumption_data, schema=schema)
+
+        # Transform data to match buffer format
+        transformed_data = {
+          'timestamp': consumption_data['timestamp'],
+          'value': consumption_data['overall_value'],
+        }
+
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        buffer['consumption'].append(consumption_data['consumption'])
+
+        buffer['consumption'].append(transformed_data)
+
         if len(buffer['consumption']) > self.max_buffer_size:
           buffer['consumption'].pop(0)
+
         logger.info(f'Updated buffer for {config.container_name} (consumption)')
+
       except ValidationError as e:
         logger.error(
           f'Invalid consumption data format for {config.container_name}: {e.message}. Data: {consumption_data}'

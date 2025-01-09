@@ -257,7 +257,9 @@ class LoadProfileManager:
           'value': np.array([]),
         }
 
-      data = list(zip(*rows))
+      columns = ['timestamp', 'ven_id', 'resource_id', 'value']
+      rows_as_lists = [[d[col] for col in columns] for d in rows]
+      data = list(zip(*rows_as_lists))
       return {
         'timestamp': np.array(data[0]),
         'ven_id': np.array(data[1]),

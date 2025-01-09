@@ -1,3 +1,5 @@
+from datetime import timezone, datetime
+
 import numpy as np
 from flask import Flask, jsonify
 from typing import Any, Dict
@@ -109,27 +111,42 @@ class RestApiManager:
     """
     Get the current consumption data with Unix timestamp in milliseconds.
 
-    :return: The current consumption data in JSON format.
-    :rtype: Any
+    Returns:
+        tuple: A tuple containing (Response, status_code) or (Response, status_code, headers)
+               Response contains consumption data in JSON format or error message
     """
     try:
       response = self._check_manager_initialized()
       if response:
         return response
 
-      df = self._load_profile_manager.get_consumption()
-      response = self._check_data_exists(df, 'Consumption data')
-      if response:
-        return response
+      current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-      latest_consumption = df.iloc[-1]
+      consumption_points = self._load_profile_manager.get_closest_consumption_points(
+        current_timestamp
+      )
+      if not consumption_points:  # Check if the list is empty
+        return jsonify({'error': 'Consumption data not found'}), 404
+
+      logger.debug(f'Retrieved consumption points: {consumption_points}')
+
+      # If consumption_points is a list of dictionaries, calculate sum of 'value' key
+      try:
+        overall_value = sum(point['value'] for point in consumption_points)
+        ven_id = consumption_points[0]['ven_id']  # Get ven_id from first point
+      except (KeyError, TypeError) as e:
+        logger.error(f'Invalid data structure in consumption points: {e}')
+        return jsonify({'error': 'Invalid data structure'}), 500
+
+      logger.debug(f'Calculated overall value: {overall_value}')
+
       consumption_data = {
-        'consumption': {
-          'value': latest_consumption['value'],
-          'timestamp': str(latest_consumption.name),  # The index is the timestamp
-          'unit': 'kWh',
-        }
+        'ven_id': ven_id,
+        'overall_value': overall_value,
+        'unit': 'kWh',
+        'timestamp': current_timestamp,
       }
+
       return jsonify(consumption_data), 200, {'Content-Type': 'application/json'}
     except Exception as e:
       logger.error(f'Failed to retrieve consumption data: {e}')

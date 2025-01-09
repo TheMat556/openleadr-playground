@@ -177,6 +177,7 @@ class NodeResourceController:
   def update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
     """Update the load profile with the provided data."""
     # Fetch and log latest z-values (no explicit loop)
+    print('update_load_profile!')
     try:
       latest_z_values = self._load_profile_manager.get_latest_z_values()
       if latest_z_values:
