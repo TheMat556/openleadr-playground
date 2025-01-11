@@ -92,7 +92,6 @@ class RestApiManager:
       if response:
         return response
 
-      print('DATA123', df)
       formatted_data = {
         str(int(df['dstart'][i])): {
           'duration': int(df['duration'][i]),

@@ -190,6 +190,11 @@ class NodeController(AdrBaseConfig):
     if self.node_resource_controller:
       self.node_resource_controller.update_consumption_data(sender, data)
 
+  def _on_register_report(self, sender: str, data: str) -> None:
+    print('_on_register_report', data)
+    if self.node_resource_controller:
+      self.node_resource_controller.on_register_report(data)
+
   def add_task(self, task: Callable) -> None:
     """
     Add a task to the event loop.

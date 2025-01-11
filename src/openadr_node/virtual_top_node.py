@@ -121,8 +121,13 @@ class VirtualTopNode(AdrBaseConfig):
     logger.info(
       f'Report registered for VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
+    self._send_register_report(ven_id)
 
     return callback, sampling_interval
+
+  @SignalSender(signal='register_report', sender='vtn')
+  def _send_register_report(self, ven_id: str):
+    return ven_id
 
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
@@ -221,6 +226,10 @@ class VirtualTopNode(AdrBaseConfig):
     :param data: Load profile data with ven_id as keys and intervals as values.
     :type data: Dict[str, List[Interval]]
     """
+    print('Updating load profile...')
+    print(f'Signal: {signal}, Sender: {sender}, Data: {data}')
+    for ven_id, intervals in data.items():
+      print(f'VEN ID: {ven_id}')
     if data:
       for ven_id, intervals in data.items():
         if not isinstance(intervals, list):

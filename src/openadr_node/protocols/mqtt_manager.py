@@ -218,14 +218,11 @@ class MQTTManager:
         # Check readiness instead of just connected state
         if not self._state.is_ready():
           logger.warning('Not ready for publishing. Waiting for connection...')
-          print('STEP0.8')
           if self._stop_event.wait(5):
             break
           continue
 
-        print('STEP0.9')
         load_profile = self.load_profile_manager.get_load_profile()
-        print(load_profile)
         if not load_profile['dstart'].size:
           if self._stop_event.wait(10):
             break
@@ -237,9 +234,7 @@ class MQTTManager:
         nearest_idx = np.abs(load_profile['dstart'] - current_time_ms).argmin()
         nearest_row = {key: load_profile[key][nearest_idx] for key in load_profile}
 
-        print('STEP2')
         payload = float(nearest_row['signal_payload'])
-        print('Payload: ', payload)
         self.client.publish(self.topic_load_profile, payload)
         logger.info(f'Published load profile: {payload}')
 

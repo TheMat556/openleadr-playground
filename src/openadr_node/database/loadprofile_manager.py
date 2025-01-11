@@ -210,7 +210,6 @@ class LoadProfileManager:
 
     try:
       rows = self.db_manager.execute_query(base_query, tuple(params))
-      print('DB-ROWS', rows)
       if not rows:
         return {
           'dstart': np.array([]),

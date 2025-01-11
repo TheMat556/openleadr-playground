@@ -65,7 +65,7 @@ def run_gradio(interface: Any) -> None:
 def device_callback() -> float:
   """Simulate a device callback."""
   print('Device callback called')
-  return rng.random() * 10
+  return random.random() * 10
 
 
 def run_node(node: NodeController, queue: Optional[Any] = None) -> None:
@@ -117,7 +117,7 @@ def create_report_configurations() -> List[ReportConfiguration]:
     ReportConfiguration(
       resource_id=f'res_{random.randint(100, 999)}',
       measurement='energy',
-      sampling_rate=timedelta(seconds=5),
+      sampling_rate=timedelta(seconds=10),
       callback=device_callback,
       additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
     ),

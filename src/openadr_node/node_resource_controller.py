@@ -1,273 +1,332 @@
-from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional, Set, Union
 from threading import Lock
 from functools import reduce
+from dataclasses import dataclass
+import logging
 
 import numpy as np
+from numpy.typing import NDArray
 from pydispatch import dispatcher
 
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager, logger
+from src.openadr_node.database.loadprofile_manager import LoadProfileManager
+from src.openadr_node.load_distribution_calculator import NodeResourceCalculator
 from src.openadr_node.models.event import ResourceConsumption
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+class NodeControllerError(Exception):
+  """Base exception class for NodeResourceController errors."""
+
+  pass
+
+
+class LoadProfileError(NodeControllerError):
+  """Raised when there's an error updating or processing load profiles."""
+
+  pass
+
+
+class ConsumptionError(NodeControllerError):
+  """Raised when there's an error processing consumption data."""
+
+  pass
+
+
+@dataclass
+class VENState:
+  """Data class representing VEN state information."""
+
+  resource_data: Dict[str, float]
+  last_updated: datetime
+  status: str
 
 
 class NodeResourceController:
+  """
+  Controller for managing Virtual End Node (VEN) resources and load distribution.
+
+  This class coordinates updates between VENs and delegates complex calculations
+  to NodeResourceCalculator. It manages VEN states, consumption data, and load
+  profile updates while maintaining thread safety.
+
+  Attributes:
+      _ven_data: Mapping of VEN IDs to their resource consumption data
+      _current_consumption: Current total consumption across all VENs
+      _pending_vens: Set of VENs waiting to be activated
+      _active_vens: Set of currently active VENs
+  """
+
+  # Constants
+  TIMESTAMP_MULTIPLIER: int = 1000  # Convert seconds to milliseconds
+  DISPATCHER_SENDER: str = 'nm'
+
   def __init__(self, load_profile_manager: LoadProfileManager):
+    """
+    Initialize the NodeResourceController.
+
+    Args:
+        load_profile_manager: Manager instance for handling load profiles
+    """
     self._load_profile_manager = load_profile_manager
+    self._calculator = NodeResourceCalculator(load_profile_manager)
     self._ven_data: Dict[str, Dict[str, float]] = {}
-    self._current_consumption = 0.0
+    self._current_consumption: float = 0.0
     self._lock = Lock()
-    self._z = None
+    self._pending_vens: Set[str] = set()
+    self._active_vens: Set[str] = set()
 
-  def _validate_intervals_recursive(
-    self, data: List[Dict[str, Any]], required_fields: set, index: int = 0
-  ) -> None:
-    """Recursively validate that each interval contains the required fields."""
-    if index >= len(data):
-      return
-    interval = data[index]
-    if not required_fields.issubset(interval):
-      logger.error('Incomplete interval data: missing required fields')
-      raise ValueError('Incomplete interval data: missing required fields')
-    self._validate_intervals_recursive(data, required_fields, index + 1)
-
-  @staticmethod
-  def _transform_intervals_no_loop(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Transform load profile data into the desired format using map."""
-
-    def transform(interval):
-      return {
-        'dstart': int(interval['dtstart'].timestamp() * 1000),
-        'duration': int(interval['duration'].total_seconds() * 1000),
-        'signal_payload': interval['signal_payload'],
-      }
-
-    return list(map(transform, data))
-
-  def process_load_profile_data(
-    self, data: List[Dict[str, Any]]
-  ) -> List[Dict[str, Any]]:
+  def _validate_ven_id(self, ven_id: str) -> None:
     """
-    Process the load profile data.
-    Parameters
-    ----------
-    data : List[Dict[str, Any]]
-        List of intervals containing load profile data.
-    Returns
-    -------
-    List[Dict[str, Any]]
-        Transformed load profile data.
+    Validate VEN ID format and uniqueness.
+
+    Args:
+        ven_id: VEN identifier to validate
+
+    Raises:
+        ValueError: If VEN ID is invalid
     """
-    if not isinstance(data, list):
-      logger.error('Invalid data format: expected list of intervals')
-      raise ValueError('Invalid data format: expected list of intervals')
+    if not isinstance(ven_id, str) or not ven_id:
+      raise ValueError('VEN ID must be a non-empty string')
 
-    required_fields = {'dtstart', 'duration', 'signal_payload'}
+    if ven_id in self._active_vens:
+      raise ValueError(f'VEN {ven_id} is already active')
 
-    # Since we must remove explicit loops, use recursion for validation
-    self._validate_intervals_recursive(data, required_fields, 0)
-
-    # Transform the data without a for-loop
-    return self._transform_intervals_no_loop(data)
-
-  def _get_current_data(
-    self, current_timestamp: int
-  ) -> tuple[Optional[dict], Optional[list]]:
-    """Get current allowed consumption and consumption points."""
-    current_allowed_consumption = self._load_profile_manager.get_closest_point(
-      current_timestamp
-    )
-    current_consumption = self._load_profile_manager.get_closest_consumption_points(
-      current_timestamp
-    )
-    return current_allowed_consumption, current_consumption
-
-  def _prepare_consumption_array(
-    self, current_consumption: List[Dict[str, Any]]
-  ) -> tuple[np.ndarray, np.ndarray]:
-    """Convert consumption data into NumPy arrays for values and VEN IDs."""
-    if not current_consumption:
-      return np.array([]), np.array([])
-
-    # Use map instead of a loop
-    ven_ids = np.array(list(map(lambda item: item['ven_id'], current_consumption)))
-    values = np.array(
-      list(map(lambda item: item['value'], current_consumption)), dtype=np.float64
-    )
-
-    # Use NumPy unique and add.at to avoid explicit Python loops
-    unique_vens, indices = np.unique(ven_ids, return_inverse=True)
-    summed_values = np.zeros(len(unique_vens))
-    np.add.at(summed_values, indices, values)
-
-    return unique_vens, summed_values
-
-  @staticmethod
-  def _correction_factor(G_i: np.ndarray) -> np.ndarray:
-    """Calculate the correction factor for given G_i values using vectorized operations."""
-    return (5 * np.square(G_i)) / 1.5 - (5 * G_i) / 1.5 + 1.085
-
-  def _calculate_z_value(
-    self, current_allowed_consumption: Dict[str, Any], unique_ven_count: int
-  ) -> float:
-    """Calculate initial Z value if not already set."""
-    if self._z is None:
-      self._z = current_allowed_consumption['signal_payload'] / unique_ven_count
-    return self._z
-
-  def _calculate_load_distribution(
-    self, ven_ids: np.ndarray, consumption_values: np.ndarray, total_allowed: float
-  ) -> tuple[np.ndarray, np.ndarray]:
-    """Calculate load distribution parameters for each VEN using vectorized operations."""
-    z = np.full_like(consumption_values, self._z)
-    g = np.divide(z, consumption_values, where=consumption_values != 0)
-    w = (1 - g) * consumption_values * self._correction_factor(g)
-    w_total = np.sum(w)
-    z_neu = w / w_total * total_allowed if w_total > 0 else np.zeros_like(w)
-
-    return ven_ids, z_neu
-
-  @staticmethod
-  def generate_time_intervals() -> List[Dict[str, Any]]:
+  def on_register_report(self, ven_id: str) -> None:
     """
-    Generate 96 intervals of 15 minutes each, starting at 00:00 for GMT+1.
+    Register a new VEN to the pending queue.
+
+    Args:
+        ven_id: Unique identifier for the VEN
+
+    Raises:
+        ValueError: If VEN ID is invalid
     """
-    gmt_plus_one = timezone(timedelta(hours=1))
-
-    gmt_plus_one_now = datetime.now(gmt_plus_one)
-
-    start_of_day_gmt_plus_one = gmt_plus_one_now.replace(
-      hour=0, minute=0, second=0, microsecond=0
-    )
-
-    base_timestamp = start_of_day_gmt_plus_one.timestamp() * 1000
-
-    intervals = np.arange(96) * 15 * 60 * 1000
-
-    def make_interval(offset_ms):
-      return {
-        'dstart': int(base_timestamp + offset_ms),
-        'duration': 900000,  # 15 minutes in milliseconds
-        'signal_payload': 0,
-      }
-
-    return list(map(make_interval, intervals))
-
-  def _create_ven_profiles(
-    self, ven_ids: np.ndarray, z_neu: np.ndarray, intervals: List[Dict[str, Any]]
-  ) -> Dict[str, List[Dict[str, Any]]]:
-    """Create load profiles for each VEN based on calculated z_neu values without an explicit loop."""
-
-    # We'll zip up ven_ids and z_neu, then build a dict
-    def build_profile(pair):
-      ven_id, z_value = pair
-
-      def apply_value(interval):
-        new_interval = {**interval}
-        new_interval['signal_payload'] = z_value
-        return new_interval
-
-      return str(ven_id), list(map(apply_value, intervals))
-
-    pairs = zip(ven_ids, z_neu)
-    # Create a list of (ven_id_str, intervals_list) pairs
-    pair_list = list(map(build_profile, pairs))
-    # Turn that into a dict
-    return dict(pair_list)
-
-  def update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
-    """Update the load profile with the provided data."""
-    # Fetch and log latest z-values (no explicit loop)
-    print('update_load_profile!')
     try:
+      self._validate_ven_id(ven_id)
+      self._pending_vens.add(ven_id)
+      logger.info(
+        f'Added VEN {ven_id} to pending queue. Current pending VENs: {self._pending_vens}'
+      )
+    except ValueError as e:
+      logger.error(f'Failed to register VEN: {str(e)}')
+      raise
+
+  def _transform_load_profile(self, df: Any) -> List[Dict[str, Union[int, float]]]:
+    """
+    Transform load profile data from database format.
+
+    Args:
+        df: Database load profile data
+
+    Returns:
+        List of transformed load profile entries
+    """
+    return [
+      {
+        'dstart': int(df['dstart'][i]),
+        'duration': int(df['duration'][i]),
+        'signal_payload': float(df['signal_payload'][i]),
+      }
+      for i in range(len(df['dstart']))
+    ]
+
+  def _process_z_values(
+    self,
+    ven_ids: NDArray[np.str_],
+    consumption_values: NDArray[np.float64],
+    current_allowed_consumption: Dict[str, Any],
+    use_z_directly: bool,
+  ) -> NDArray[np.float64]:
+    """
+    Process and calculate Z values for load distribution.
+
+    Args:
+        ven_ids: Array of VEN identifiers
+        consumption_values: Array of consumption values
+        current_allowed_consumption: Current consumption limits
+        use_z_directly: Flag to bypass stored z-values
+
+    Returns:
+        Array of calculated Z values
+    """
+    if len(ven_ids) > 0 and not use_z_directly:
       latest_z_values = self._load_profile_manager.get_latest_z_values()
-      if latest_z_values:
-        logger.info('Current Z-values for VENs:')
-        # Use map to log each z_value
-        list(
-          map(
-            lambda z_val: logger.info(
-              f"VEN: {z_val['ven_id']}, Z-value: {z_val['z_value']}"
-            ),
-            latest_z_values,
-          )
+      processed_z_values = self._calculator.process_latest_z_values(
+        latest_z_values, ven_ids
+      )
+
+      if processed_z_values is not None:
+        self._calculator._z = processed_z_values
+        _, z_neu = self._calculator.calculate_load_distribution(
+          ven_ids, consumption_values, current_allowed_consumption['signal_payload']
         )
-      else:
-        logger.info('No previous Z-values found in database')
-    except Exception as e:
-      logger.error(f'Error retrieving Z-values: {e}')
+        return z_neu
 
-    # Transform data if needed without a loop
-    def is_transformed(interval):
-      return all(k in interval for k in ['dstart', 'duration', 'signal_payload'])
-
-    # Check if all intervals are already in the correct format
-    if not all(map(is_transformed, data)):
-      transformed_data = self.process_load_profile_data(data)
-    else:
-      transformed_data = data
-
-    current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
-    current_allowed_consumption, current_consumption = self._get_current_data(
-      current_timestamp
+    z_value = self._calculator.calculate_z_value(
+      current_allowed_consumption, len(self._active_vens), len(self._pending_vens)
     )
+    self._calculator._z = z_value
+    return np.full_like(consumption_values, z_value)
 
-    new_data_structure = {}
-    if current_allowed_consumption and current_consumption:
-      try:
-        ven_ids, consumption_values = self._prepare_consumption_array(
-          current_consumption
+  def update_load_profile(
+    self,
+    sender: str,
+    data: Optional[List[Dict[str, Any]]],
+    use_z_directly: bool = False,
+  ) -> None:
+    """
+    Update load profiles and recalculate resource distribution.
+
+    Args:
+        sender: Identity of the update sender
+        data: Load profile data to update
+        use_z_directly: Flag to use direct z-value calculation
+
+    Raises:
+        LoadProfileError: If the update process fails
+    """
+    try:
+      processed_data = (
+        data
+        if data is not None
+        else self._transform_load_profile(self._load_profile_manager.get_load_profile())
+      )
+
+      if not all(
+        map(
+          lambda x: all(k in x for k in ['dstart', 'duration', 'signal_payload']),
+          processed_data,
         )
-        if len(ven_ids) > 0:
-          self._z = self._calculate_z_value(current_allowed_consumption, len(ven_ids))
-          ven_ids, z_neu = self._calculate_load_distribution(
-            ven_ids,
-            consumption_values,
-            current_allowed_consumption['signal_payload'],
-          )
-          self._load_profile_manager.insert_z_values(ven_ids, z_neu, current_timestamp)
-          intervals = self.generate_time_intervals()
-          new_data_structure = self._create_ven_profiles(ven_ids, z_neu, intervals)
-      except Exception as e:
-        logger.error(f'Error calculating load distribution: {e}')
-        raise
+      ):
+        processed_data = self._calculator.process_load_profile_data(processed_data)
 
-    self._load_profile_manager.insert_load_profile(transformed_data)
-    dispatcher.send(sender='nm', signal='update_load_profile', data=new_data_structure)
+      self._load_profile_manager.insert_load_profile(processed_data)
+      current_timestamp = int(
+        datetime.now(timezone.utc).timestamp() * self.TIMESTAMP_MULTIPLIER
+      )
+
+      current_allowed_consumption, current_consumption = (
+        self._calculator.get_current_data(current_timestamp)
+      )
+
+      if not current_allowed_consumption:
+        raise LoadProfileError('No current_allowed_consumption available.')
+
+      ven_ids, consumption_values = self._calculator.prepare_consumption_array(
+        current_consumption
+      )
+
+      z_neu = self._process_z_values(
+        ven_ids, consumption_values, current_allowed_consumption, use_z_directly
+      )
+
+      if len(ven_ids) > 0:
+        self._load_profile_manager.insert_z_values(ven_ids, z_neu, current_timestamp)
+        intervals = self._calculator.generate_time_intervals()
+        new_data_structure = self._calculator.create_ven_profiles(
+          ven_ids, z_neu, intervals
+        )
+        dispatcher.send(
+          sender=self.DISPATCHER_SENDER,
+          signal='update_load_profile',
+          data=new_data_structure,
+        )
+
+    except Exception as e:
+      logger.error(f'Error calculating load distribution: {str(e)}')
+      raise LoadProfileError(f'Failed to update load profile: {str(e)}') from e
+
+  def _calculate_total_consumption(self) -> float:
+    """
+    Calculate total consumption across all VENs.
+
+    Returns:
+        Total consumption value
+    """
+    return reduce(lambda acc, d: acc + sum(d.values()), self._ven_data.values(), 0.0)
+
+  def _handle_ven_activation(self, ven_id: str) -> None:
+    """
+    Handle the activation of a pending VEN.
+
+    Args:
+        ven_id: Identifier of the VEN to activate
+    """
+    if ven_id in self._pending_vens:
+      self._pending_vens.remove(ven_id)
+      self._active_vens.add(ven_id)
+      logger.info(
+        f'VEN {ven_id} moved from pending to active. Triggering recalculation.'
+      )
+      self._calculator._z = None
+      self.update_load_profile(None, None, use_z_directly=True)
 
   def update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
-    Update the consumption data with the provided ResourceConsumption data.
+    Update consumption data and manage VEN state changes.
+
+    Args:
+        sender: Identity of the update sender
+        data: Resource consumption data
+
+    Raises:
+        ConsumptionError: If the update process fails
     """
     try:
       with self._lock:
-        self._current_consumption = 0.0
         ven_data = self._ven_data.setdefault(data.ven_id, {})
         ven_data[data.resource_id] = data.data[1]
+        self._current_consumption = self._calculate_total_consumption()
 
-        # Use reduce for summation to avoid explicit loops
-        self._current_consumption = reduce(
-          lambda acc, d: acc + reduce(lambda acc2, val: acc2 + val, d.values(), 0.0),
-          self._ven_data.values(),
-          0.0,
-        )
-
-        timestamp_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         consumption_data = {
-          'timestamp': timestamp_ms,
+          'timestamp': int(
+            datetime.now(timezone.utc).timestamp() * self.TIMESTAMP_MULTIPLIER
+          ),
           'ven_id': data.ven_id,
           'resource_id': data.resource_id,
           'value': data.data[1],
         }
+
         self._load_profile_manager.insert_consumption(consumption_data)
+        self._handle_ven_activation(data.ven_id)
 
         logger.debug(f'Updated consumption data - Total: {self._current_consumption}')
         dispatcher.send(
-          sender='nm',
+          sender=self.DISPATCHER_SENDER,
           signal='update_consumption_data',
           data=self._current_consumption,
         )
-    except (AttributeError, IndexError) as e:
+
+    except Exception as e:
       logger.error(
-        f'Error processing consumption data from sender {sender} with data {data}: {e}'
+        f'Error processing consumption data from sender {sender} with data {data}: {str(e)}'
       )
-      raise
+      raise ConsumptionError(f'Failed to update consumption data: {str(e)}') from e
+
+  def get_ven_status(self) -> Dict[str, Union[List[str], int]]:
+    """
+    Get current status information for all VENs.
+
+    Returns:
+        Dictionary containing VEN status information including:
+        - List of pending VENs
+        - List of active VENs
+        - Total VEN count
+    """
+    return {
+      'pending_vens': list(self._pending_vens),
+      'active_vens': list(self._active_vens),
+      'total_vens': len(self._pending_vens) + len(self._active_vens),
+    }
+
+  def get_current_consumption(self) -> float:
+    """
+    Get the current total consumption value.
+
+    Returns:
+        Current total consumption across all VENs
+    """
+    return self._current_consumption
