@@ -221,7 +221,7 @@ class NodeController(AdrBaseConfig):
     data : List[Dict[str, Any]]
         The data associated with the signal.
     """
-    if self.node_resource_controller:
+    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
       self.node_resource_controller.update_load_profile(sender, data)
 
   def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
@@ -235,7 +235,7 @@ class NodeController(AdrBaseConfig):
     data : ResourceConsumption
         The data associated with the signal.
     """
-    if self.node_resource_controller:
+    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
       self.node_resource_controller.update_consumption_data(sender, data)
 
   def _on_register_report(self, sender: str, data: str) -> None:
@@ -249,7 +249,7 @@ class NodeController(AdrBaseConfig):
     data : str
         The data associated with the signal.
     """
-    if self.node_resource_controller:
+    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
       self.node_resource_controller.on_register_report(data)
 
   def add_task(self, task: Callable) -> None:

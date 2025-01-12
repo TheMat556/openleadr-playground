@@ -144,7 +144,7 @@ class PlotManager:
     fill_color: str,
   ) -> None:
     """
-    Adds a trace to the figure.
+    Adds or updates a trace in the figure by name.
 
     Parameters
     ----------
@@ -169,12 +169,42 @@ class PlotManager:
       logger.debug(f'No data to add for trace: {name}')
       return
 
+    # Process incoming data to get times/values
     times, values = self._process_data_points(data)
-    if times and values:
+    if not times or not values:
+      return
+
+    # Sort by time to ensure the line connects chronologically
+    combined = sorted(zip(times, values), key=lambda x: x[0])
+    sorted_times, sorted_values = zip(*combined)
+
+    # Check if a trace with this name already exists
+    existing_trace_index = None
+    for i, trace in enumerate(fig.data):
+      if trace.name == name:
+        existing_trace_index = i
+        break
+
+    if existing_trace_index is not None:
+      # Extend the existing trace's data
+      old_x = list(fig.data[existing_trace_index].x)
+      old_y = list(fig.data[existing_trace_index].y)
+
+      # Combine old and new data
+      combined_old_new = list(zip(old_x, old_y)) + list(
+        zip(sorted_times, sorted_values)
+      )
+      combined_old_new.sort(key=lambda x: x[0])  # Keep everything in time order
+      updated_times, updated_values = zip(*combined_old_new)
+
+      fig.data[existing_trace_index].x = updated_times
+      fig.data[existing_trace_index].y = updated_values
+    else:
+      # Add a new trace if none exists
       fig.add_trace(
         go.Scatter(
-          x=times,
-          y=values,
+          x=sorted_times,
+          y=sorted_values,
           mode='lines+markers',
           name=name,
           line=dict(color=line_color),

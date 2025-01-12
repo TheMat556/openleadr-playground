@@ -27,7 +27,7 @@ def print_startup_banner(component_name: str, command: str):
   """
   message = f"""
     ⚡️ Current Time (UTC): {get_current_time()}
-    👤 User: {os.getlogin()}
+    👤 User: {os.getlogin() if hasattr(os, 'getlogin') else os.getenv('USER', 'unknown')}
 
              @@@@@@@@@@@@@@@                     🚀 Welcome to OpenADR Node System!
          @@@@@@@@@@@@@@@@@@@@@                   ==============================

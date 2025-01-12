@@ -284,8 +284,11 @@ class NodeResourceCalculator:
     """
     try:
       gmt_plus_one_now = datetime.now(self.GMT_PLUS_ONE)
-      minute = (gmt_plus_one_now.minute // 15) * 15
-      start_of_day = gmt_plus_one_now.replace(minute=minute, second=0, microsecond=0)
+      # minute = (gmt_plus_one_now.minute // 15) * 15
+      second = (gmt_plus_one_now.second // 30) * 30
+      # minute = gmt_plus_one_now.minute
+      # start_of_day = gmt_plus_one_now.replace(minute=minute, second=0, microsecond=0)
+      start_of_day = gmt_plus_one_now.replace(second=second, microsecond=0)
       base_timestamp = int(start_of_day.timestamp() * 1000)
 
       intervals = np.arange(self.INTERVALS_PER_DAY) * self.INTERVAL_DURATION_MS

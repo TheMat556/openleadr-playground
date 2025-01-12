@@ -12,7 +12,7 @@ This guide will help you set up and run the server, client, and node using Scoop
 
 ## ✨ Prerequisites
 
-💡 Suggestion: Make sure somekind of package manager is installed on your system. For example, Scoop for Windows, Homebrew for macOS, or Pacman for Linux. This makes it easier to install and maintain different python version
+💡 Suggestion: Make sure some kind of package manager is installed on your system (e.g., Scoop for Windows, Homebrew for macOS, or Pacman for Linux). This makes it easier to install and maintain different Python versions.
 This guide will specifically cover the installation of Python 3.12 using [Scoop](https://scoop.sh/) on Windows.
 
 ## 🛠️ Setup Instructions
@@ -108,6 +108,7 @@ All core environment variables are automatically loaded from the `.env` file whe
 For MQTT service integration, create an `.env.mqtt` file with these variables:
 
 ```env
+# WARNING: Never commit this file with real credentials!
 PRIVATE_MQTT_BROKER_URL=your_broker_url
 PRIVATE_MQTT_USERNAME=your_username
 PRIVATE_MQTT_PASSWORD=your_password
@@ -121,10 +122,10 @@ PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION=your_consumption_topic
 - **Development:** Create `.env.mqtt` in `development/simple` directory
 
 ✨ **Features:**
-- 🔄 Automatic service initialization
-- 📊 Integrated node dashboard
-- 🔌 Pre-configured network setup
-- 🚀 One-command launch system
+- 🔄 Automatic service initialization - Services start automatically without manual configuration
+- 📊 Integrated node dashboard - Real-time monitoring of node status and performance
+- 🔌 Pre-configured network setup - Ready-to-use network topology for testing
+- 🚀 One-command launch system - Simple `dev` command starts all components
 
 > 💡 **Note:** All services, including the node dashboard, start automatically with the `dev` command. No additional configuration is needed for basic development setup.
 ## 🐳 Containerized approach

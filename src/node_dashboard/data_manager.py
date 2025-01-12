@@ -50,7 +50,8 @@ class DataManager:
     -------
     None
     """
-    timeout = aiohttp.ClientTimeout(total=30)
+    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
       tasks = [
         self._fetch_data(session, config, 'consumption') for config in self.configs
