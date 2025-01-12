@@ -264,6 +264,7 @@ class NodeResourceCalculator:
           z, consumption_values, out=np.zeros_like(z), where=consumption_values != 0
         )
         g = np.nan_to_num(g)
+        g = np.clip(g, 0, 0.8)
       w = (1 - g) * consumption_values * self.correction_factor(g)
       w_total = np.sum(w)
       if w_total > 0:

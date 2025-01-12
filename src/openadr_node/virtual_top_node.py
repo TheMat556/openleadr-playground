@@ -283,7 +283,7 @@ class VirtualTopNode(AdrBaseConfig):
             logger.error(f'No valid intervals to process for VEN {ven_id}')
             return
           logger.info(
-            f'Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
+            f'[{datetime.now(timezone.utc).isoformat()}] Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
             f' from {transformed_intervals[0]["dtstart"]} to {transformed_intervals[-1]["dtstart"]}'
           )
         except ValueError as e:

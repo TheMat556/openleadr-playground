@@ -136,7 +136,7 @@ class LoadProfileManager:
           logger.error(f'Failed to insert batch: {str(e)}')
 
     logger.info(
-      f"Insertion complete. Succeeded: {results['success']}, Failed: {results['failed']}"
+      f'Insertion complete. Succeeded: {results["success"]}, Failed: {results["failed"]}'
     )
     return results
 

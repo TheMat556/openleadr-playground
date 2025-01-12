@@ -17,6 +17,14 @@ def get_current_time():
   return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
+def get_user():
+  """Retrieve the current user or return 'unknown' if not available."""
+  try:
+    return os.getlogin() if hasattr(os, 'getlogin') else os.getenv('USER', 'unknown')
+  except OSError:
+    return 'unknown'
+
+
 def print_startup_banner(component_name: str, command: str):
   """
   Print a banner with aligned text and emojis.
@@ -27,7 +35,7 @@ def print_startup_banner(component_name: str, command: str):
   """
   message = f"""
     ⚡️ Current Time (UTC): {get_current_time()}
-    👤 User: {os.getlogin() if hasattr(os, 'getlogin') else os.getenv('USER', 'unknown')}
+    👤 User: {get_user()}
 
              @@@@@@@@@@@@@@@                     🚀 Welcome to OpenADR Node System!
          @@@@@@@@@@@@@@@@@@@@@                   ==============================

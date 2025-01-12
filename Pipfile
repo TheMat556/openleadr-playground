@@ -25,6 +25,7 @@ igraph = "*"
 jsonschema = "*"
 cachetools = "*"
 "paho.mqtt" = "*"
+yappi = "*"
 
 [dev-packages]
 ruff = "*"

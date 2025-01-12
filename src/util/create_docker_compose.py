@@ -124,7 +124,7 @@ def generate_node(
   missing_vars = [var for var in required_mqtt_vars if not os.getenv(var)]
   if missing_vars:
     logger.warning(
-      f"Missing required MQTT environment variables: {', '.join(missing_vars)}"
+      f'Missing required MQTT environment variables: {", ".join(missing_vars)}'
     )
 
   # Update environment with MQTT configuration if all variables are present
