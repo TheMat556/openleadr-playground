@@ -3,17 +3,13 @@ import json
 import asyncio
 from typing import Dict, Any, Optional, List
 import aiohttp
-import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
 from src.node_dashboard.helper.constants import Environment
 from src.node_dashboard.helper.utils import fetch_data_async
 from src.node_dashboard.helper.config import ContainerConfig
-
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class DataManager:

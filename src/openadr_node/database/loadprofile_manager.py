@@ -1,12 +1,9 @@
-import logging
 from typing import List, Dict, Any, Optional
 
 import numpy as np
 
+from src.openadr_node import logger
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class LoadProfileManager:
@@ -28,7 +25,7 @@ class LoadProfileManager:
       self.db_manager.create_table(
         'load_profiles',
         {
-          'dstart': 'INTEGER PRIMARY KEY',
+          'dstart': 'INTEGER PRIMARY KEY UNIQUE',
           'duration': 'INTEGER NOT NULL',
           'signal_payload': 'FLOAT NOT NULL',
         },
@@ -128,8 +125,9 @@ class LoadProfileManager:
           self.db_manager.insert_values_batch(
             table_name='load_profiles',
             columns=['dstart', 'duration', 'signal_payload'],
+            conflict_cols=['dstart'],
             batch_values=batch_values,
-            replace=True,
+            # replace=True,
           )
           results['success'] += len(batch_values)
         except DatabaseError as e:
@@ -166,8 +164,9 @@ class LoadProfileManager:
         table_name='consumption',
         columns=['timestamp', 'ven_id', 'resource_id', 'value'],
         batch_values=batch_values,
-        replace=True,
-        batch_size=self.batch_size,  # Adjust this value based on your needs
+        conflict_cols=['timestamp'],
+        # replace=True,
+        # batch_size=self.batch_size,  # Adjust this value based on your needs
       )
 
       logger.info(f'Successfully inserted {len(data)} consumption records')
@@ -335,8 +334,9 @@ class LoadProfileManager:
       self.db_manager.insert_values_batch(
         table_name='z_values',
         columns=['timestamp', 'ven_id', 'z_value'],
+        conflict_cols=['timestamp', 'ven_id'],
         batch_values=batch_values,
-        replace=True,
+        # replace=True,
       )
       logger.info(f'Successfully inserted {len(batch_values)} z-values')
     except DatabaseError as e:

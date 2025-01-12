@@ -6,6 +6,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.openadr_node.database.loadprofile_manager import LoadProfileManager, logger
+from src.openadr_node.errors.node_calculation_errors import (
+  ProcessingError,
+  CalculationError,
+)
 
 
 @dataclass
@@ -15,24 +19,6 @@ class TimeInterval:
   dstart: int
   duration: int
   signal_payload: float
-
-
-class CalculationError(Exception):
-  """Base exception for calculation-related errors."""
-
-  pass
-
-
-class ValidationError(CalculationError):
-  """Raised when data validation fails."""
-
-  pass
-
-
-class ProcessingError(CalculationError):
-  """Raised when data processing fails."""
-
-  pass
 
 
 class NodeResourceCalculator:
@@ -51,7 +37,7 @@ class NodeResourceCalculator:
   """
 
   INTERVAL_DURATION_MS: int = 900000  # 15 minutes in milliseconds
-  INTERVALS_PER_DAY: int = 96  # Number of 15-minute intervals in a day
+  INTERVALS_PER_DAY: int = 1  # Number of 15-minute intervals in a day
   GMT_PLUS_ONE = timezone(timedelta(hours=1))
 
   CORRECTION_FACTOR_A: float = 5.0
@@ -67,42 +53,33 @@ class NodeResourceCalculator:
     self._load_profile_manager = load_profile_manager
     self._z: Optional[Union[float, NDArray[np.float64]]] = None
 
-  def validate_intervals_recursive(
-    self, data: List[Dict[str, Any]], required_fields: set, index: int = 0
-  ) -> None:
-    """
-    Recursively validate that each interval contains the required fields.
-
-    :param data: List of intervals to validate.
-    :param required_fields: Set of required fields.
-    :param index: Current index in the list of intervals.
-    :raises ValueError: If an interval is missing required fields.
-    """
-    if index >= len(data):
-      return
-    interval = data[index]
-    if not required_fields.issubset(interval):
-      logger.error('Incomplete interval data: missing required fields')
-      raise ValueError('Incomplete interval data: missing required fields')
-    self.validate_intervals_recursive(data, required_fields, index + 1)
+  def set_z_value(self, value: Optional[float]) -> None:
+    """Set the z-value for load distribution calculations."""
+    self._z = value
 
   @staticmethod
-  def transform_intervals_no_loop(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+  def validate_intervals(data: List[Dict[str, Any]], required_fields: set) -> None:
+    for interval in data:
+      if not required_fields.issubset(interval):
+        logger.error('Incomplete interval data: missing required fields')
+        raise ValueError('Incomplete interval data: missing required fields')
+
+  @staticmethod
+  def transform_intervals(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Transform load profile data into the desired format using map.
+    Transform load profile data into the desired format using a loop.
 
     :param data: List of intervals to transform.
     :return: Transformed list of intervals.
     """
-
-    def transform(interval):
-      return {
+    return [
+      {
         'dstart': int(interval['dtstart'].timestamp() * 1000),
         'duration': int(interval['duration'].total_seconds() * 1000),
         'signal_payload': interval['signal_payload'],
       }
-
-    return list(map(transform, data))
+      for interval in data
+    ]
 
   def process_load_profile_data(
     self, data: List[Dict[str, Any]]
@@ -121,8 +98,8 @@ class NodeResourceCalculator:
     required_fields = {'dtstart', 'duration', 'signal_payload'}
 
     # Since we must remove explicit loops, use recursion for validation
-    self.validate_intervals_recursive(data, required_fields, 0)
-    return self.transform_intervals_no_loop(data)
+    self.validate_intervals(data, required_fields)
+    return self.transform_intervals(data)
 
   def get_current_data(
     self, current_timestamp: int
@@ -302,21 +279,20 @@ class NodeResourceCalculator:
     """
     try:
       gmt_plus_one_now = datetime.now(self.GMT_PLUS_ONE)
-      start_of_day = gmt_plus_one_now.replace(hour=0, minute=0, second=0, microsecond=0)
+      minute = (gmt_plus_one_now.minute // 15) * 15
+      start_of_day = gmt_plus_one_now.replace(minute=minute, second=0, microsecond=0)
       base_timestamp = int(start_of_day.timestamp() * 1000)
 
       intervals = np.arange(self.INTERVALS_PER_DAY) * self.INTERVAL_DURATION_MS
 
-      return list(
-        map(
-          lambda offset: {
-            'dstart': base_timestamp + int(offset),
-            'duration': self.INTERVAL_DURATION_MS,
-            'signal_payload': 0,
-          },
-          intervals,
-        )
-      )
+      return [
+        {
+          'dstart': base_timestamp + int(offset),
+          'duration': self.INTERVAL_DURATION_MS,
+          'signal_payload': 0,
+        }
+        for offset in intervals
+      ]
     except Exception as e:
       logger.error(f'Failed to generate time intervals: {str(e)}')
       raise ProcessingError(f'Time interval generation failed: {str(e)}') from e

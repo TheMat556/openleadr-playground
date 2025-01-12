@@ -1,13 +1,10 @@
-import logging
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import plotly.graph_objs as go
 from .helper.config import ContainerConfig
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class PlotManager:

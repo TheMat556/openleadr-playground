@@ -1,4 +1,7 @@
 from run_command import run_command
+from startup_banner import print_startup_banner
 
-print('Starting house node...')
-run_command('python -m development.simple')
+COMPONENT_NAME = 'Development Environment'
+COMMAND = 'python -m development.simple'
+print_startup_banner(COMPONENT_NAME, COMMAND)
+run_command(COMMAND)

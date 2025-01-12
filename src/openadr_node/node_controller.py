@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import timedelta
 from typing import Optional, List, Any, Dict, Callable
 
 from src.openadr_node import logger
@@ -94,7 +95,12 @@ class NodeController(AdrBaseConfig):
 
     if self._load_profile_manager:
       self.node_resource_controller = NodeResourceController(self._load_profile_manager)
-
+      self.start_periodic_task(
+        lambda: self.node_resource_controller.update_load_profile(
+          '', None, use_z_directly=False
+        ),
+        timedelta(minutes=1),
+      )
     if self._rest_api_config:
       self._initialize_rest_api_manager(self._rest_api_config)
 
@@ -117,6 +123,11 @@ class NodeController(AdrBaseConfig):
   def _initialize_rest_api_manager(self, config: RestApiConfig) -> None:
     """
     Initialize the REST API manager.
+
+    Parameters
+    ----------
+    config : RestApiConfig
+        Configuration for REST API.
     """
     if not config.port:
       logger.warning(
@@ -141,6 +152,11 @@ class NodeController(AdrBaseConfig):
   def _initialize_mqtt_manager(self, config: MQTTConfig) -> None:
     """
     Initialize the MQTT manager.
+
+    Parameters
+    ----------
+    config : MQTTConfig
+        Configuration for MQTT.
     """
     if config.is_valid():
       self._mqtt_manager = MQTTManager(
@@ -173,12 +189,28 @@ class NodeController(AdrBaseConfig):
   def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
     """
     Register a dispatcher for a signal.
+
+    Parameters
+    ----------
+    sender : str
+        The sender of the signal.
+    signal : str
+        The signal to register.
+    data : str
+        The data associated with the signal.
     """
     self._dispatcher_manager.register_dispatcher(sender, signal, data)
 
   def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
     """
     Handle the update load profile signal.
+
+    Parameters
+    ----------
+    sender : str
+        The sender of the signal.
+    data : List[Dict[str, Any]]
+        The data associated with the signal.
     """
     if self.node_resource_controller:
       self.node_resource_controller.update_load_profile(sender, data)
@@ -186,20 +218,80 @@ class NodeController(AdrBaseConfig):
   def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
     Handle the update consumption data signal.
+
+    Parameters
+    ----------
+    sender : str
+        The sender of the signal.
+    data : ResourceConsumption
+        The data associated with the signal.
     """
     if self.node_resource_controller:
       self.node_resource_controller.update_consumption_data(sender, data)
 
   def _on_register_report(self, sender: str, data: str) -> None:
-    print('_on_register_report', data)
+    """
+    Handle the register report signal.
+
+    Parameters
+    ----------
+    sender : str
+        The sender of the signal.
+    data : str
+        The data associated with the signal.
+    """
     if self.node_resource_controller:
       self.node_resource_controller.on_register_report(data)
 
   def add_task(self, task: Callable) -> None:
     """
     Add a task to the event loop.
+
+    Parameters
+    ----------
+    task : Callable
+        The task to be added.
     """
     self._loop.create_task(task())
+
+  def start_periodic_task(self, method: Callable, interval: timedelta) -> None:
+    """
+    Start a periodic task to trigger a method at a specified interval.
+
+    Parameters
+    ----------
+    method : Callable
+        The method to be triggered.
+    interval : timedelta
+        The interval at which to trigger the method.
+    """
+    interval_seconds = interval.total_seconds()
+    self._loop.create_task(
+      self._trigger_method_periodically(
+        method, interval_seconds, first_interval=4 / 3 * interval_seconds
+      )
+    )
+
+  @staticmethod
+  async def _trigger_method_periodically(
+    method: Callable, interval: float, first_interval: float
+  ) -> None:
+    """
+    Trigger a method at a specified interval without blocking execution.
+
+    Parameters
+    ----------
+    method : Callable
+        The method to be triggered.
+    interval : float
+        The interval in seconds at which to trigger the method.
+    first_interval : float
+        The interval in seconds to defer the first call.
+    """
+    await asyncio.sleep(first_interval)
+    while True:
+      method()
+      await asyncio.sleep(interval)
 
   def run_node(self) -> None:
     """
@@ -227,13 +319,19 @@ class NodeController(AdrBaseConfig):
       self._node_task_manager.add_reports(list_of_reports)
       logger.info('Reports added successfully')
     except Exception as e:
-      logger.error(f'Error adding report: {e}')
       logger.error(f'Error adding report: {e}', exc_info=True)
       raise RuntimeError(f'Failed to add reports: {e}') from e
 
   def publish(self, signal: str, data: Any) -> None:
     """
     Publish a signal to subscribers.
+
+    Parameters
+    ----------
+    signal : str
+        The signal to publish.
+    data : Any
+        The data associated with the signal.
     """
     try:
       self._node_task_manager.publish(signal, data)
@@ -244,6 +342,13 @@ class NodeController(AdrBaseConfig):
   def subscribe(self, signal: str, callback: Callable) -> None:
     """
     Subscribe to a signal.
+
+    Parameters
+    ----------
+    signal : str
+        The signal to subscribe to.
+    callback : Callable
+        The callback to be executed when the signal is received.
     """
     try:
       self._node_task_manager.subscribe(signal, callback)

@@ -1,12 +1,9 @@
 from typing import List, Dict, Tuple, Optional
-import logging
 import plotly.graph_objects as go
 from igraph import Graph
 
 from src.node_dashboard.helper.config import ContainerConfig
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class HierarchyPlotManager:

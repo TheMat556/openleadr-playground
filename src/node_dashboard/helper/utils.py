@@ -1,10 +1,8 @@
-import logging
 from datetime import datetime, timedelta
 import aiohttp
 import asyncio
 from typing import Dict, Any, Optional
-
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 async def fetch_data_with_retry(

@@ -226,10 +226,6 @@ class VirtualTopNode(AdrBaseConfig):
     :param data: Load profile data with ven_id as keys and intervals as values.
     :type data: Dict[str, List[Interval]]
     """
-    print('Updating load profile...')
-    print(f'Signal: {signal}, Sender: {sender}, Data: {data}')
-    for ven_id, intervals in data.items():
-      print(f'VEN ID: {ven_id}')
     if data:
       for ven_id, intervals in data.items():
         if not isinstance(intervals, list):
@@ -325,4 +321,3 @@ class VirtualTopNode(AdrBaseConfig):
     :param opt_type: Opt type.
     :type opt_type: str
     """
-    print(f'VEN {ven_id} responded to Event {event_id} with: {opt_type}')

@@ -1,5 +1,4 @@
 import json
-import logging
 import ssl
 import time
 from threading import Event, Thread, Lock
@@ -8,20 +7,18 @@ from typing import Optional, Dict, Any, List
 import numpy as np
 import paho.mqtt.client as mqtt
 
+from src.openadr_node import logger
 from src.openadr_node.database.loadprofile_manager import LoadProfileManager
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class MQTTManagerState:
-  """Thread-safe state container for MQTT Manager"""
+  """Thread-safe state container for MQTT Manager."""
 
   def __init__(self):
     self._connected = False
     self._connection_rc = None
-    self._lock = Lock()
-    self._ready = Event()  # New: Ready state for connection completion
+    self._lock: Lock = Lock()
+    self._ready: Event = Event()
 
   @property
   def connected(self) -> bool:
@@ -64,34 +61,21 @@ class MQTTManager:
   reconnection across multiple threads. Only one instance should be running at a time
   per broker connection.
 
-  Thread Safety:
-  - All shared state is protected by locks
-  - Methods are reentrant and thread-safe
-  - Start/Stop operations are atomic and idempotent
-
-  Usage:
-      manager = MQTTManager(...)
-      try:
-          manager.start()  # Start MQTT client and worker threads
-          # ... application code ...
-      finally:
-          manager.stop()   # Cleanup resources
-
   Args:
-      broker: MQTT broker address
-      port: MQTT broker port
-      topic_load_profile: Topic for publishing load profile data
-      topic_consumption: Topic for receiving consumption data
-      load_profile_manager: Manager for handling load profiles
-      username: MQTT authentication username
-      password: MQTT authentication password
-      use_tls: Enable TLS encryption (default: True)
-      ca_certs: Path to CA certificates (default: None)
+      broker (str): MQTT broker address.
+      port (int): MQTT broker port.
+      topic_load_profile (str): Topic for publishing load profile data.
+      topic_consumption (str): Topic for receiving consumption data.
+      load_profile_manager (LoadProfileManager): Manager for handling load profiles.
+      username (str): MQTT authentication username.
+      password (str): MQTT authentication password.
+      use_tls (bool): Enable TLS encryption (default: True).
+      ca_certs (Optional[str]): Path to CA certificates (default: None).
 
   Raises:
-      ValueError: If required parameters are invalid
-      RuntimeError: If client is already running
-      ConnectionError: If broker connection fails
+      ValueError: If required parameters are invalid.
+      RuntimeError: If client is already running.
+      ConnectionError: If broker connection fails.
   """
 
   CONNECTION_RESPONSES = {
@@ -228,7 +212,6 @@ class MQTTManager:
             break
           continue
 
-        print('STEP1')
         # Convert timestamps safely
         current_time_ms = int(time.time() * 1000)
         nearest_idx = np.abs(load_profile['dstart'] - current_time_ms).argmin()
@@ -249,14 +232,14 @@ class MQTTManager:
     Attempt to reconnect to the MQTT broker.
 
     Args:
-        max_retries: Maximum number of reconnection attempts
-        retry_delay: Delay between attempts in seconds
+        max_retries (int): Maximum number of reconnection attempts.
+        retry_delay (int): Delay between attempts in seconds.
 
     Returns:
-        bool: True if reconnection successful
+        bool: True if reconnection successful.
 
     Raises:
-        ConnectionError: If all reconnection attempts fail
+        ConnectionError: If all reconnection attempts fail.
     """
     for attempt in range(max_retries):
       try:
@@ -274,8 +257,8 @@ class MQTTManager:
     Start the MQTT client.
 
     Raises:
-        RuntimeError: If client fails to start
-        ConnectionError: If broker connection fails or connection timeout occurs
+        RuntimeError: If client fails to start.
+        ConnectionError: If broker connection fails or connection timeout occurs.
     """
     with self._start_lock:
       if self._state.connected:

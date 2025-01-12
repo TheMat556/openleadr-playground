@@ -1,0 +1,49 @@
+import os
+from datetime import datetime, timezone
+
+
+def clear_screen():
+  """Clear the terminal screen."""
+  os.system('cls' if os.name == 'nt' else 'clear')
+
+
+def get_current_time():
+  """Get formatted current UTC time."""
+  return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def print_startup_banner(component_name: str, command: str):
+  """
+  Print a banner with aligned text and emojis.
+
+  Args:
+      component_name (str): Name of the component being launched
+      command (str): Command being executed
+  """
+  message = f"""
+    ⚡️ Current Time (UTC): {get_current_time()}
+    👤 User: {os.getlogin()}
+
+             @@@@@@@@@@@@@@@                     🚀 Welcome to OpenADR Node System!
+         @@@@@@@@@@@@@@@@@@@@@                   ==============================
+       @@@@@@@@@@@@@@@  @@@@@@@@
+     @@@@@@@@@@@@@@    @@@@@@@@@@@              🔧 Development Mode
+     @@@@@@@@@@        @@@@@@@@@@@              ⚙️ System: {os.name.upper()}
+    @@@@@@@@@         @@@@@@@@@@@@              🌟 Version: 1.0.0
+    @@@@@@@@@@@@@        @@@@@@@@@
+     @@@@@@@@@@@      @@@@@@@@@@@@              🎯 Starting: {component_name}
+      @@@@@@@@@   &@@@@@@@@@@@@@@               🔄 Command: {command}
+        @@@@@@@@@@@@@@@@@@@@@@@                 ⏳ Please wait...
+          @@@@@@@@@@@@@@@@@@@
+              @@@@@@@@@@@
+
+    🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+
+        🎮 Development environment is launching!
+        💻 You are launching {component_name}.
+        🚀 Get ready to code!
+
+    🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+    """
+  clear_screen()
+  print(message)

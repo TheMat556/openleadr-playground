@@ -25,7 +25,13 @@ rng = np.random.default_rng(RANDOM_SEED)
 
 def load_environment(env_path: str) -> None:
   """Load environment variables from a .env file."""
-  load_dotenv(dotenv_path=env_path)
+  try:
+    if not os.path.exists(env_path):
+      raise FileNotFoundError(f'Environment file not found: {env_path}')
+    load_dotenv(dotenv_path=env_path)
+  except Exception as e:
+    logger.error(f'Failed to load environment from {env_path}: {e}')
+    raise
 
 
 def create_rest_api_config(

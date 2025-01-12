@@ -3,36 +3,18 @@ from typing import List, Dict, Any, Optional, Set, Union
 from threading import Lock
 from functools import reduce
 from dataclasses import dataclass
-import logging
 
 import numpy as np
 from numpy.typing import NDArray
 from pydispatch import dispatcher
 
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager
-from src.openadr_node.load_distribution_calculator import NodeResourceCalculator
+from src.openadr_node.database.loadprofile_manager import LoadProfileManager, logger
+from src.openadr_node.errors.node_controller_errors import (
+  LoadProfileError,
+  ConsumptionError,
+)
+from src.openadr_node.node_resource_calculator import NodeResourceCalculator
 from src.openadr_node.models.event import ResourceConsumption
-
-# Configure logging
-logger = logging.getLogger(__name__)
-
-
-class NodeControllerError(Exception):
-  """Base exception class for NodeResourceController errors."""
-
-  pass
-
-
-class LoadProfileError(NodeControllerError):
-  """Raised when there's an error updating or processing load profiles."""
-
-  pass
-
-
-class ConsumptionError(NodeControllerError):
-  """Raised when there's an error processing consumption data."""
-
-  pass
 
 
 @dataclass
@@ -42,6 +24,13 @@ class VENState:
   resource_data: Dict[str, float]
   last_updated: datetime
   status: str
+
+  def __post_init__(self):
+    """Validate field types after initialization."""
+    if not isinstance(self.resource_data, dict):
+      raise ValueError('resource_data must be a dictionary')
+    if not isinstance(self.last_updated, datetime):
+      raise ValueError('last_updated must be a datetime object')
 
 
 class NodeResourceController:
@@ -59,7 +48,6 @@ class NodeResourceController:
       _active_vens: Set of currently active VENs
   """
 
-  # Constants
   TIMESTAMP_MULTIPLIER: int = 1000  # Convert seconds to milliseconds
   DISPATCHER_SENDER: str = 'nm'
 
@@ -90,9 +78,10 @@ class NodeResourceController:
     """
     if not isinstance(ven_id, str) or not ven_id:
       raise ValueError('VEN ID must be a non-empty string')
-
     if ven_id in self._active_vens:
       raise ValueError(f'VEN {ven_id} is already active')
+    if len(ven_id) > 50:
+      raise ValueError('VEN ID exceeds maximum length')
 
   def on_register_report(self, ven_id: str) -> None:
     """
@@ -159,7 +148,7 @@ class NodeResourceController:
       )
 
       if processed_z_values is not None:
-        self._calculator._z = processed_z_values
+        self._calculator.set_z_value(processed_z_values)
         _, z_neu = self._calculator.calculate_load_distribution(
           ven_ids, consumption_values, current_allowed_consumption['signal_payload']
         )
@@ -261,8 +250,8 @@ class NodeResourceController:
       logger.info(
         f'VEN {ven_id} moved from pending to active. Triggering recalculation.'
       )
-      self._calculator._z = None
-      self.update_load_profile(None, None, use_z_directly=True)
+      self._calculator.set_z_value(None)
+      self.update_load_profile('', None, use_z_directly=True)
 
   def update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
     """
@@ -278,7 +267,8 @@ class NodeResourceController:
     try:
       with self._lock:
         ven_data = self._ven_data.setdefault(data.ven_id, {})
-        ven_data[data.resource_id] = data.data[1]
+        consumption_value = data.data[1] if len(data.data) > 1 else 0.0
+        ven_data[data.resource_id] = consumption_value
         self._current_consumption = self._calculate_total_consumption()
 
         consumption_data = {
@@ -301,9 +291,7 @@ class NodeResourceController:
         )
 
     except Exception as e:
-      logger.error(
-        f'Error processing consumption data from sender {sender} with data {data}: {str(e)}'
-      )
+      logger.error(f'Error processing consumption data from sender {sender}: {str(e)}')
       raise ConsumptionError(f'Failed to update consumption data: {str(e)}') from e
 
   def get_ven_status(self) -> Dict[str, Union[List[str], int]]:

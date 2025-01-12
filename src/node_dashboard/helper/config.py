@@ -1,12 +1,11 @@
 import json
-import logging
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import jsonschema
 from cachetools.func import lru_cache
 
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 @dataclass

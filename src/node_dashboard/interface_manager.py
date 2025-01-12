@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from pathlib import Path
 
 import gradio as gr
@@ -8,12 +7,10 @@ from typing import List, TYPE_CHECKING, Optional
 from .helper import constants
 from .helper.config import ContainerConfig
 from .hierarchy_plot_manager import HierarchyPlotManager
+from src.node_dashboard.helper.logger import logger
 
 if TYPE_CHECKING:
   from .dashboard import GradioNodeDashboard
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 class InterfaceManager:
