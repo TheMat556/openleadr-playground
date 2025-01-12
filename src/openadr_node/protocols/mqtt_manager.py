@@ -271,6 +271,7 @@ class MQTTManager:
         self._stop_event.clear()
 
         # Connect asynchronously
+        self.client.loop_start()
         self.client.connect_async(self.broker, self.port, keepalive=60)
         logger.info('MQTT client started and connecting...')
 
@@ -289,6 +290,7 @@ class MQTTManager:
       try:
         self._stop_event.set()
         self.client.disconnect()
+        self.client.loop_stop()
         self._state.connected = False
         logger.info('MQTT client stopped successfully')
 

@@ -1,10 +1,11 @@
 from datetime import timezone, datetime
 import numpy as np
-from flask import Flask, jsonify, request
-from typing import Any, Dict
+from flask import Flask, jsonify, request, Response
+from typing import Any, Dict, Optional, Callable, Tuple, List
 import threading
 
 from src.openadr_node import logger
+from src.openadr_node.database.loadprofile_manager import LoadProfileManager
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
 
 
@@ -32,8 +33,10 @@ class RestApiManager:
     """
     self.app = Flask(__name__)
     self._rest_api_port = port
-    self._load_profile_manager = None
-    self._get_current_consumption_callback = None
+    self._load_profile_manager: Optional[LoadProfileManager] = None
+    self._get_current_consumption_callback: Optional[Callable[[], Dict[str, Any]]] = (
+      None
+    )
     self.server_thread = None
 
   def set_load_profile_manager(self, load_profile_manager: Any) -> None:
@@ -91,7 +94,7 @@ class RestApiManager:
       self.server_thread.join()
       logger.info('Flask server shut down successfully.')
 
-  def _check_manager_initialized(self) -> Any:
+  def _check_manager_initialized(self) -> Optional[Tuple[Response, int]]:
     """
     Check if the load profile manager is initialized.
 
@@ -102,7 +105,9 @@ class RestApiManager:
       return jsonify({'error': 'Load profile manager not initialized'}), 500
     return None
 
-  def _check_data_exists(self, data: Dict[str, np.ndarray], data_type: str) -> Any:
+  def _check_data_exists(
+    self, data: Dict[str, np.ndarray], data_type: str
+  ) -> Optional[Tuple[Response, int]]:
     """
     Check if the data exists.
 
@@ -113,7 +118,7 @@ class RestApiManager:
     Returns:
         Any: JSON response if data not found, otherwise None.
     """
-    if data is None or not any(arr.size for arr in data.values()):
+    if not data or not any(arr.size for arr in data.values()):
       return jsonify({'error': f'{data_type} not found'}), 404
     return None
 
@@ -136,17 +141,26 @@ class RestApiManager:
         return response
 
       formatted_data = {
-        str(int(df['dstart'][i])): {
-          'duration': int(df['duration'][i]),
-          'signal_payload': float(df['signal_payload'][i]),
-        }
-        for i in range(len(df['dstart']))
+        str(int(start)): {'duration': int(dur), 'signal_payload': float(payload)}
+        for start, dur, payload in zip(
+          df['dstart'], df['duration'], df['signal_payload']
+        )
       }
 
       return jsonify(formatted_data), 200, {'Content-Type': 'application/json'}
     except Exception as e:
       logger.error(f'Failed to serialize load profile: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
+
+  def _process_consumption_points(
+    self, points: List[Dict[str, Any]]
+  ) -> Tuple[float, str]:
+    """Process consumption points to extract overall value and ven_id."""
+    if not points:
+      raise ValueError('Empty consumption points')
+    overall_value = sum(point['value'] for point in points)
+    ven_id = points[0]['ven_id']
+    return overall_value, ven_id
 
   @rest_endpoint('/data/consumption')
   def get_current_consumption(self) -> Any:
@@ -172,11 +186,10 @@ class RestApiManager:
       logger.debug(f'Retrieved consumption points: {consumption_points}')
 
       try:
-        overall_value = sum(point['value'] for point in consumption_points)
-        ven_id = consumption_points[0]['ven_id']
-      except (KeyError, TypeError) as e:
-        logger.error(f'Invalid data structure in consumption points: {e}')
-        return jsonify({'error': 'Invalid data structure'}), 500
+        overall_value, ven_id = self._process_consumption_points(consumption_points)
+      except ValueError as e:
+        logger.error(f'Failed to process consumption points: {e}')
+        return jsonify({'error': str(e)}), 500
 
       logger.debug(f'Calculated overall value: {overall_value}')
 

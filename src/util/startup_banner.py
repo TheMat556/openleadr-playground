@@ -1,10 +1,15 @@
 import os
+import subprocess
 from datetime import datetime, timezone
 
 
 def clear_screen():
   """Clear the terminal screen."""
-  os.system('cls' if os.name == 'nt' else 'clear')
+  command = 'cls' if os.name == 'nt' else 'clear'
+  try:
+    subprocess.run([command], shell=True, check=True)
+  except subprocess.SubprocessError:
+    print('\n' * 100)
 
 
 def get_current_time():
@@ -39,7 +44,6 @@ def print_startup_banner(component_name: str, command: str):
 
     🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
 
-        🎮 Development environment is launching!
         💻 You are launching {component_name}.
         🚀 Get ready to code!
 

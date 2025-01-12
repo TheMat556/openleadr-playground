@@ -97,7 +97,6 @@ class NodeResourceCalculator:
 
     required_fields = {'dtstart', 'duration', 'signal_payload'}
 
-    # Since we must remove explicit loops, use recursion for validation
     self.validate_intervals(data, required_fields)
     return self.transform_intervals(data)
 
@@ -259,12 +258,18 @@ class NodeResourceCalculator:
         or self._z.shape != consumption_values.shape
         else self._z
       )
-
-      g = np.divide(z, consumption_values, where=consumption_values != 0)
+      # Avoid division by zero
+      with np.errstate(divide='ignore', invalid='ignore'):
+        g = np.divide(
+          z, consumption_values, out=np.zeros_like(z), where=consumption_values != 0
+        )
+        g = np.nan_to_num(g)
       w = (1 - g) * consumption_values * self.correction_factor(g)
       w_total = np.sum(w)
-      z_neu = np.where(w_total > 0, w / w_total * total_allowed, np.zeros_like(w))
-
+      if w_total > 0:
+        z_neu = w / w_total * total_allowed
+      else:
+        z_neu = np.zeros_like(w)
       return ven_ids, z_neu
     except Exception as e:
       logger.error(f'Failed to calculate load distribution: {str(e)}')
@@ -318,6 +323,9 @@ class NodeResourceCalculator:
         ProcessingError: If profile creation fails
     """
     try:
+      if ven_ids.size == 0 or z_neu.size == 0:
+        logger.error('VEN IDs or Z values are empty')
+        raise ProcessingError('VEN IDs and Z values must not be empty')
 
       def build_profile(pair: Tuple[str, float]) -> Tuple[str, List[Dict[str, Any]]]:
         ven_id, z_value = pair

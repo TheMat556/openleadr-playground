@@ -1,6 +1,3 @@
-Current Date and Time (UTC): 2025-01-12 10:15:23
-Current User's Login: TheMat556
-
 ![logo.png](public/logo.png)
 
 # 🌟 Basic Idea

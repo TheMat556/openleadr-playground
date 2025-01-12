@@ -210,16 +210,28 @@ class PlotManager:
     for point in data:
       # Check if this is load profile data (has 'signal_payload')
       if 'signal_payload' in point:
+        # Validate timestamp before conversion
+        if not isinstance(point['timestamp'], (int, float)) or point['timestamp'] <= 0:
+          logger.warning(f'Invalid timestamp value: {point["timestamp"]}')
+          continue
         timestamp = datetime.fromtimestamp(
           point['timestamp'] / 1000
         )  # Convert from milliseconds
         value = point['signal_payload']
       # Check if this is consumption data (has 'value')
       elif 'value' in point:
-        timestamp = datetime.fromtimestamp(
-          int(point['timestamp']) / 1000
-        )  # Convert string timestamp from milliseconds
-        value = point['value']
+        try:
+          timestamp_val = int(point['timestamp'])
+          if timestamp_val <= 0:
+            logger.warning(f'Invalid timestamp value: {timestamp_val}')
+            continue
+          timestamp = datetime.fromtimestamp(
+            timestamp_val / 1000
+          )  # Convert string timestamp from milliseconds
+          value = point['value']
+        except (ValueError, TypeError) as e:
+          logger.warning(f'Invalid timestamp format: {point["timestamp"]}. Error: {e}')
+          continue
       else:
         continue
 

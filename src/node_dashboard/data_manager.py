@@ -161,8 +161,8 @@ class DataManager:
 
         # Transform data to match buffer format
         transformed_data = {
-          'timestamp': consumption_data['timestamp'],
-          'value': consumption_data['overall_value'],
+          k2: consumption_data[k1]
+          for k1, k2 in [('timestamp', 'timestamp'), ('overall_value', 'value')]
         }
 
         buffer = self.data_buffers.setdefault(
@@ -227,17 +227,18 @@ class DataManager:
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        valid_entries = [
-          {
+        valid_entries = []
+        for time, value in load_profile_data.items():
+          if not isinstance(value, dict):
+            continue
+          if not all(key in value for key in ['duration', 'signal_payload']):
+            continue
+          entry = {
             'timestamp': int(time),
             'duration': value['duration'],
             'signal_payload': value['signal_payload'],
           }
-          for time, value in load_profile_data.items()
-          if isinstance(value, dict)
-          and 'duration' in value
-          and 'signal_payload' in value
-        ]
+          valid_entries.append(entry)
         buffer['load_profile'].extend(valid_entries)
 
         if len(buffer['load_profile']) > self.max_buffer_size:

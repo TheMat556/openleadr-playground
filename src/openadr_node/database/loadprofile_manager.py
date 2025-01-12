@@ -114,7 +114,7 @@ class LoadProfileManager:
           batch_values.append(
             [interval['dstart'], interval['duration'], interval['signal_payload']]
           )
-        except Exception as e:
+        except (ValueError, KeyError, TypeError) as e:
           results['failed'] += 1
           results['errors'].append({'data': interval, 'error': str(e)})
           logger.error(f'Failed to process record: {str(e)}')

@@ -72,6 +72,7 @@ class NodeController(AdrBaseConfig):
     self._rest_api_config = rest_api_config
     self._dispatcher_manager = NodeDispatcherController(self)
 
+    self._periodic_tasks = []
     self._loop = asyncio.get_event_loop()
     self._node_task_manager = NodeOpenADRController(
       self._loop,
@@ -108,6 +109,17 @@ class NodeController(AdrBaseConfig):
       self._initialize_mqtt_manager(self._mqtt_config)
 
     dispatcher.send(signal='on_ready', sender='system')
+
+  def __del__(self):
+    """
+    Ensure the periodic tasks are canceled and resources are cleaned up when the instance is destroyed.
+    """
+    self.cancel_periodic_tasks()
+    if hasattr(self, '_rest_api') and self._rest_api:
+      self._rest_api.shutdown_server()
+    if hasattr(self, '_mqtt_manager') and self._mqtt_manager:
+      self._mqtt_manager.stop()
+    logger.info('NodeController instance has been cleaned up.')
 
   def create_node_tasks(self) -> None:
     """
@@ -179,9 +191,6 @@ class NodeController(AdrBaseConfig):
     """
     Start the MQTT client and associated threads.
     """
-    self._thread_manager.start_thread(
-      target=self._mqtt_manager.client.loop_forever, name='MQTTLoopThread'
-    )
     self._thread_manager.start_thread(
       target=self._mqtt_manager.publish_load_profile, name='PublishThread'
     )
@@ -266,11 +275,23 @@ class NodeController(AdrBaseConfig):
         The interval at which to trigger the method.
     """
     interval_seconds = interval.total_seconds()
-    self._loop.create_task(
+    task = self._loop.create_task(
       self._trigger_method_periodically(
         method, interval_seconds, first_interval=4 / 3 * interval_seconds
       )
     )
+    if not hasattr(self, '_periodic_tasks'):
+      self._periodic_tasks = []
+    self._periodic_tasks.append(task)
+
+  def cancel_periodic_tasks(self) -> None:
+    """
+    Cancel all periodic tasks.
+    """
+    if hasattr(self, '_periodic_tasks'):
+      for task in self._periodic_tasks:
+        task.cancel()
+      self._periodic_tasks.clear()
 
   @staticmethod
   async def _trigger_method_periodically(
