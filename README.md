@@ -81,7 +81,7 @@ This environment also allows you to use the corresponding gradio UIs.
 
 1. **Start the development environment** 🚀
     ```bash
-    pipenv run start-mock-node
+    pipenv run start-dev
     ```
 
 ### 💻 Development Environment
