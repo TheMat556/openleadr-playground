@@ -1,18 +1,18 @@
 import json
-import logging
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 import jsonschema
 from cachetools.func import lru_cache
 
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 @dataclass
 class ContainerConfig:
   """Configuration for a container instance."""
 
+  node_id: str
   vtn_name: str
   vtn_url: str
   vtn_path_prefix: str
@@ -30,6 +30,7 @@ class ConfigManager:
 
   REQUIRED_KEYS: frozenset[str] = frozenset(
     {
+      'NODE_ID',
       'VTN_NAME',
       'VTN_URL',
       'VTN_PATH_PREFIX',
@@ -51,15 +52,16 @@ class ConfigManager:
         'type': 'object',
         'required': list(REQUIRED_KEYS),
         'properties': {
+          'NODE_ID': {'type': 'string'},
           'VTN_NAME': {'type': 'string'},
           'VTN_URL': {'type': 'string'},
           'VTN_PATH_PREFIX': {'type': 'string'},
           'VEN_NAME': {'type': 'string'},
-          'GRADIO_PORT': {'type': 'string'},
+          'GRADIO_PORT': {'type': ['string', 'integer']},  # Accept as string or integer
           'GRADIO_SERVER_NAME': {'type': 'string'},
-          'REST_API_PORT': {'type': 'string'},
+          'REST_API_PORT': {'type': ['string', 'integer']},
           'VTN_SELF_HOST': {'type': 'string'},
-          'LAYER': {'type': 'integer'},
+          'LAYER': {'type': ['string', 'integer']},
         },
       }
     },
@@ -146,7 +148,7 @@ class ConfigManager:
       )
       return None
 
-    def validate_port(port: str) -> bool:
+    def validate_port(port: Any) -> bool:
       if not port:
         return True
       try:
@@ -165,13 +167,14 @@ class ConfigManager:
       if not validate_port(rest_api_port):
         raise ValueError(f'Invalid REST API port: {rest_api_port}')
       config_dict = {
+        'node_id': values['NODE_ID'],
         'vtn_name': values['VTN_NAME'],
         'vtn_url': values['VTN_URL'],
         'vtn_path_prefix': values['VTN_PATH_PREFIX'],
         'ven_name': values['VEN_NAME'],
-        'gradio_port': gradio_port,
+        'gradio_port': int(gradio_port),
         'gradio_server_name': values['GRADIO_SERVER_NAME'],
-        'rest_api_port': rest_api_port,
+        'rest_api_port': int(rest_api_port),
         'vtn_self_host': values['VTN_SELF_HOST'],
         'layer': layer,
         'container_name': container_name,

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict, Optional, List, Any, Tuple
 
@@ -9,7 +10,8 @@ from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
-from src.openadr_node.models.event import ResourceConsumption
+from src.openadr_node.models.event import ResourceConsumption, Interval
+from src.openadr_node.node_resource_controller import NodeResourceController
 
 
 class VirtualTopNode(AdrBaseConfig):
@@ -119,8 +121,13 @@ class VirtualTopNode(AdrBaseConfig):
     logger.info(
       f'Report registered for VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
+    self._send_register_report(ven_id)
 
     return callback, sampling_interval
+
+  @SignalSender(signal='register_report', sender='vtn')
+  def _send_register_report(self, ven_id: str):
+    return ven_id
 
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
@@ -207,7 +214,7 @@ class VirtualTopNode(AdrBaseConfig):
 
   @SignalConnector('update_load_profile', 'nm')
   def _on_update_load_profile(
-    self, signal: str, sender: str, data: List[Dict[str, Any]]
+    self, signal: str, sender: str, data: Dict[str, List[Interval]]
   ) -> None:
     """
     Update the load profile.
@@ -216,22 +223,81 @@ class VirtualTopNode(AdrBaseConfig):
     :type signal: str
     :param sender: Signal sender.
     :type sender: str
-    :param data: Load profile data.
-    :type data: List[Dict[str, Any]]
+    :param data: Load profile data with ven_id as keys and intervals as values.
+    :type data: Dict[str, List[Interval]]
     """
     if data:
-      for ven_id in self._ven_data.keys():
+      for ven_id, intervals in data.items():
+        if not isinstance(intervals, list):
+          logger.error(
+            f'Invalid intervals data for VEN {ven_id}: expected list, got {type(intervals)}'
+          )
+          continue
+
+        # Check if the data is already formatted
+        if not all(
+          'dstart' in interval
+          and 'duration' in interval
+          and 'signal_payload' in interval
+          for interval in intervals
+        ):
+          missing_fields = [
+            field
+            for field in ['dstart', 'duration', 'signal_payload']
+            if not all(field in interval for interval in intervals)
+          ]
+          logger.error(
+            f'Missing required fields for VEN {ven_id}: {", ".join(missing_fields)}'
+          )
+          intervals = NodeResourceController.process_load_profile_data(intervals)
+
+        transformed_intervals = [
+          {
+            'dtstart': datetime.fromtimestamp(
+              interval['dstart'] / 1000, tz=timezone.utc
+            ),
+            'duration': timedelta(milliseconds=interval['duration']),
+            'signal_payload': interval['signal_payload'],
+          }
+          for interval in intervals
+          if all(key in interval for key in ['dstart', 'duration', 'signal_payload'])
+          and isinstance(interval['dstart'], (int, float))
+          and isinstance(interval['duration'], (int, float))
+          and interval['dstart'] > 0
+          and interval['duration'] > 0
+        ]
+        if len(transformed_intervals) != len(intervals):
+          logger.error(
+            f'Failed to transform some intervals for VEN {ven_id} due to invalid timestamp data'
+          )
+
         try:
           self._open_adr_server.add_event(
             ven_id=ven_id,
             signal_type='level',
             signal_name='simple',
-            intervals=data,
+            intervals=transformed_intervals,
             callback=self._event_callback,
           )
-          logger.info(f'Event added successfully for VEN: {ven_id}')
+          if not transformed_intervals:
+            logger.error(f'No valid intervals to process for VEN {ven_id}')
+            return
+          logger.info(
+            f'[{datetime.now(timezone.utc).isoformat()}] Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
+            f' from {transformed_intervals[0]["dtstart"]} to {transformed_intervals[-1]["dtstart"]}'
+          )
+        except ValueError as e:
+          logger.error(f'Invalid data in event for VEN {ven_id}: {e}')
+        except ConnectionError as e:
+          logger.error(f'Failed to connect to OpenADR server for VEN {ven_id}: {e}')
         except Exception as e:
           logger.error(f'Failed to add event for VEN {ven_id}: {e}')
+          logger.debug(
+            f'Event processing failed for VEN {ven_id} with {len(transformed_intervals)} '
+            f'intervals spanning {transformed_intervals[0]["dtstart"]} to '
+            f'{transformed_intervals[-1]["dtstart"]}',
+            exc_info=True,
+          )
 
   def get_open_adr_server_run(self) -> Any:
     """
@@ -255,4 +321,3 @@ class VirtualTopNode(AdrBaseConfig):
     :param opt_type: Opt type.
     :type opt_type: str
     """
-    print(f'VEN {ven_id} responded to Event {event_id} with: {opt_type}')

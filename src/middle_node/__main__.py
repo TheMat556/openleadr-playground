@@ -4,7 +4,8 @@ import sys
 
 from dotenv import load_dotenv
 
-from src.openadr_node.node_manager import NodeManager
+from src.openadr_node.models.rest_config import RestApiConfig
+from src.openadr_node.node_controller import NodeController
 
 
 def validate_config() -> None:
@@ -18,7 +19,7 @@ def validate_config() -> None:
   missing_vars = [var for var in required_vars if not os.getenv(var)]
   if missing_vars:
     raise ValueError(
-      f"Missing required environment variables: {', '.join(missing_vars)}"
+      f'Missing required environment variables: {", ".join(missing_vars)}'
     )
 
 
@@ -26,13 +27,16 @@ def main() -> None:
   load_dotenv()
   validate_config()
 
-  node_manager = NodeManager(
+  rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
+
+  node_manager = NodeController(
+    node_id=os.getenv('NODE_ID'),
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
-    http_port=int(os.getenv('VTN_PORT', 8080)),
-    vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
+    openadr_http_port=int(os.getenv('VTN_PORT', 8080)),
+    openadr_vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
     ven_name=os.getenv('VEN_NAME', 'default_ven'),
     vtn_url=os.getenv('CONNECT_VTN_URL'),
-    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
+    rest_api_config=rest_api_config,
   )
 
   try:

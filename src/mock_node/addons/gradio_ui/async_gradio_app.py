@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List
@@ -7,25 +6,23 @@ import gradio as gr
 import pandas as pd
 import plotly.graph_objs as go
 import math
-
-from gradio import Timer
 import logging
 
+from gradio import Timer
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 
 MINUTES_INTERVAL = 15
 KWH_UNIT = 'kWh'
+SLIDER_VALUE = 'Slider Value'
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-SLIDER_VALUE = 'Slider Value'
-
 
 class AsyncGradioApp(AdrBaseConfig):
+  TIMEZONE = timezone(timedelta(hours=1))
   """
   A Gradio application for interactive slider-based load profile visualization.
 
@@ -54,7 +51,7 @@ class AsyncGradioApp(AdrBaseConfig):
     self.slider_file = slider_file
     self.slider_values = self.load_slider_values(slider_file)
     self._current_consumption = 0
-    self.save_slider_values(*self.slider_values)  # Send interpolated values at startup
+    self.save_slider_values(*self.slider_values)
 
   @SignalConnector('update_consumption_data', 'nm')
   def _on_update_consumption_data(self, sender: str, signal: str, data: float) -> None:
@@ -68,6 +65,9 @@ class AsyncGradioApp(AdrBaseConfig):
     """
     self._current_consumption = data
 
+  def log_slider_file_issue(self, message: str) -> None:
+    logger.warning(f'{message} Please create {self.slider_file} with integer values.')
+
   def load_slider_values(self, filename: str) -> List[int]:
     """
     Load slider values from a file or generate default values.
@@ -80,48 +80,81 @@ class AsyncGradioApp(AdrBaseConfig):
     try:
       base_path = Path(__file__).parent.parent.parent
       filepath = (base_path / filename).resolve()
-
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
       return values[: self.num_sliders] + [30] * (self.num_sliders - len(values))
     except FileNotFoundError:
-      logging.warning(
+      self.log_slider_file_issue(
         f'Slider values file not found at {filename}. Using default values.'
       )
       return [30] * self.num_sliders
     except ValueError as e:
-      logging.error(f'Invalid data in {filename}: {e}')
+      self.log_slider_file_issue(f'Invalid data in {filename}: {e}')
       return [30] * self.num_sliders
+
+  def get_unix_timestamp_range(self) -> tuple:
+    """
+    Get start and end Unix timestamps for the current day in milliseconds.
+
+    :return: Tuple of start and end Unix timestamps in milliseconds
+    :rtype: tuple
+    """
+    now = datetime.now(self.TIMEZONE)
+    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_day = start_of_day + timedelta(days=1)
+    return int(start_of_day.timestamp() * 1000), int(end_of_day.timestamp() * 1000)
+
+  def datetime_to_unix_ms(self, dt: datetime) -> int:
+    """
+    Convert datetime to Unix timestamp in milliseconds.
+
+    :param dt: datetime object
+    :type dt: datetime
+    :return: Unix timestamp in milliseconds
+    :rtype: int
+    """
+    if dt.tzinfo is None:
+      dt = dt.replace(tzinfo=self.TIMEZONE)
+    return int(dt.timestamp() * 1000)
 
   def interpolate_slider_values(self, slider_values: List[int]) -> pd.DataFrame:
     """
-    Interpolate slider values to create a 15-minute resolution time series.
+    Interpolate slider values to create a 15-minute resolution time series with Unix timestamps in milliseconds (GMT+1).
 
-    :param slider_values: List of hourly slider values.
+    :param slider_values: List of hourly slider values
     :type slider_values: list[int]
-    :return: Interpolated DataFrame with 15-minute resolution time index.
+    :return: Interpolated DataFrame with 15-minute resolution
     :rtype: pandas.DataFrame
     """
-    time_index = pd.date_range(start='2024-01-01 00:00:00', periods=96, freq='15min')
+    start_timestamp, _end_timestamp = self.get_unix_timestamp_range()
+    start_dt = datetime.fromtimestamp(start_timestamp / 1000).replace(
+      tzinfo=self.TIMEZONE
+    )
+
+    time_index = pd.date_range(
+      start=start_dt, periods=96, freq='15min', tz=self.TIMEZONE
+    )
     original_time_index = pd.date_range(
-      start='2024-01-01 00:00:00', periods=24, freq='1h'
+      start=start_dt, periods=24, freq='1h', tz=self.TIMEZONE
     )
 
     df_original = pd.DataFrame(
       {'Time': original_time_index, SLIDER_VALUE: slider_values}
     )
     df_original.set_index('Time', inplace=True)
-    df_interpolated = df_original.reindex(time_index).interpolate(method='linear')
-    df_interpolated.index = df_interpolated.index.strftime('%H:%M')
 
-    return df_interpolated[[SLIDER_VALUE]]
+    df_interpolated = df_original.reindex(time_index).interpolate(method='linear')
+    df_interpolated['unix_timestamp'] = df_interpolated.index.view('int64') // 10**6
+    df_interpolated['display_time'] = df_interpolated.index.strftime('%H:%M')
+
+    return df_interpolated[[SLIDER_VALUE, 'unix_timestamp', 'display_time']]
 
   def save_slider_values(self, *args: int) -> None:
     """
-    Save slider values to a file and send interpolated values via dispatcher.
+    Save slider values and generate interpolated load profile.
 
-    :param args: Variable number of slider values.
-    :type args: list[int]
+    Args:
+        *args: Variable number of slider values
     """
     slider_values = list(args)[: self.num_sliders]
     self.slider_values = slider_values
@@ -131,45 +164,52 @@ class AsyncGradioApp(AdrBaseConfig):
         for value in slider_values:
           file.write(f'{value}\n')
     except Exception as e:
-      print(f'Error saving slider values: {e}')
+      logger.error(f'Error saving slider values: {e}')
 
+    # Get interpolated values and send directly to the next function
     interpolated_values = self.interpolate_slider_values(slider_values)
-
-    result = {
-      f'timestamp_{i}': {'time': index, 'value': row['Slider Value']}
-      for i, (index, row) in enumerate(interpolated_values.iterrows())
-    }
-
-    json_result = json.dumps(result, indent=None, separators=(',', ':'))
-
-    self._send_interpolated_values(json_result)
+    self._send_interpolated_values(interpolated_values)
 
   @SignalSender('update_load_profile', 'ui')
-  def _send_interpolated_values(self, value: str) -> List[dict]:
+  def _send_interpolated_values(self, interpolated_values: pd.DataFrame) -> List[dict]:
     """
     Send interpolated slider values as load profile data.
 
-    :param value: JSON string of interpolated slider values.
-    :type value: str
-    :return: List of intervals with dtstart, duration, and signal_payload.
-    :rtype: list[dict]
+    Args:
+        interpolated_values: DataFrame containing interpolated values with unix_timestamp column
+
+    Returns:
+        List of intervals with dtstart, duration, and signal_payload
     """
-    data = json.loads(value)
     intervals = []
-    start_time = datetime.now().replace(
-      hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
-    )
-    for key, val in data.items():
-      time_str = val['time']
-      hours, minutes = map(int, time_str.split(':'))
-      dtstart = start_time + timedelta(hours=hours, minutes=minutes)
+    for _, row in interpolated_values.iterrows():
+      dt = datetime.fromtimestamp(int(row['unix_timestamp']) / 1000, timezone.utc)
       interval = {
-        'dtstart': dtstart,
+        'dtstart': dt,
         'duration': timedelta(minutes=15),
-        'signal_payload': val['value'],
+        'signal_payload': row[SLIDER_VALUE],
       }
       intervals.append(interval)
     return intervals
+
+  def get_current_allowed_consumption(self) -> str:
+    """
+    Get the current allowed consumption based on the interpolated slider values.
+
+    :return: Current allowed consumption in kWh
+    :rtype: str
+    """
+    interpolated_values = self.interpolate_slider_values(self.slider_values)
+    now = datetime.now(timezone.utc)
+    current_unix = self.datetime_to_unix_ms(now)
+
+    # Find the closest 15-minute interval
+    closest_row = interpolated_values.iloc[
+      (interpolated_values['unix_timestamp'] - current_unix).abs().argsort()[:1]
+    ]
+
+    allowed_consumption = closest_row[SLIDER_VALUE].iloc[0]
+    return f'{allowed_consumption} {KWH_UNIT}'
 
   def update_chart(self, *args: int) -> go.Figure:
     """
@@ -220,6 +260,15 @@ class AsyncGradioApp(AdrBaseConfig):
 
     return fig
 
+  def get_current_consumption(self) -> str:
+    """
+    Get the current consumption.
+
+    :return: Current consumption in kWh
+    :rtype: str
+    """
+    return f'{self._current_consumption} {KWH_UNIT}'
+
   def create_interface(self) -> gr.Blocks:
     """
     Create the Gradio interface with sliders and interactive plot.
@@ -236,7 +285,7 @@ class AsyncGradioApp(AdrBaseConfig):
           value=self.slider_values[index],
           step=1,
           label=f'Slider {index}:00',
-          scale=1,  # Distribute space equally
+          scale=1,
         )
       else:
         return gr.Slider(visible=False)
@@ -286,41 +335,3 @@ class AsyncGradioApp(AdrBaseConfig):
           )
 
     return interface
-
-  def get_current_consumption(self) -> str:
-    """
-    Get the current consumption value.
-
-    :return: Current consumption value with unit.
-    :rtype: str
-    """
-    return f'{self._current_consumption} {KWH_UNIT}'
-
-  def get_current_allowed_consumption(self) -> str:
-    """
-    Get the current allowed consumption value.
-
-    :return: Current allowed consumption value with unit.
-    :rtype: str
-    """
-    interpolated_values = self.interpolate_slider_values(self.slider_values)
-    now = datetime.now()
-    minutes = (now.minute // MINUTES_INTERVAL) * MINUTES_INTERVAL
-    rounded_time = now.replace(minute=minutes, second=0, microsecond=0)
-    rounded_time_str = rounded_time.strftime('%H:%M')
-    allowed_consumption = interpolated_values.loc[rounded_time_str, SLIDER_VALUE]
-
-    return f'{allowed_consumption} {KWH_UNIT}'
-
-
-def main() -> None:
-  """
-  Main function to create and launch the AsyncGradioApp.
-  """
-  app = AsyncGradioApp(num_sliders=24, slider_file='slider_values.txt')
-  interface = app.create_interface()
-  interface.launch(share=True)
-
-
-if __name__ == '__main__':
-  main()

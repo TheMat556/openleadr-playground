@@ -1,9 +1,41 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
   rev: v0.8.1
   hooks:
-    # Run the linter.
     - id: ruff
-    # Run the formatter.
     - id: ruff-format
+
+- repo: local
+  hooks:
+    - id: check-env-mqtt
+      name: Check for .env.mqtt file
+      entry: python scripts/check_env_mqtt.py
+      language: python
+      pass_filenames: false
+      stages: [pre-commit]
+
+    - id: delete-docker-compose
+      name: Delete docker-compose.yml file
+      entry: python scripts/delete_generated_file.py
+      args: [docker-compose.yml]
+      language: python
+      pass_filenames: false
+      always_run: true
+      stages: [pre-commit]
+
+    - id: delete-env-variables
+      name: Delete env_variables.json file
+      entry: python scripts/delete_generated_file.py
+      args: [env_variables.json]
+      language: python
+      pass_filenames: false
+      always_run: true
+      stages: [pre-commit]
+
+    - id: delete-slider-values
+      name: Delete slider_values.txt files
+      entry: python scripts/delete_slider_values.py
+      language: python
+      pass_filenames: false
+      always_run: true
+      stages: [pre-commit]

@@ -1,5 +1,4 @@
 from typing import List
-import logging
 import sys
 
 import gradio as gr
@@ -9,8 +8,7 @@ from .helper import constants
 from .plot_manager import PlotManager
 from .interface_manager import InterfaceManager
 from .helper.config import ContainerConfig, ConfigManager
-
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class GradioNodeDashboard:

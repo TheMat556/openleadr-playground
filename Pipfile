@@ -14,13 +14,18 @@ pandas = "*"
 plotly = "*"
 python-dotenv = "*"
 dependency-injector = "*"
-pyopenssl = "24.2.1" #Important! verify is legacy in latest version, signxml not updated yet
+pyopenssl = "24.2.1" #Important! verify is deprecated in latest version, signxml not updated yet
 pydispatcher = "*"
 gradio = "*"
 nest-asyncio = "*"
 pyyaml = "*"
 flask = "*"
 "ruamel.yaml" = "*"
+igraph = "*"
+jsonschema = "*"
+cachetools = "*"
+"paho.mqtt" = "*"
+yappi = "*"
 
 [dev-packages]
 ruff = "*"
@@ -30,11 +35,11 @@ pre-commit = "*"
 python_version = "3.12"
 
 [scripts]
+dev = "python ./src/util/start_simple_setup.py"
 start-house-node = "python ./src/util/start_house_node.py"
 start-mock-node = "python ./src/util/start_mock_node.py"
 start-middle-node = "python ./src/util/start_middle_node.py"
 start-node-dashboard =  "python ./src/util/start_node_dashboard.py"
-start-simple-setup = "python ./src/util/start_simple_setup.py"
 start-advanced-setup = "python ./src/util/start_advanced_setup.py"
 generate-docker-compose = "python ./src/util/create_docker_compose.py"
 format = "ruff format ./"

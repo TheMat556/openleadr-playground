@@ -3,17 +3,13 @@ import json
 import asyncio
 from typing import Dict, Any, Optional, List
 import aiohttp
-import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
-
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
-
 from src.node_dashboard.helper.constants import Environment
 from src.node_dashboard.helper.utils import fetch_data_async
 from src.node_dashboard.helper.config import ContainerConfig
-
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class DataManager:
@@ -54,7 +50,8 @@ class DataManager:
     -------
     None
     """
-    timeout = aiohttp.ClientTimeout(total=30)
+    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     async with aiohttp.ClientSession(timeout=timeout) as session:
       tasks = [
         self._fetch_data(session, config, 'consumption') for config in self.configs
@@ -134,7 +131,13 @@ class DataManager:
     config : ContainerConfig
         The container configuration.
     consumption_data : Dict[str, Any]
-        The fetched consumption data.
+        The fetched consumption data in the format:
+        {
+            "overall_value": float,
+            "timestamp": int,
+            "unit": str,
+            "ven_id": str
+        }
 
     Returns
     -------
@@ -143,25 +146,37 @@ class DataManager:
     schema = {
       'type': 'object',
       'properties': {
-        'consumption': {
-          'type': 'object',
-          'properties': {'timestamp': {'type': 'string'}, 'value': {'type': 'number'}},
-          'required': ['timestamp', 'value'],
-        }
+        'overall_value': {'type': 'number'},
+        'timestamp': {'type': 'integer'},
+        'unit': {'type': 'string'},
+        'ven_id': {'type': 'string'},
       },
-      'required': ['consumption'],
+      'required': ['overall_value', 'timestamp', 'unit', 'ven_id'],
     }
+
+    logger.info(f'Processing consumption data: {consumption_data}')
 
     async with self.lock:
       try:
         validate(instance=consumption_data, schema=schema)
+
+        # Transform data to match buffer format
+        transformed_data = {
+          k2: consumption_data[k1]
+          for k1, k2 in [('timestamp', 'timestamp'), ('overall_value', 'value')]
+        }
+
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        buffer['consumption'].append(consumption_data['consumption'])
+
+        buffer['consumption'].append(transformed_data)
+
         if len(buffer['consumption']) > self.max_buffer_size:
           buffer['consumption'].pop(0)
+
         logger.info(f'Updated buffer for {config.container_name} (consumption)')
+
       except ValidationError as e:
         logger.error(
           f'Invalid consumption data format for {config.container_name}: {e.message}. Data: {consumption_data}'
@@ -190,14 +205,17 @@ class DataManager:
     """
     schema = {
       'type': 'object',
-      'properties': {
-        'value': {
+      'patternProperties': {
+        '^[0-9]{13}$': {
           'type': 'object',
-          'patternProperties': {'^[0-9]{2}:[0-9]{2}$': {'type': 'number'}},
-          'additionalProperties': False,
+          'properties': {
+            'duration': {'type': 'number'},
+            'signal_payload': {'type': 'number'},
+          },
+          'required': ['duration', 'signal_payload'],
         }
       },
-      'required': ['value'],
+      'additionalProperties': False,
     }
 
     if not load_profile_data:
@@ -210,13 +228,18 @@ class DataManager:
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        value_data = load_profile_data.get('value')
-        valid_entries = [
-          {'timestamp': time, 'value': value}
-          for time, value in value_data.items()
-          if isinstance(value, (int, float))
-        ]
-
+        valid_entries = []
+        for time, value in load_profile_data.items():
+          if not isinstance(value, dict):
+            continue
+          if not all(key in value for key in ['duration', 'signal_payload']):
+            continue
+          entry = {
+            'timestamp': int(time),
+            'duration': value['duration'],
+            'signal_payload': value['signal_payload'],
+          }
+          valid_entries.append(entry)
         buffer['load_profile'].extend(valid_entries)
 
         if len(buffer['load_profile']) > self.max_buffer_size:

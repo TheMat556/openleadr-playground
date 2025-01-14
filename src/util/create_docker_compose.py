@@ -1,38 +1,42 @@
+import logging
+
 import ruamel.yaml
 import argparse
 import sys
 import json
 from ruamel.yaml.scalarstring import SingleQuotedScalarString
 from typing import Optional, List, Dict, Any
+from dotenv import load_dotenv
+import os
+
+# Set up logging
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env.mqtt file
+load_dotenv('.env.mqtt')
 
 # Create YAML instance with specific string handling
 yaml = ruamel.yaml.YAML()
 yaml.preserve_quotes = True  # Preserve existing quotes
 yaml.default_flow_style = False  # Use block style
 yaml.allow_unicode = True  # Allow Unicode characters
+MQTT_CONFIG_WRITTEN = False
+
+# Validate MQTT environment variables
+required_mqtt_vars = [
+  'PRIVATE_MQTT_BROKER_URL',
+  'PRIVATE_MQTT_USERNAME',
+  'PRIVATE_MQTT_PASSWORD',
+  'PRIVATE_MQTT_PORT',
+]
 
 
 class PortRegistry:
-  """
-  A class to manage the allocation of unique ports.
-  """
-
   def __init__(self):
-    """
-    Initialize the PortRegistry with an empty set of used ports.
-    """
     self.used_ports = set()
 
   def allocate_port(self, base_port: int) -> int:
-    """
-    Allocate a unique port starting from the base_port.
-
-    :param base_port: The starting port number.
-    :type base_port: int
-    :raises ValueError: If the base_port is not in the valid range (0-65535).
-    :return: The allocated port number.
-    :rtype: int
-    """
     if not 0 <= base_port <= 65535:
       raise ValueError(f'Invalid port number: {base_port}')
     port = base_port
@@ -45,19 +49,7 @@ class PortRegistry:
 
 
 class IPAllocator:
-  """
-  A class to manage the allocation of unique IP addresses.
-  """
-
   def __init__(self, base_ip: str = '172.18.0'):
-    """
-    Initialize the IPAllocator with a base IP.
-
-    :param base_ip: The base IP address (format: xxx.xxx.xxx).
-    :type base_ip: str
-    :raises ValueError: If the base_ip format is invalid.
-    """
-    # Validate IP format
     try:
       octets = base_ip.split('.')
       if len(octets) != 3 or not all(
@@ -70,16 +62,9 @@ class IPAllocator:
       )
     self.base_ip = base_ip
     self.used_ips = set()
-    self.available_count = 253  # Track available IPs
+    self.available_count = 253
 
   def allocate_ip(self) -> str:
-    """
-    Allocate a unique IP address from the base IP range.
-
-    :raises ValueError: If the IP address pool is exhausted or fragmented.
-    :return: The allocated IP address.
-    :rtype: str
-    """
     if self.available_count <= 0:
       raise ValueError('IP address pool exhausted')
     for i in range(2, 255):
@@ -88,9 +73,7 @@ class IPAllocator:
         self.used_ips.add(ip)
         self.available_count -= 1
         return ip
-    raise ValueError(
-      'IP address pool fragmented'
-    )  # Should never happen if available_count > 0
+    raise ValueError('IP address pool fragmented')
 
 
 def generate_node(
@@ -108,50 +91,19 @@ def generate_node(
   parent_ip: Optional[str] = None,
   last_layer_children: int = 2,
 ) -> Optional[Dict[str, Any]]:
-  """
-  Generate a node with the given layer and index.
+  global MQTT_CONFIG_WRITTEN
 
-  :param layer: The current layer of the node.
-  :type layer: int
-  :param index: The index of the node.
-  :type index: str
-  :param max_layers: The maximum number of layers.
-  :type max_layers: int
-  :param port_registry: The PortRegistry instance.
-  :type port_registry: PortRegistry
-  :param ip_allocator: The IPAllocator instance.
-  :type ip_allocator: IPAllocator
-  :param parent_path_prefix: The path prefix of the parent node.
-  :type parent_path_prefix: Optional[str]
-  :param base_port: The base port number.
-  :type base_port: int
-  :param gradio_port: The Gradio port number.
-  :type gradio_port: int
-  :param rest_api_port: The REST API port number.
-  :type rest_api_port: int
-  :param parent_ports: The list of parent ports.
-  :type parent_ports: Optional[List[str]]
-  :param parent_service_name: The name of the parent service.
-  :type parent_service_name: Optional[str]
-  :param parent_ip: The IP address of the parent node.
-  :type parent_ip: Optional[str]
-  :param last_layer_children: The number of children in the last layer.
-  :type last_layer_children: int
-  :return: The generated node configuration.
-  :rtype: Optional[Dict[str, Any]]
-  """
   if layer >= max_layers:
     return None
 
-  # Allocate ports and IP address
   port = port_registry.allocate_port(base_port)
   gradio_port = port_registry.allocate_port(gradio_port)
   rest_api_port = port_registry.allocate_port(rest_api_port)
   ip_address = ip_allocator.allocate_ip()
 
-  # Define path prefix and environment variables
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
   environment = {
+    'NODE_ID': index,
     'VTN_NAME': f'vtn_{index}',
     'VTN_URL': f'http://localhost:{port}{path_prefix}OpenADR2/Simple/2.0b',
     'VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
@@ -169,14 +121,34 @@ def generate_node(
       f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 
-  # Define port mappings
+  missing_vars = [var for var in required_mqtt_vars if not os.getenv(var)]
+  if missing_vars:
+    logger.warning(
+      f'Missing required MQTT environment variables: {", ".join(missing_vars)}'
+    )
+
+  # Update environment with MQTT configuration if all variables are present
+  if layer == max_layers - 1 and not MQTT_CONFIG_WRITTEN:
+    MQTT_CONFIG_WRITTEN = True
+    environment.update(
+      {
+        'PRIVATE_MQTT_BROKER_URL': os.getenv('PRIVATE_MQTT_BROKER_URL'),
+        'PRIVATE_MQTT_USERNAME': os.getenv('PRIVATE_MQTT_USERNAME'),
+        'PRIVATE_MQTT_PASSWORD': os.getenv('PRIVATE_MQTT_PASSWORD'),
+        'PRIVATE_MQTT_PORT': os.getenv('PRIVATE_MQTT_PORT'),
+        'PRIVATE_MQTT_TOPIC_LOAD_PROFILE': os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
+        'PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION': os.getenv(
+          'PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'
+        ),
+      }
+    )
+
   port_mapping = [
     SingleQuotedScalarString(f'{port}:{port}'),
     SingleQuotedScalarString(f'{gradio_port}:{gradio_port}'),
     SingleQuotedScalarString(f'{rest_api_port}:{rest_api_port}'),
   ]
 
-  # Determine the Dockerfile based on the node's index
   if index == '0':
     dockerfile = './src/docker/top_node/Dockerfile'
   elif layer == max_layers - 1:
@@ -184,7 +156,6 @@ def generate_node(
   else:
     dockerfile = './src/docker/middle_node/Dockerfile'
 
-  # Define the node configuration
   node = {
     'path_prefix': path_prefix,
     'server_name': index,
@@ -197,7 +168,6 @@ def generate_node(
     'expose': [port, rest_api_port],
   }
 
-  # Add healthcheck for non-leaf nodes
   if layer < max_layers - 1:
     node['healthcheck'] = {
       'test': SingleQuotedScalarString(
@@ -208,9 +178,8 @@ def generate_node(
       'retries': 10,
     }
 
-  # Generate child nodes
   children = []
-  num_children = last_layer_children if layer == max_layers - 2 else 2
+  num_children = last_layer_children
   for i in range(num_children):
     child_index = f'{index}_{i}'
     child_node = generate_node(
@@ -241,19 +210,8 @@ def generate_node(
 def flatten_services(
   node: Dict[str, Any], services: Dict[str, Any], env_json: Dict[str, Any]
 ) -> None:
-  """
-  Flatten the hierarchical structure into a dictionary of services and build the environment JSON structure.
-
-  :param node: The node configuration.
-  :type node: Dict[str, Any]
-  :param services: The dictionary to store flattened services.
-  :type services: Dict[str, Any]
-  :param env_json: The dictionary to store environment variables.
-  :type env_json: Dict[str, Any]
-  """
   service_name = node['server_name']
 
-  # Use CommentedSeq to precisely control port string representation
   from ruamel.yaml.comments import CommentedSeq
 
   ports = CommentedSeq()
@@ -264,7 +222,7 @@ def flatten_services(
     'build': node['build'],
     'container_name': node['container_name'],
     'environment': [f'{key}={value}' for key, value in node['environment'].items()],
-    'ports': ports,  # Use CommentedSeq to preserve exact port string representation
+    'ports': ports,
     'networks': node['networks'],
     'depends_on': node['depends_on'],
     'expose': node['expose'],
@@ -279,21 +237,11 @@ def flatten_services(
 
 
 def create_docker_compose(layers: int, last_layer_children: int) -> None:
-  """
-  Generate the hierarchical YAML structure and create docker-compose.yml.
-
-  :param layers: The number of layers to generate.
-  :type layers: int
-  :param last_layer_children: The number of children in the last layer.
-  :type last_layer_children: int
-  :raises TypeError: If layers is not an integer.
-  :raises ValueError: If layers is not positive or exceeds the maximum allowed value.
-  """
   if not isinstance(layers, int):
     raise TypeError('layers must be an integer')
   if layers <= 0:
     raise ValueError('layers must be positive')
-  if layers > 10:  # Adjust limit as needed
+  if layers > 10:
     raise ValueError('layers exceeds maximum allowed value')
 
   port_registry = PortRegistry()
@@ -305,7 +253,6 @@ def create_docker_compose(layers: int, last_layer_children: int) -> None:
   env_json = {}
   flatten_services(root, services, env_json)
 
-  # Add the node_dashboard service
   services['node_dashboard'] = {
     'build': {'context': '.', 'dockerfile': './src/docker/node_dashboard/Dockerfile'},
     'container_name': 'node_dashboard',

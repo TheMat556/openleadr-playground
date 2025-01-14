@@ -1,14 +1,10 @@
-import logging
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 import plotly.graph_objs as go
 from .helper.config import ContainerConfig
-from .helper.utils import round_to_nearest_minute
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.node_dashboard.helper.logger import logger
 
 
 class PlotManager:
@@ -148,7 +144,7 @@ class PlotManager:
     fill_color: str,
   ) -> None:
     """
-    Adds a trace to the figure.
+    Adds or updates a trace in the figure by name.
 
     Parameters
     ----------
@@ -170,14 +166,45 @@ class PlotManager:
     None
     """
     if not data:
+      logger.debug(f'No data to add for trace: {name}')
       return
 
+    # Process incoming data to get times/values
     times, values = self._process_data_points(data)
-    if times and values:
+    if not times or not values:
+      return
+
+    # Sort by time to ensure the line connects chronologically
+    combined = sorted(zip(times, values), key=lambda x: x[0])
+    sorted_times, sorted_values = zip(*combined)
+
+    # Check if a trace with this name already exists
+    existing_trace_index = None
+    for i, trace in enumerate(fig.data):
+      if trace.name == name:
+        existing_trace_index = i
+        break
+
+    if existing_trace_index is not None:
+      # Extend the existing trace's data
+      old_x = list(fig.data[existing_trace_index].x)
+      old_y = list(fig.data[existing_trace_index].y)
+
+      # Combine old and new data
+      combined_old_new = list(zip(old_x, old_y)) + list(
+        zip(sorted_times, sorted_values)
+      )
+      combined_old_new.sort(key=lambda x: x[0])  # Keep everything in time order
+      updated_times, updated_values = zip(*combined_old_new)
+
+      fig.data[existing_trace_index].x = updated_times
+      fig.data[existing_trace_index].y = updated_values
+    else:
+      # Add a new trace if none exists
       fig.add_trace(
         go.Scatter(
-          x=times,
-          y=values,
+          x=sorted_times,
+          y=sorted_values,
           mode='lines+markers',
           name=name,
           line=dict(color=line_color),
@@ -187,71 +214,99 @@ class PlotManager:
         )
       )
 
+  @staticmethod
   def _process_data_points(
-    self, data: List[Dict[str, Any]]
+    data: List[Dict[str, Any]],
   ) -> Tuple[List[datetime], List[float]]:
     """
-    Processes data points and returns sorted times and values.
+    Process data points for plotting.
 
     Parameters
     ----------
     data : List[Dict[str, Any]]
-        Data points.
+        List of data points to process.
 
     Returns
     -------
     Tuple[List[datetime], List[float]]
-        Sorted times and values from the data.
+        Tuple containing lists of timestamps and values.
     """
+    if not data:
+      return [], []
+
     times = []
     values = []
 
-    for entry in data:
-      timestamp = entry.get('timestamp')
-      value = entry.get('value')
-      if timestamp and value:
-        time = self._parse_timestamp(timestamp)
-        if time:
-          times.append(round_to_nearest_minute(time))
-          values.append(value)
+    for point in data:
+      # Check if this is load profile data (has 'signal_payload')
+      if 'signal_payload' in point:
+        # Validate timestamp before conversion
+        if not isinstance(point['timestamp'], (int, float)) or point['timestamp'] <= 0:
+          logger.warning(f'Invalid timestamp value: {point["timestamp"]}')
+          continue
+        timestamp = datetime.fromtimestamp(
+          point['timestamp'] / 1000
+        )  # Convert from milliseconds
+        value = point['signal_payload']
+      # Check if this is consumption data (has 'value')
+      elif 'value' in point:
+        try:
+          timestamp_val = int(point['timestamp'])
+          if timestamp_val <= 0:
+            logger.warning(f'Invalid timestamp value: {timestamp_val}')
+            continue
+          timestamp = datetime.fromtimestamp(
+            timestamp_val / 1000
+          )  # Convert string timestamp from milliseconds
+          value = point['value']
+        except (ValueError, TypeError) as e:
+          logger.warning(f'Invalid timestamp format: {point["timestamp"]}. Error: {e}')
+          continue
+      else:
+        continue
 
-    if not times or not values:
-      return [], []
+      times.append(timestamp)
+      values.append(value)
 
-    # Sort data points in-place
-    data_points = list(zip(times, values))
-    data_points.sort(key=lambda x: x[0])
-    sorted_times, sorted_values = zip(*data_points)
-    return list(sorted_times), list(sorted_values)
+    return times, values
 
-  def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
+  @staticmethod
+  def _parse_timestamp(timestamp: str) -> Optional[datetime]:
     """
-    Parses a timestamp string into a datetime object.
+    Parses a Unix timestamp string into a datetime object.
 
     Parameters
     ----------
     timestamp : str
-        Timestamp string.
+        Unix timestamp string.
 
     Returns
     -------
     Optional[datetime]
         Parsed datetime object or None if parsing fails.
     """
-    for fmt in ('%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
-      try:
-        dt = datetime.strptime(timestamp, fmt)
-        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
-      except ValueError:
-        continue
     try:
-      return self.parse_time_to_datetime(timestamp)
+      if timestamp.isdigit():
+        length = len(timestamp)
+        if length == 13:
+          # Convert milliseconds to seconds
+          return datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+        elif length == 10:
+          # Convert seconds to datetime
+          return datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+        elif length == 16:
+          # Convert microseconds to seconds
+          return datetime.fromtimestamp(int(timestamp) / 1_000_000, tz=timezone.utc)
+        else:
+          raise ValueError(f'Unexpected Unix timestamp length: {length}')
+      else:
+        raise ValueError(f'Invalid Unix timestamp format: {timestamp}')
     except ValueError as e:
       logger.error(f'Invalid timestamp format: {timestamp}. Error: {e}')
       raise
 
   @staticmethod
-  def parse_time_to_datetime(time_str: str, timezone: Optional[str] = None) -> datetime:
+  def parse_time_to_datetime(time_str: str, tz_info: Optional[str] = None) -> datetime:
     """
     Parses a time string in 'HH:MM' format to a datetime object with today's date.
 
@@ -259,7 +314,7 @@ class PlotManager:
     ----------
     time_str : str
         Time string in 'HH:MM' format.
-    timezone : Optional[str], optional
+    tz_info : Optional[str], optional
         Timezone information to be applied, by default None.
 
     Returns
@@ -274,6 +329,6 @@ class PlotManager:
     except ValueError as e:
       logger.error(f'Invalid time string: {time_str}. Error: {e}')
       raise
-    if timezone:
-      dt = dt.replace(tzinfo=ZoneInfo(timezone))
+    if tz_info:
+      dt = dt.replace(tzinfo=ZoneInfo(tz_info))
     return dt

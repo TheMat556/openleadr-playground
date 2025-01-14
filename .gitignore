@@ -1,5 +1,6 @@
 .idea/
 .DS_Store
+.env.mqtt
 
 docker-compose.yml
 env_variables.json
@@ -7,3 +8,7 @@ env_variables.json
 /src/database/
 /src/mock_node/slider_values.txt
 
+*.sqlite
+*.sqlite3
+*.db
+*.db3

@@ -206,7 +206,7 @@ class VirtualEndNode(AdrBaseConfig):
     :raises KeyError: If the event is missing required fields.
     :raises ValueError: If the event signals format is invalid.
     """
-    logger.info('Processing OpenADR event')
+    logger.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {'event_descriptor', 'active_period', 'event_signals', 'targets'}
     if not all(key in event for key in required_keys):
       raise KeyError(f'Event missing required fields: {required_keys}')
