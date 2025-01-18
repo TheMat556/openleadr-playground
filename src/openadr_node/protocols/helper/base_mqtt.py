@@ -61,7 +61,7 @@ class BaseMQTT:
     self._ready = Event()
 
     # Initialize MQTT client
-    client_id = f'{username}_{uuid.uuid4()}'
+    client_id = f'client_{uuid.uuid4()}'
     self.client = mqtt.Client(client_id=client_id, clean_session=True)
     self._configure_client(use_tls, ca_certs)
 
@@ -117,6 +117,8 @@ class BaseMQTT:
         self.client.username_pw_set(self.username, self.password)
 
       if use_tls:
+        if not ca_certs:
+          raise ValueError('CA certificates must be provided when use_tls is True')
         self.client.tls_set(ca_certs=ca_certs, tls_version=ssl.PROTOCOL_TLSv1_2)
         self.client.tls_insecure_set(False)
 

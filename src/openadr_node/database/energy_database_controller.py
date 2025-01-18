@@ -22,21 +22,24 @@ class EnergyDatabaseController:
     """Initialize the database tables for load profiles, consumption, and z-values"""
     try:
       self.db_manager.connect()
+      float_not_null = 'FLOAT NOT NULL'
+      text_not_null = 'TEXT NOT NULL'
+
       self.db_manager.create_table(
         'load_profiles',
         {
           'dstart': 'INTEGER PRIMARY KEY UNIQUE',
           'duration': 'INTEGER NOT NULL',
-          'signal_payload': 'FLOAT NOT NULL',
+          'signal_payload': float_not_null,
         },
       )
       self.db_manager.create_table(
         'consumption',
         {
           'timestamp': 'INTEGER PRIMARY KEY',
-          'ven_id': 'TEXT NOT NULL',
-          'resource_id': 'TEXT NOT NULL',
-          'value': 'FLOAT NOT NULL',
+          'ven_id': text_not_null,
+          'resource_id': text_not_null,
+          'value': float_not_null,
         },
       )
       # New table for z-values
@@ -44,8 +47,8 @@ class EnergyDatabaseController:
         'z_values',
         {
           'timestamp': 'INTEGER NOT NULL',
-          'ven_id': 'TEXT NOT NULL',
-          'z_value': 'FLOAT NOT NULL',
+          'ven_id': text_not_null,
+          'z_value': float_not_null,
           'PRIMARY KEY': '(timestamp, ven_id)',
         },
       )
@@ -192,11 +195,23 @@ class EnergyDatabaseController:
     Returns:
         Dict[str, np.ndarray]: Load profile data
     """
+    allowed_columns = {'dstart', 'duration', 'signal_payload'}
+    allowed_directions = {'ASC', 'DESC'}
+
+    # Parse and validate order_by
+    try:
+      column, direction = order_by.split()
+      if column not in allowed_columns or direction not in allowed_directions:
+        raise ValueError('Invalid order_by clause')
+    except ValueError:
+      logger.error(f'Invalid order_by parameter: {order_by}')
+      raise ValueError('Invalid order_by parameter')
+
     base_query = f"""
-                    SELECT dstart, duration, signal_payload
-                    FROM load_profiles
-                    ORDER BY {order_by}
-                """
+                      SELECT dstart, duration, signal_payload
+                      FROM load_profiles
+                      ORDER BY {column} {direction}
+                  """
 
     params = []
     if limit is not None:

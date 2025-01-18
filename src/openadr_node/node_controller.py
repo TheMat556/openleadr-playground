@@ -117,11 +117,11 @@ class NodeController(AdrBaseConfig):
 
   def __del__(self):
     """
-    Ensure the periodic tasks are canceled and resources are cleaned up when the instance is destroyed.
+    Ensure all resources are cleaned up when the instance is destroyed.
     """
     self.cancel_periodic_tasks()
     if hasattr(self, '_rest_api') and self._rest_api:
-      self._rest_api.shutdown_server()
+      self._rest_api.shutdown()
     if hasattr(self, '_mqtt_controller') and self._mqtt_controller:
       self._mqtt_controller.stop()
     logger.info('NodeController instance has been cleaned up.')
@@ -151,8 +151,8 @@ class NodeController(AdrBaseConfig):
         'Incomplete REST API configuration provided. REST API manager will not be initialized.'
       )
       return
-    self._rest_api = RestAPIController(config.port)
     try:
+      self._rest_api = RestAPIController(config.port)
       self._rest_api.set_load_profile_manager(self._load_profile_manager)
       self._rest_api.init_routes(self._rest_api)
       self._start_rest_api_thread()
@@ -164,7 +164,9 @@ class NodeController(AdrBaseConfig):
     """
     Start the REST API server in a separate thread.
     """
-    self._thread_manager.start_thread(target=self._rest_api.run, name='RestApiThread')
+    self._thread_manager.start_thread(
+      target=self._rest_api.serve_forever, name='RestApiThread'
+    )
 
   def _initialize_mqtt_controller(self, config: MQTTConfig) -> None:
     """
@@ -181,8 +183,6 @@ class NodeController(AdrBaseConfig):
         energy_database_controller=self._load_profile_manager,
         ven_id=self._ven_name,
       )
-      signal.signal(signal.SIGTERM, self._mqtt_controller.signal_handler)
-      signal.signal(signal.SIGINT, self._mqtt_controller.signal_handler)
       self._mqtt_controller.start()
       self._start_mqtt_threads()
     else:
