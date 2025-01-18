@@ -1,6 +1,6 @@
 import asyncio
-import signal
 import sys
+import uuid
 from datetime import timedelta
 from typing import Optional, List, Any, Dict, Callable
 
@@ -73,34 +73,27 @@ class NodeController(AdrBaseConfig):
     self._openadr_vtn_path_prefix = openadr_vtn_path_prefix
     self._mqtt_config = mqtt_config
     self._rest_api_config = rest_api_config
-    self._dispatcher_manager = NodeDispatcherController(self)
-
-    self._periodic_tasks = []
-    self._loop = asyncio.get_event_loop()
-    self._node_task_manager = NodeOpenADRController(
-      self._loop,
-      vtn_name=self._vtn_name,
-      ven_name=self._ven_name,
-      vtn_url=self._vtn_url,
-      openadr_http_host=self._openadr_http_host,
-      openadr_http_port=self._openadr_http_port,
-      openadr_vtn_path_prefix=self._openadr_vtn_path_prefix,
-    )
-    self.create_node_tasks()
 
     self._subscribers: Dict[str, List[Callable]] = {}
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption = 0.0
-    self._load_profile_manager = None
+    self._energy_database_controller = None
+
+    self._dispatcher_manager = NodeDispatcherController(self)
     self._thread_manager = NodeThreadController()
 
-    if node_id:
-      self._load_profile_manager = EnergyDatabaseController(
-        DatabaseManager(f'{node_id}.db')
-      )
+    self._periodic_tasks = []
+    self._loop = asyncio.get_event_loop()
 
-    if self._load_profile_manager:
-      self.node_resource_controller = NodeResourceController(self._load_profile_manager)
+    database_id = node_id or str(uuid.uuid4())
+    self._energy_database_controller = EnergyDatabaseController(
+      DatabaseManager(f'{database_id}.db')
+    )
+
+    if self._energy_database_controller:
+      self.node_resource_controller = NodeResourceController(
+        self._energy_database_controller
+      )
       self.start_periodic_task(
         lambda: self.node_resource_controller.update_load_profile(
           '', None, use_z_directly=False
@@ -112,6 +105,17 @@ class NodeController(AdrBaseConfig):
 
     if self._mqtt_config:
       self._initialize_mqtt_controller(self._mqtt_config)
+
+    self._node_task_manager = NodeOpenADRController(
+      self._loop,
+      vtn_name=self._vtn_name,
+      ven_name=self._ven_name,
+      vtn_url=self._vtn_url,
+      openadr_http_host=self._openadr_http_host,
+      openadr_http_port=self._openadr_http_port,
+      openadr_vtn_path_prefix=self._openadr_vtn_path_prefix,
+    )
+    self.create_node_tasks()
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -153,7 +157,7 @@ class NodeController(AdrBaseConfig):
       return
     try:
       self._rest_api = RestAPIController(config.port)
-      self._rest_api.set_load_profile_manager(self._load_profile_manager)
+      self._rest_api.set_load_profile_manager(self._energy_database_controller)
       self._rest_api.init_routes(self._rest_api)
       self._start_rest_api_thread()
     except Exception as e:
@@ -180,7 +184,7 @@ class NodeController(AdrBaseConfig):
     if config.is_valid():
       self._mqtt_controller = MQTTController(
         config=config,
-        energy_database_controller=self._load_profile_manager,
+        energy_database_controller=self._energy_database_controller,
         ven_id=self._ven_name,
       )
       self._mqtt_controller.start()

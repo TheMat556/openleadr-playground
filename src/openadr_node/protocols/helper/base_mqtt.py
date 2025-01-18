@@ -183,7 +183,7 @@ class BaseMQTT:
       except ConnectionError as e:
         logger.error(f'Failed to reconnect: {e}')
 
-  def _reconnect(self, max_retries: int = 5, retry_delay: int = 5) -> bool:
+  def _reconnect(self, max_retries: int = 5, initial_delay: int = 5) -> bool:
     """
     Attempt to reconnect to the MQTT broker.
 
@@ -211,7 +211,8 @@ class BaseMQTT:
         return True
       except MQTTException as e:
         logger.error(f'Reconnection attempt failed: {e}')
-        time.sleep(retry_delay)
+        delay = initial_delay * (2**attempt)
+        time.sleep(min(delay, 60))
 
     raise ConnectionError('All reconnection attempts failed')
 
@@ -239,3 +240,15 @@ class BaseMQTT:
         True if the connection is ready, False otherwise.
     """
     return self._ready.is_set()
+
+  def cleanup(self) -> None:
+    """Stop the network loop and disconnect from the broker."""
+    try:
+      self.client.loop_stop()
+      if self.is_connected:
+        self.client.disconnect()
+    except MQTTException as e:
+      logger.error(f'Error during cleanup: {e}')
+    finally:
+      self._connected = False
+      self._ready.clear()

@@ -178,6 +178,50 @@ class EnergyDatabaseController:
       logger.error(f'Failed to insert consumption batch: {str(e)}')
       raise
 
+  def get_latest_resource_consumption(
+    self,
+    target_timestamp: int,
+    resource_id: str,
+    time_window_ms: int = 15 * 60 * 1000,  # Default 15 minutes in milliseconds
+  ) -> float:
+    """
+    Get the latest consumption value for a specific resource within the specified time window.
+
+    Args:
+        target_timestamp (int): The target timestamp in milliseconds to search from
+        resource_id (str): The identifier of the resource to query
+        time_window_ms (int): The time window in milliseconds to look back (default: 15 minutes)
+
+    Returns:
+        float: The latest consumption value if found within the time window, 0 otherwise
+    """
+    try:
+      query = """
+              SELECT value
+              FROM consumption
+              WHERE resource_id = ?
+              AND timestamp >= ? - ?
+              AND timestamp <= ?
+              ORDER BY timestamp DESC
+              LIMIT 1
+            """
+
+      params = [resource_id, target_timestamp, time_window_ms, target_timestamp]
+      rows = self.db_manager.execute_query(query, params)
+
+      return float(rows[0]['value']) if rows else 0.0
+
+    except DatabaseError as e:
+      logger.error(
+        f'Failed to retrieve latest consumption for resource {resource_id}: {str(e)}'
+      )
+      raise
+    except Exception as e:
+      logger.error(
+        f'Unexpected error retrieving consumption for resource {resource_id}: {str(e)}'
+      )
+      return 0.0
+
   def get_load_profile(
     self,
     limit: Optional[int] = None,
@@ -207,13 +251,13 @@ class EnergyDatabaseController:
       logger.error(f'Invalid order_by parameter: {order_by}')
       raise ValueError('Invalid order_by parameter')
 
-    base_query = f"""
+    base_query = """
                       SELECT dstart, duration, signal_payload
                       FROM load_profiles
-                      ORDER BY {column} {direction}
+                      ORDER BY ? ?
                   """
 
-    params = []
+    params = [column, direction]
     if limit is not None:
       base_query += ' LIMIT ?'
       params.append(limit)

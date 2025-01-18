@@ -1,6 +1,6 @@
 from datetime import timezone, datetime
 import numpy as np
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, Response
 from typing import Any, Dict, Optional, Callable, Tuple, List
 from werkzeug.serving import make_server
 

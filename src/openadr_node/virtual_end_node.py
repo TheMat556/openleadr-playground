@@ -34,6 +34,7 @@ class VirtualEndNode(AdrBaseConfig):
     self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
     self._init_default_handler()
     self._base_event_registered = False
+    self._loxone_event_registered = False
     self._base_consumption = 0.0
 
   def _init_default_handler(self) -> None:
@@ -85,6 +86,49 @@ class VirtualEndNode(AdrBaseConfig):
       return 0.0
 
     return wrapper
+
+  def register_loxone_report(self) -> None:
+    """
+    Register the report for the Loxone system.
+
+    :raises Exception: If an error occurs during the registration process.
+    """
+    try:
+      if not self._open_adr_client:
+        raise ValueError('OpenADR client not initialized')
+
+      if not self._loxone_event_registered:
+        logger.info('Registering Loxone report')
+        report: List[ReportConfiguration] = [
+          ReportConfiguration(
+            resource_id='loxone',
+            measurement='energy',
+            sampling_rate=timedelta(seconds=5),
+            callback=lambda: self._loxone_consumption,
+          )
+        ]
+        self.add_reports(report)
+        self._loxone_event_registered = True
+        logger.info('Loxone report registered successfully')
+    except ValueError as e:
+      logger.error(f'OpenADR client initialization failed: {str(e)}')
+      self._loxone_event_registered = False
+      raise
+    except TypeError as e:
+      logger.error(
+        f'Invalid Loxone report configuration - Check measurement type and sampling rate: {str(e)}'
+      )
+      self._loxone_event_registered = False
+      raise
+    except (ConnectionError, TimeoutError) as e:
+      logger.error(
+        f'Network error while registering Loxone report - Check VTN connectivity: {str(e)}'
+      )
+      self._loxone_event_registered = False
+      raise
+    except Exception as e:
+      logger.error(f'Failed to register Loxone report: {e}')
+      raise
 
   def register_base_report(self) -> None:
     """
