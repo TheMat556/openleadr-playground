@@ -8,7 +8,10 @@ import numpy as np
 from numpy.typing import NDArray
 from pydispatch import dispatcher
 
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager, logger
+from src.openadr_node import logger
+from src.openadr_node.database.energy_database_controller import (
+  EnergyDatabaseController,
+)
 from src.openadr_node.errors.node_controller_errors import (
   LoadProfileError,
   ConsumptionError,
@@ -51,15 +54,15 @@ class NodeResourceController:
   TIMESTAMP_MULTIPLIER: int = 1000  # Convert seconds to milliseconds
   DISPATCHER_SENDER: str = 'nm'
 
-  def __init__(self, load_profile_manager: LoadProfileManager):
+  def __init__(self, energy_database_controller: EnergyDatabaseController):
     """
     Initialize the NodeResourceController.
 
     Args:
-        load_profile_manager: Manager instance for handling load profiles
+        energy_database_controller: Manager instance for handling load profiles
     """
-    self._load_profile_manager = load_profile_manager
-    self._calculator = NodeResourceCalculator(load_profile_manager)
+    self._energy_database_controller = energy_database_controller
+    self._calculator = NodeResourceCalculator(energy_database_controller)
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._current_consumption: float = 0.0
     self._lock = Lock()
@@ -142,7 +145,7 @@ class NodeResourceController:
         Array of calculated Z values
     """
     if len(ven_ids) > 0 and not use_z_directly:
-      latest_z_values = self._load_profile_manager.get_latest_z_values()
+      latest_z_values = self._energy_database_controller.get_latest_z_values()
       processed_z_values = self._calculator.process_latest_z_values(
         latest_z_values, ven_ids
       )
@@ -181,7 +184,9 @@ class NodeResourceController:
       processed_data = (
         data
         if data is not None
-        else self._transform_load_profile(self._load_profile_manager.get_load_profile())
+        else self._transform_load_profile(
+          self._energy_database_controller.get_load_profile()
+        )
       )
 
       if not all(
@@ -192,7 +197,7 @@ class NodeResourceController:
       ):
         processed_data = self._calculator.process_load_profile_data(processed_data)
 
-      self._load_profile_manager.insert_load_profile(processed_data)
+      self._energy_database_controller.insert_load_profile(processed_data)
       current_timestamp = int(
         datetime.now(timezone.utc).timestamp() * self.TIMESTAMP_MULTIPLIER
       )
@@ -213,7 +218,9 @@ class NodeResourceController:
       )
 
       if len(ven_ids) > 0:
-        self._load_profile_manager.insert_z_values(ven_ids, z_neu, current_timestamp)
+        self._energy_database_controller.insert_z_values(
+          ven_ids, z_neu, current_timestamp
+        )
         intervals = self._calculator.generate_time_intervals()
         new_data_structure = self._calculator.create_ven_profiles(
           ven_ids, z_neu, intervals
@@ -224,7 +231,7 @@ class NodeResourceController:
           data=new_data_structure,
         )
 
-    except Exception as e:
+    except (ValueError, KeyError) as e:
       logger.error(f'Error calculating load distribution: {str(e)}')
       raise LoadProfileError(f'Failed to update load profile: {str(e)}') from e
 
@@ -280,7 +287,7 @@ class NodeResourceController:
           'value': data.data[1],
         }
 
-        self._load_profile_manager.insert_consumption(consumption_data)
+        self._energy_database_controller.insert_consumption(consumption_data)
         self._handle_ven_activation(data.ven_id)
 
         logger.debug(f'Updated consumption data - Total: {self._current_consumption}')
@@ -290,7 +297,7 @@ class NodeResourceController:
           data=self._current_consumption,
         )
 
-    except Exception as e:
+    except (ValueError, KeyError) as e:
       logger.error(f'Error processing consumption data from sender {sender}: {str(e)}')
       raise ConsumptionError(f'Failed to update consumption data: {str(e)}') from e
 

@@ -14,6 +14,7 @@ from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
+from src.openadr_node.models.topic_config import TopicConfig
 from src.openadr_node.node_controller import NodeController
 
 logging.basicConfig(level=logging.INFO)
@@ -44,11 +45,16 @@ def create_rest_api_config(
 def create_mqtt_config() -> MQTTConfig:
   """Create an MQTTConfig instance from environment variables."""
   try:
+    topic_config = [
+      TopicConfig(topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'), topic_type='pub'),
+      TopicConfig(
+        topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'), topic_type='sub'
+      ),
+    ]
     return MQTTConfig(
       broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
       port=int(os.getenv('PRIVATE_MQTT_PORT')),
-      topic_load_profile=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
-      topic_consumption=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'),
+      topics=topic_config,
       username=os.getenv('PRIVATE_MQTT_USERNAME'),
       password=os.getenv('PRIVATE_MQTT_PASSWORD'),
     )
@@ -147,13 +153,17 @@ def run_house_node(
 
   rest_api_config = RestApiConfig(port=int(rest_api_port))
 
+  topic_config = [
+    TopicConfig(topic=mqtt_topic_load_profile, topic_type='pub'),
+    TopicConfig(topic=mqtt_topic_consumption, topic_type='sub'),
+  ]
+
   mqtt_config = MQTTConfig(
+    username=mqtt_username,
     broker=mqtt_broker,
     port=mqtt_port,
-    topic_load_profile=mqtt_topic_load_profile,
-    topic_consumption=mqtt_topic_consumption,
-    username=mqtt_username,
     password=mqtt_password,
+    topics=topic_config,
   )
 
   house_node = NodeController(

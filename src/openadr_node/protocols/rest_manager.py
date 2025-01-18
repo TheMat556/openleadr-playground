@@ -1,27 +1,30 @@
 from datetime import timezone, datetime
 import numpy as np
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, Response
 from typing import Any, Dict, Optional, Callable, Tuple, List
-import threading
+from werkzeug.serving import make_server
 
 from src.openadr_node import logger
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager
+from src.openadr_node.database.energy_database_controller import (
+  EnergyDatabaseController,
+)
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
 
 
-class RestApiManager:
+class RestAPIController:
   """
   Manages the REST API for the OpenADR node.
 
-  This class initializes and runs a Flask server to handle REST API requests.
+  This class initializes a Flask server to handle REST API requests.
   It provides endpoints for retrieving load profile and consumption data.
+  The actual server running is handled by the NodeController.
 
   Attributes:
       app (Flask): The Flask application instance.
       _rest_api_port (int): The port on which the REST API runs.
       _load_profile_manager (Any): The load profile manager instance.
       _get_current_consumption_callback (Any): Callback for getting current consumption.
-      server_thread (threading.Thread): The thread running the Flask server.
+      _server (werkzeug.serving.BaseWSGIServer): The WSGI server instance.
   """
 
   def __init__(self, port: int):
@@ -33,11 +36,11 @@ class RestApiManager:
     """
     self.app = Flask(__name__)
     self._rest_api_port = port
-    self._load_profile_manager: Optional[LoadProfileManager] = None
+    self._load_profile_manager: Optional[EnergyDatabaseController] = None
     self._get_current_consumption_callback: Optional[Callable[[], Dict[str, Any]]] = (
       None
     )
-    self.server_thread = None
+    self._server = None
 
   def set_load_profile_manager(self, load_profile_manager: Any) -> None:
     """
@@ -60,38 +63,26 @@ class RestApiManager:
       if callable(attr) and getattr(attr, '_rest_endpoint', False):
         self.app.add_url_rule(attr._rest_path, view_func=attr, methods=['GET'])
 
-  def run(self) -> None:
+  def serve_forever(self) -> None:
     """
-    Run the Flask server in a separate thread.
+    Start the Flask server. This method is called by the NodeController's thread manager.
     """
+    if self._server is None:
+      self._server = make_server('0.0.0.0', self._rest_api_port, self.app)
+    try:
+      self._server.serve_forever()
+    except Exception as e:
+      logger.error(f'Failed to start Flask server: {e}')
+      raise
 
-    def run_server():
-      try:
-        self.app.run(host='0.0.0.0', port=self._rest_api_port)
-      except OSError as e:
-        logger.error(f'Failed to start Flask server: {e}')
-        raise
-
-    self.server_thread = threading.Thread(target=run_server)
-    self.server_thread.start()
-
-  def shutdown_server(self) -> None:
+  def shutdown(self) -> None:
     """
-    Shutdown the Flask server.
+    Shutdown the Flask server cleanly.
     """
-    func = request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-      raise RuntimeError('Not running the Werkzeug Server')
-    func()
-
-  def __del__(self):
-    """
-    Ensure the Flask server is shut down when the instance is destroyed.
-    """
-    if self.server_thread and self.server_thread.is_alive():
+    if self._server:
       logger.info('Shutting down Flask server...')
-      self.shutdown_server()
-      self.server_thread.join()
+      self._server.shutdown()
+      self._server = None
       logger.info('Flask server shut down successfully.')
 
   def _check_manager_initialized(self) -> Optional[Tuple[Response, int]]:
@@ -99,7 +90,7 @@ class RestApiManager:
     Check if the load profile manager is initialized.
 
     Returns:
-        Any: JSON response if not initialized, otherwise None.
+        Optional[Tuple[Response, int]]: JSON response if not initialized, otherwise None.
     """
     if self._load_profile_manager is None:
       return jsonify({'error': 'Load profile manager not initialized'}), 500
@@ -116,7 +107,7 @@ class RestApiManager:
         data_type (str): Type of data being checked.
 
     Returns:
-        Any: JSON response if data not found, otherwise None.
+        Optional[Tuple[Response, int]]: JSON response if data not found, otherwise None.
     """
     if not data or not any(arr.size for arr in data.values()):
       return jsonify({'error': f'{data_type} not found'}), 404
@@ -124,12 +115,7 @@ class RestApiManager:
 
   @rest_endpoint('/data/load_profile')
   def get_load_profile(self) -> Any:
-    """
-    Get the load profile data.
-
-    Returns:
-        Any: JSON response containing the load profile data or an error message.
-    """
+    """Get the load profile data."""
     try:
       response = self._check_manager_initialized()
       if response:
@@ -164,12 +150,7 @@ class RestApiManager:
 
   @rest_endpoint('/data/consumption')
   def get_current_consumption(self) -> Any:
-    """
-    Get the current consumption data with Unix timestamp in milliseconds.
-
-    Returns:
-        Any: JSON response containing the consumption data or an error message.
-    """
+    """Get the current consumption data with Unix timestamp in milliseconds."""
     try:
       response = self._check_manager_initialized()
       if response:

@@ -6,10 +6,10 @@ from src.openadr_node import logger
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
 
 
-class LoadProfileManager:
+class EnergyDatabaseController:
   def __init__(self, db_manager: DatabaseManager, batch_size: int = 1000):
     """
-    Initialize the LoadProfileManager
+    Initialize the EnergyDatabaseController
 
     Args:
         db_manager (DatabaseManager): An instance of DatabaseManager
@@ -22,21 +22,24 @@ class LoadProfileManager:
     """Initialize the database tables for load profiles, consumption, and z-values"""
     try:
       self.db_manager.connect()
+      float_not_null = 'FLOAT NOT NULL'
+      text_not_null = 'TEXT NOT NULL'
+
       self.db_manager.create_table(
         'load_profiles',
         {
           'dstart': 'INTEGER PRIMARY KEY UNIQUE',
           'duration': 'INTEGER NOT NULL',
-          'signal_payload': 'FLOAT NOT NULL',
+          'signal_payload': float_not_null,
         },
       )
       self.db_manager.create_table(
         'consumption',
         {
           'timestamp': 'INTEGER PRIMARY KEY',
-          'ven_id': 'TEXT NOT NULL',
-          'resource_id': 'TEXT NOT NULL',
-          'value': 'FLOAT NOT NULL',
+          'ven_id': text_not_null,
+          'resource_id': text_not_null,
+          'value': float_not_null,
         },
       )
       # New table for z-values
@@ -44,8 +47,8 @@ class LoadProfileManager:
         'z_values',
         {
           'timestamp': 'INTEGER NOT NULL',
-          'ven_id': 'TEXT NOT NULL',
-          'z_value': 'FLOAT NOT NULL',
+          'ven_id': text_not_null,
+          'z_value': float_not_null,
           'PRIMARY KEY': '(timestamp, ven_id)',
         },
       )
@@ -175,6 +178,50 @@ class LoadProfileManager:
       logger.error(f'Failed to insert consumption batch: {str(e)}')
       raise
 
+  def get_latest_resource_consumption(
+    self,
+    target_timestamp: int,
+    resource_id: str,
+    time_window_ms: int = 15 * 60 * 1000,  # Default 15 minutes in milliseconds
+  ) -> float:
+    """
+    Get the latest consumption value for a specific resource within the specified time window.
+
+    Args:
+        target_timestamp (int): The target timestamp in milliseconds to search from
+        resource_id (str): The identifier of the resource to query
+        time_window_ms (int): The time window in milliseconds to look back (default: 15 minutes)
+
+    Returns:
+        float: The latest consumption value if found within the time window, 0 otherwise
+    """
+    try:
+      query = """
+              SELECT value
+              FROM consumption
+              WHERE resource_id = ?
+              AND timestamp >= ? - ?
+              AND timestamp <= ?
+              ORDER BY timestamp DESC
+              LIMIT 1
+            """
+
+      params = [resource_id, target_timestamp, time_window_ms, target_timestamp]
+      rows = self.db_manager.execute_query(query, params)
+
+      return float(rows[0]['value']) if rows else 0.0
+
+    except DatabaseError as e:
+      logger.error(
+        f'Failed to retrieve latest consumption for resource {resource_id}: {str(e)}'
+      )
+      raise
+    except Exception as e:
+      logger.error(
+        f'Unexpected error retrieving consumption for resource {resource_id}: {str(e)}'
+      )
+      return 0.0
+
   def get_load_profile(
     self,
     limit: Optional[int] = None,
@@ -192,13 +239,25 @@ class LoadProfileManager:
     Returns:
         Dict[str, np.ndarray]: Load profile data
     """
-    base_query = f"""
-                    SELECT dstart, duration, signal_payload
-                    FROM load_profiles
-                    ORDER BY {order_by}
-                """
+    allowed_columns = {'dstart', 'duration', 'signal_payload'}
+    allowed_directions = {'ASC', 'DESC'}
 
-    params = []
+    # Parse and validate order_by
+    try:
+      column, direction = order_by.split()
+      if column not in allowed_columns or direction not in allowed_directions:
+        raise ValueError('Invalid order_by clause')
+    except ValueError:
+      logger.error(f'Invalid order_by parameter: {order_by}')
+      raise ValueError('Invalid order_by parameter')
+
+    base_query = """
+                      SELECT dstart, duration, signal_payload
+                      FROM load_profiles
+                      ORDER BY ? ?
+                  """
+
+    params = [column, direction]
     if limit is not None:
       base_query += ' LIMIT ?'
       params.append(limit)
@@ -292,25 +351,43 @@ class LoadProfileManager:
 
   def get_closest_consumption_points(self, target_timestamp):
     """
-    Retrieve the nearest consumption point for each unique ven_id to the given timestamp.
+    Retrieve the nearest consumption point for each unique combination of ven_id and resource_id
+    to the given timestamp, considering only data points from the last 15 minutes.
 
     Args:
         target_timestamp (int): The target timestamp to search for.
 
     Returns:
-        List[Dict[str, Any]]: A list of the nearest consumption point records for each unique ven_id.
+        List[Dict[str, Any]]: A list of the nearest consumption point records for each unique
+                             combination of ven_id and resource_id.
     """
+    fifteen_minutes_ms = 15 * 60 * 1000
     query = """
         SELECT t1.timestamp, t1.ven_id, t1.resource_id, t1.value
         FROM consumption t1
         INNER JOIN (
-            SELECT ven_id, MIN(ABS(timestamp - ?)) AS min_diff
+            SELECT ven_id, resource_id, MIN(ABS(timestamp - ?)) AS min_diff
             FROM consumption
-            GROUP BY ven_id
+            WHERE timestamp >= ? - ?  -- Filter for last 15 minutes
+            AND timestamp <= ?        -- up to target timestamp
+            GROUP BY ven_id, resource_id  -- Group by both ven_id and resource_id
         ) t2
-        ON t1.ven_id = t2.ven_id AND ABS(t1.timestamp - ?) = t2.min_diff
+        ON t1.ven_id = t2.ven_id
+        AND t1.resource_id = t2.resource_id  -- Join on both ven_id and resource_id
+        AND ABS(t1.timestamp - ?) = t2.min_diff
+        WHERE t1.timestamp >= ? - ?   -- Apply same filter to outer query
+        AND t1.timestamp <= ?
     """
-    params = (target_timestamp, target_timestamp)
+    params = [
+      target_timestamp,  # For MIN(ABS(timestamp - ?))
+      target_timestamp,  # For timestamp >= ? - ?
+      fifteen_minutes_ms,  # The 15-minute window
+      target_timestamp,  # For timestamp <= ?
+      target_timestamp,  # For ABS(t1.timestamp - ?)
+      target_timestamp,  # For outer WHERE timestamp >= ? - ?
+      fifteen_minutes_ms,  # The 15-minute window again
+      target_timestamp,  # For outer WHERE timestamp <= ?
+    ]
     rows = self.db_manager.execute_query(query, params)
     return rows if rows else []
 

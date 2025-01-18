@@ -1,5 +1,5 @@
 # models/__init__.py
 
-from .rest_manager import RestApiManager
+from .rest_manager import RestAPIController
 
-__all__ = ['RestApiManager']
+__all__ = ['RestAPIController']

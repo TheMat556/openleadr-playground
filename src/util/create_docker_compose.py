@@ -278,7 +278,7 @@ def create_docker_compose(layers: int, last_layer_children: int) -> None:
     with open('env_variables.json', 'w') as file:
       json.dump(env_json, file, indent=2)
   except (IOError, PermissionError) as e:
-    print(f'Error writing configuration files: {e}')
+    logger.info(f'Error writing configuration files: {e}')
     sys.exit(1)
 
 
