@@ -5,11 +5,13 @@ from typing import Any, Dict, Optional, Callable, Tuple, List
 import threading
 
 from src.openadr_node import logger
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager
+from src.openadr_node.database.energy_database_controller import (
+  EnergyDatabaseController,
+)
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
 
 
-class RestApiManager:
+class RestAPIController:
   """
   Manages the REST API for the OpenADR node.
 
@@ -33,7 +35,7 @@ class RestApiManager:
     """
     self.app = Flask(__name__)
     self._rest_api_port = port
-    self._load_profile_manager: Optional[LoadProfileManager] = None
+    self._load_profile_manager: Optional[EnergyDatabaseController] = None
     self._get_current_consumption_callback: Optional[Callable[[], Dict[str, Any]]] = (
       None
     )

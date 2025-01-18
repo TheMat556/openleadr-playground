@@ -1,3 +1,4 @@
+import traceback
 from typing import List, Dict, Any, Optional
 
 import numpy as np
@@ -6,7 +7,7 @@ from src.openadr_node import logger
 from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
 
 
-class LoadProfileManager:
+class EnergyDatabaseController:
   def __init__(self, db_manager: DatabaseManager, batch_size: int = 1000):
     """
     Initialize the LoadProfileManager
@@ -292,25 +293,43 @@ class LoadProfileManager:
 
   def get_closest_consumption_points(self, target_timestamp):
     """
-    Retrieve the nearest consumption point for each unique ven_id to the given timestamp.
+    Retrieve the nearest consumption point for each unique combination of ven_id and resource_id
+    to the given timestamp, considering only data points from the last 15 minutes.
 
     Args:
         target_timestamp (int): The target timestamp to search for.
 
     Returns:
-        List[Dict[str, Any]]: A list of the nearest consumption point records for each unique ven_id.
+        List[Dict[str, Any]]: A list of the nearest consumption point records for each unique
+                             combination of ven_id and resource_id.
     """
+    fifteen_minutes_ms = 15 * 60 * 1000
     query = """
         SELECT t1.timestamp, t1.ven_id, t1.resource_id, t1.value
         FROM consumption t1
         INNER JOIN (
-            SELECT ven_id, MIN(ABS(timestamp - ?)) AS min_diff
+            SELECT ven_id, resource_id, MIN(ABS(timestamp - ?)) AS min_diff
             FROM consumption
-            GROUP BY ven_id
+            WHERE timestamp >= ? - ?  -- Filter for last 15 minutes
+            AND timestamp <= ?        -- up to target timestamp
+            GROUP BY ven_id, resource_id  -- Group by both ven_id and resource_id
         ) t2
-        ON t1.ven_id = t2.ven_id AND ABS(t1.timestamp - ?) = t2.min_diff
+        ON t1.ven_id = t2.ven_id
+        AND t1.resource_id = t2.resource_id  -- Join on both ven_id and resource_id
+        AND ABS(t1.timestamp - ?) = t2.min_diff
+        WHERE t1.timestamp >= ? - ?   -- Apply same filter to outer query
+        AND t1.timestamp <= ?
     """
-    params = (target_timestamp, target_timestamp)
+    params = [
+      target_timestamp,  # For MIN(ABS(timestamp - ?))
+      target_timestamp,  # For timestamp >= ? - ?
+      fifteen_minutes_ms,  # The 15-minute window
+      target_timestamp,  # For timestamp <= ?
+      target_timestamp,  # For ABS(t1.timestamp - ?)
+      target_timestamp,  # For outer WHERE timestamp >= ? - ?
+      fifteen_minutes_ms,  # The 15-minute window again
+      target_timestamp,  # For outer WHERE timestamp <= ?
+    ]
     rows = self.db_manager.execute_query(query, params)
     return rows if rows else []
 

@@ -1,50 +1,50 @@
 from dataclasses import dataclass
+from typing import Optional, List
+from .topic_config import TopicConfig
 
 
 @dataclass
 class MQTTConfig:
-  """
-  Configuration settings for MQTT connection.
+  """Configuration for MQTT client connection.
 
-  Attributes
-  ----------
-  broker : str
-      The MQTT broker address.
-  port : int
-      The port number for the MQTT broker.
-  topic_load_profile : str
-      The MQTT topic for load profile.
-  topic_consumption : str
-      The MQTT topic for consumption.
-  username : str
-      The username for MQTT authentication.
-  password : str
-      The password for MQTT authentication.
+  Args:
+      broker: MQTT broker address
+      port: MQTT broker port
+      username: Authentication username
+      password: Authentication password
+      use_tls: Whether to use TLS encryption
+      ca_certs: Path to CA certificates for TLS
+      client_id: Optional client identifier
+      keepalive: Connection keepalive timeout in seconds
+      topics: List of TopicConfig objects
   """
 
   broker: str
   port: int
-  topic_load_profile: str
-  topic_consumption: str
   username: str
   password: str
+  use_tls: bool = True
+  ca_certs: Optional[str] = None
+  client_id: Optional[str] = None
+  keepalive: int = 60
+  topics: List[TopicConfig] = None
 
   def is_valid(self) -> bool:
-    """
-    Check if all required MQTT configuration parameters are present.
+    """Check if the MQTT configuration is valid.
 
     Returns
     -------
     bool
-        True if all required parameters are present, False otherwise.
+        True if the configuration is valid, False otherwise.
     """
-    return all(
-      [
-        self.broker,
-        self.port,
-        self.topic_load_profile,
-        self.topic_consumption,
-        self.username,
-        self.password,
-      ]
-    )
+    if not self.broker:
+      return False
+    if not (1 <= self.port <= 65535):
+      return False
+    if not self.username:
+      return False
+    if not self.password:
+      return False
+    if not self.topics or not isinstance(self.topics, list):
+      return False
+    return True

@@ -5,7 +5,10 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager, logger
+from src.openadr_node import logger
+from src.openadr_node.database.energy_database_controller import (
+  EnergyDatabaseController,
+)
 from src.openadr_node.errors.node_calculation_errors import (
   ProcessingError,
   CalculationError,
@@ -44,7 +47,7 @@ class NodeResourceCalculator:
   CORRECTION_FACTOR_B: float = 1.5
   CORRECTION_FACTOR_C: float = 1.085
 
-  def __init__(self, load_profile_manager: LoadProfileManager):
+  def __init__(self, load_profile_manager: EnergyDatabaseController):
     """
     Initialize the NodeResourceCalculator.
 

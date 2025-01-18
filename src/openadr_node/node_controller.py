@@ -7,14 +7,16 @@ from src.openadr_node import logger
 from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.node_resource_controller import NodeResourceController
 from src.openadr_node.database.database_manager import DatabaseManager
-from src.openadr_node.database.loadprofile_manager import LoadProfileManager
+from src.openadr_node.database.energy_database_controller import (
+  EnergyDatabaseController,
+)
 from src.openadr_node.node_dispatcher_controller import NodeDispatcherController
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.event import ResourceConsumption
 from src.openadr_node.models.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.protocols import RestApiManager
-from src.openadr_node.protocols.mqtt_manager import MQTTManager
+from src.openadr_node.protocols import RestAPIController
+from src.openadr_node.protocols.mqtt_controller import MQTTController
 from src.openadr_node.node_thread_controller import NodeThreadController
 from src.openadr_node.node_open_adr_controller import NodeOpenADRController
 from pydispatch import dispatcher
@@ -92,7 +94,9 @@ class NodeController(AdrBaseConfig):
     self._thread_manager = NodeThreadController()
 
     if node_id:
-      self._load_profile_manager = LoadProfileManager(DatabaseManager(f'{node_id}.db'))
+      self._load_profile_manager = EnergyDatabaseController(
+        DatabaseManager(f'{node_id}.db')
+      )
 
     if self._load_profile_manager:
       self.node_resource_controller = NodeResourceController(self._load_profile_manager)
@@ -106,7 +110,7 @@ class NodeController(AdrBaseConfig):
       self._initialize_rest_api_manager(self._rest_api_config)
 
     if self._mqtt_config:
-      self._initialize_mqtt_manager(self._mqtt_config)
+      self._initialize_mqtt_controller(self._mqtt_config)
 
     dispatcher.send(signal='on_ready', sender='system')
 
@@ -117,8 +121,8 @@ class NodeController(AdrBaseConfig):
     self.cancel_periodic_tasks()
     if hasattr(self, '_rest_api') and self._rest_api:
       self._rest_api.shutdown_server()
-    if hasattr(self, '_mqtt_manager') and self._mqtt_manager:
-      self._mqtt_manager.stop()
+    if hasattr(self, '_mqtt_controller') and self._mqtt_controller:
+      self._mqtt_controller.stop()
     logger.info('NodeController instance has been cleaned up.')
 
   def create_node_tasks(self) -> None:
@@ -146,7 +150,7 @@ class NodeController(AdrBaseConfig):
         'Incomplete REST API configuration provided. REST API manager will not be initialized.'
       )
       return
-    self._rest_api = RestApiManager(config.port)
+    self._rest_api = RestAPIController(config.port)
     try:
       self._rest_api.set_load_profile_manager(self._load_profile_manager)
       self._rest_api.init_routes(self._rest_api)
@@ -161,7 +165,7 @@ class NodeController(AdrBaseConfig):
     """
     self._thread_manager.start_thread(target=self._rest_api.run, name='RestApiThread')
 
-  def _initialize_mqtt_manager(self, config: MQTTConfig) -> None:
+  def _initialize_mqtt_controller(self, config: MQTTConfig) -> None:
     """
     Initialize the MQTT manager.
 
@@ -171,16 +175,12 @@ class NodeController(AdrBaseConfig):
         Configuration for MQTT.
     """
     if config.is_valid():
-      self._mqtt_manager = MQTTManager(
-        broker=config.broker,
-        port=config.port,
-        topic_load_profile=config.topic_load_profile,
-        topic_consumption=config.topic_consumption,
-        load_profile_manager=self._load_profile_manager,
-        username=config.username,
-        password=config.password,
+      self._mqtt_controller = MQTTController(
+        config=config,
+        energy_database_controller=self._load_profile_manager,
+        ven_id=self._ven_name,
       )
-      self._mqtt_manager.start()
+      self._mqtt_controller.start()
       self._start_mqtt_threads()
     else:
       logger.warning(
@@ -192,7 +192,7 @@ class NodeController(AdrBaseConfig):
     Start the MQTT client and associated threads.
     """
     self._thread_manager.start_thread(
-      target=self._mqtt_manager.publish_load_profile, name='PublishThread'
+      target=self._mqtt_controller.publish_load_profile, name='PublishThread'
     )
 
   def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
