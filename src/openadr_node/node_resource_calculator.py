@@ -33,7 +33,7 @@ class NodeResourceCalculator:
   maintains a functional programming approach where possible.
 
   Args:
-      load_profile_manager: Manager instance for handling load profiles
+      energy_database_controller: Manager instance for handling load profiles
 
   Attributes:
       _z: Distribution factor for load calculations
@@ -47,13 +47,13 @@ class NodeResourceCalculator:
   CORRECTION_FACTOR_B: float = 1.5
   CORRECTION_FACTOR_C: float = 1.085
 
-  def __init__(self, load_profile_manager: EnergyDatabaseController):
+  def __init__(self, energy_database_controller: EnergyDatabaseController):
     """
     Initialize the NodeResourceCalculator.
 
-    :param load_profile_manager: Instance of LoadProfileManager to handle database operations.
+    :param energy_database_controller: Instance of EnergyDatabaseController to handle database operations.
     """
-    self._load_profile_manager = load_profile_manager
+    self._energy_database_controller = energy_database_controller
     self._z: Optional[Union[float, NDArray[np.float64]]] = None
 
   def set_z_value(self, value: Optional[float]) -> None:
@@ -112,11 +112,11 @@ class NodeResourceCalculator:
     :param current_timestamp: Current timestamp in milliseconds.
     :return: Tuple containing current allowed consumption and consumption points.
     """
-    current_allowed_consumption = self._load_profile_manager.get_closest_point(
+    current_allowed_consumption = self._energy_database_controller.get_closest_point(
       current_timestamp
     )
-    current_consumption = self._load_profile_manager.get_closest_consumption_points(
-      current_timestamp
+    current_consumption = (
+      self._energy_database_controller.get_closest_consumption_points(current_timestamp)
     )
     return current_allowed_consumption, current_consumption
 

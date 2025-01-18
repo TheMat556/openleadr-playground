@@ -231,7 +231,7 @@ class NodeResourceController:
           data=new_data_structure,
         )
 
-    except Exception as e:
+    except (ValueError, KeyError) as e:
       logger.error(f'Error calculating load distribution: {str(e)}')
       raise LoadProfileError(f'Failed to update load profile: {str(e)}') from e
 
@@ -297,7 +297,7 @@ class NodeResourceController:
           data=self._current_consumption,
         )
 
-    except Exception as e:
+    except (ValueError, KeyError) as e:
       logger.error(f'Error processing consumption data from sender {sender}: {str(e)}')
       raise ConsumptionError(f'Failed to update consumption data: {str(e)}') from e
 

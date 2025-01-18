@@ -1,7 +1,9 @@
 import ssl
 import time
+import uuid
 from typing import Optional, Dict, Any
 import paho.mqtt.client as mqtt
+from paho.mqtt import MQTTException
 from threading import Event, Lock
 from src.openadr_node import logger
 
@@ -59,7 +61,7 @@ class BaseMQTT:
     self._ready = Event()
 
     # Initialize MQTT client
-    client_id = f'{username}_{int(time.time())}'
+    client_id = f'{username}_{uuid.uuid4()}'
     self.client = mqtt.Client(client_id=client_id, clean_session=True)
     self._configure_client(use_tls, ca_certs)
 
@@ -121,7 +123,7 @@ class BaseMQTT:
       self.client.on_connect = self._on_connect
       self.client.on_disconnect = self._on_disconnect
 
-    except Exception as e:
+    except (ssl.SSLError, MQTTException) as e:
       logger.error(f'Failed to configure MQTT client: {e}', exc_info=True)
       raise RuntimeError(f'MQTT client configuration failed: {str(e)}')
 
@@ -205,7 +207,7 @@ class BaseMQTT:
         logger.info(f'Attempting to reconnect... (Attempt {attempt + 1}/{max_retries})')
         self.client.connect(self.broker, self.port, keepalive=60)
         return True
-      except Exception as e:
+      except MQTTException as e:
         logger.error(f'Reconnection attempt failed: {e}')
         time.sleep(retry_delay)
 

@@ -1,4 +1,10 @@
 from dataclasses import dataclass
+from enum import Enum
+
+
+class TopicType(Enum):
+  SUBSCRIBE = 'sub'
+  PUBLISH = 'pub'
 
 
 @dataclass
@@ -7,8 +13,8 @@ class TopicConfig:
 
   Args:
       topic: The topic name
-      type: The type of the topic ('sub' or 'pub')
+      topic_type: The type of the topic (TopicType.SUBSCRIBE or TopicType.PUBLISH)
   """
 
   topic: str
-  type: str
+  topic_type: TopicType

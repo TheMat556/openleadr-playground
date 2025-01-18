@@ -17,7 +17,6 @@ class MQTTSubscriber:
     """
     self.client = client
     self.topic_handlers: Dict[str, Callable] = {}
-    print('TESTTSTST')
 
   def subscribe_with_handler(
     self,
@@ -44,12 +43,10 @@ class MQTTSubscriber:
     Exception
         If subscription fails.
     """
-    # Convert single topic/handler to list for uniform processing
+    if qos not in (0, 1, 2):
+      raise ValueError('QoS must be 0, 1, or 2')
     topic_list = [topics] if isinstance(topics, str) else topics
     handler_list = [handlers] if callable(handlers) else handlers
-
-    print('topic_list', topic_list)
-    print('handler_list', handler_list)
 
     # Validate input
     if len(topic_list) != len(handler_list):
@@ -90,8 +87,44 @@ class MQTTSubscriber:
       if topic in self.topic_handlers:
         handler = self.topic_handlers[topic]
         handler(topic, payload)
-        logger.debug(f'Handled message for topic {topic}')
+        logger.debug(f'Handled message for topic {topic} with payload: {payload}')
       else:
-        logger.info(f'Received message on unhandled topic {topic}: {payload}')
-    except Exception as e:
+        logger.info(f'Received message on unhandled topic {topic}')
+        logger.debug(f'Unhandled message payload: {payload}')
+    except (ValueError, TypeError) as e:
       logger.error(f'Error handling message for topic {topic}: {e}', exc_info=True)
+    except Exception as e:
+      logger.error(
+        f'Unexpected error handling message for topic {topic}: {e}', exc_info=True
+      )
+      raise
+
+  def unsubscribe(self, topics: Union[str, List[str]]) -> None:
+    """
+    Unsubscribe from topics and remove their handlers.
+
+    Parameters
+    ----------
+    topics : Union[str, List[str]]
+        Single topic string or list of topics to unsubscribe from.
+
+    Raises
+    ------
+    Exception
+        If unsubscription fails.
+    """
+    topic_list = [topics] if isinstance(topics, str) else topics
+
+    try:
+      for topic in topic_list:
+        result = self.client.unsubscribe(topic)
+        if result[0] != mqtt.MQTT_ERR_SUCCESS:
+          logger.error(
+            f'Failed to unsubscribe from topic {topic}. Result code: {result[0]}'
+          )
+        else:
+          logger.info(f'Successfully unsubscribed from topic: {topic}')
+          self.topic_handlers.pop(topic, None)
+    except Exception as e:
+      logger.error(f'Failed to unsubscribe: {e}', exc_info=True)
+      raise

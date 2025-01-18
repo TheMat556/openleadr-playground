@@ -27,7 +27,7 @@ class MQTTConfig:
   ca_certs: Optional[str] = None
   client_id: Optional[str] = None
   keepalive: int = 60
-  topics: List[TopicConfig] = None
+  topics: Optional[List[TopicConfig]] = None
 
   def is_valid(self) -> bool:
     """Check if the MQTT configuration is valid.

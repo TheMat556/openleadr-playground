@@ -1,4 +1,3 @@
-import traceback
 from typing import List, Dict, Any, Optional
 
 import numpy as np
@@ -10,7 +9,7 @@ from src.openadr_node.database.database_manager import DatabaseManager, Database
 class EnergyDatabaseController:
   def __init__(self, db_manager: DatabaseManager, batch_size: int = 1000):
     """
-    Initialize the LoadProfileManager
+    Initialize the EnergyDatabaseController
 
     Args:
         db_manager (DatabaseManager): An instance of DatabaseManager

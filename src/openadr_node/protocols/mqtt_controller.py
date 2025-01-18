@@ -4,8 +4,6 @@ import time
 from typing import Any
 import numpy as np
 from threading import Event
-import atexit
-import signal
 
 from src.openadr_node import logger
 from .helper.base_mqtt import BaseMQTT
@@ -62,15 +60,10 @@ class MQTTController(BaseMQTT):
 
     self._stop_event = Event()
 
-    # Register cleanup handlers
-    atexit.register(self.stop)
-    signal.signal(signal.SIGTERM, self._signal_handler)
-    signal.signal(signal.SIGINT, self._signal_handler)
-
     # Additional setup
     self._setup_subscriptions()
 
-  def _signal_handler(self, signum, frame) -> None:
+  def signal_handler(self, signum, frame) -> None:
     """
     Handle system signals for graceful shutdown.
 
@@ -91,7 +84,7 @@ class MQTTController(BaseMQTT):
     if self.is_connected:
       try:
         for topic in self.config.topics:
-          if topic.type == 'sub':
+          if topic.topic_type == 'sub':
             self.subscriber.subscribe_with_handler(
               topic.topic, self._handle_consumption_message
             )
@@ -185,7 +178,7 @@ class MQTTController(BaseMQTT):
 
         payload = float(nearest_row['signal_payload'])
         for topic in self.config.topics:
-          if topic.type == 'pub' and topic.topic == 'load_profile':
+          if topic.topic_type == 'pub' and topic.topic == 'load_profile':
             self.publisher.publish(topic.topic, payload)
             logger.info(f'Published load profile to {topic.topic}: {payload}')
 
@@ -230,7 +223,7 @@ class MQTTController(BaseMQTT):
 
         # Unsubscribe from all topics
         for topic in self.config.topics:
-          if topic.type == 'sub':
+          if topic.topic_type == 'sub':
             self.client.unsubscribe(topic.topic)
 
         # Wait briefly for pending operations

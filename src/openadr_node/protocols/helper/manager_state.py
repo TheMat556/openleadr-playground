@@ -47,7 +47,13 @@ class MQTTState:
   @property
   def connection_rc(self) -> Optional[int]:
     """
-    Get the connection return code.
+    The connection return code, or None if not set. Possible values:
+    0: Connection successful
+    1: Connection refused - incorrect protocol version
+    2: Connection refused - invalid client identifier
+    3: Connection refused - server unavailable
+    4: Connection refused - bad username or password
+    5: Connection refused - not authorized
 
     Returns
     -------

@@ -46,8 +46,10 @@ def create_mqtt_config() -> MQTTConfig:
   """Create an MQTTConfig instance from environment variables."""
   try:
     topic_config = [
-      TopicConfig(topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'), type='pub'),
-      TopicConfig(topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'), type='sub'),
+      TopicConfig(topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'), topic_type='pub'),
+      TopicConfig(
+        topic=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'), topic_type='sub'
+      ),
     ]
     return MQTTConfig(
       broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
@@ -152,8 +154,8 @@ def run_house_node(
   rest_api_config = RestApiConfig(port=int(rest_api_port))
 
   topic_config = [
-    TopicConfig(topic=mqtt_topic_load_profile, type='pub'),
-    TopicConfig(topic=mqtt_topic_consumption, type='sub'),
+    TopicConfig(topic=mqtt_topic_load_profile, topic_type='pub'),
+    TopicConfig(topic=mqtt_topic_consumption, topic_type='sub'),
   ]
 
   mqtt_config = MQTTConfig(

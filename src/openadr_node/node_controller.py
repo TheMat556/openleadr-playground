@@ -1,4 +1,5 @@
 import asyncio
+import signal
 import sys
 from datetime import timedelta
 from typing import Optional, List, Any, Dict, Callable
@@ -180,6 +181,8 @@ class NodeController(AdrBaseConfig):
         energy_database_controller=self._load_profile_manager,
         ven_id=self._ven_name,
       )
+      signal.signal(signal.SIGTERM, self._mqtt_controller.signal_handler)
+      signal.signal(signal.SIGINT, self._mqtt_controller.signal_handler)
       self._mqtt_controller.start()
       self._start_mqtt_threads()
     else:
