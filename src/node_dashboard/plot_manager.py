@@ -30,7 +30,7 @@ class PlotManager:
     clear_existing: bool = True,
   ) -> go.Figure:
     """
-    Creates a combined plot of load profile and consumption data for a container.
+    Creates a combined plot of load profiler and consumption data for a container.
 
     Parameters
     ----------
@@ -238,7 +238,7 @@ class PlotManager:
     values = []
 
     for point in data:
-      # Check if this is load profile data (has 'signal_payload')
+      # Check if this is load profiler data (has 'signal_payload')
       if 'signal_payload' in point:
         # Validate timestamp before conversion
         if not isinstance(point['timestamp'], (int, float)) or point['timestamp'] <= 0:

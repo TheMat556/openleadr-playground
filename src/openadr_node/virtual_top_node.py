@@ -7,7 +7,7 @@ from openleadr import OpenADRServer
 from openleadr.utils import generate_id
 
 from src.openadr_node import logger
-from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.config.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models.event import ResourceConsumption, Interval
@@ -50,11 +50,16 @@ class VirtualTopNode(AdrBaseConfig):
     )
 
     self._init_default_handler()
+    self._open_adr_server.add_handler(
+      'on_create_party_registration', self._on_create_party_registration
+    )
+    self._open_adr_server.add_handler('on_register_report', self._on_register_report)
 
   def _init_default_handler(self) -> None:
     """
     Initialize the default handlers for the OpenADR server.
     """
+    print('INIT DEFAULT HANDLER')
     self._open_adr_server.add_handler(
       'on_create_party_registration', self._on_create_party_registration
     )
@@ -71,6 +76,7 @@ class VirtualTopNode(AdrBaseConfig):
     :return: Tuple containing VEN ID and registration ID.
     :rtype: Tuple[str, str]
     """
+    print('REGISTRATION INFO')
     ven_name = registration_info.get('ven_name')
     ven_id = generate_id('ven_id')
     registration_id = generate_id()
@@ -90,6 +96,7 @@ class VirtualTopNode(AdrBaseConfig):
     min_sampling_interval: int,
     max_sampling_interval: int,
   ) -> Tuple[partial, int]:
+    print('REGISTER REPORT')
     """
     Handle report registration.
 
@@ -147,7 +154,7 @@ class VirtualTopNode(AdrBaseConfig):
     :rtype: Dict[str, Dict[str, float]]
     """
     logger.info(
-      f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
+      f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement} and Data: {data}'
     )
 
     if measurement == 'energy':
@@ -158,7 +165,7 @@ class VirtualTopNode(AdrBaseConfig):
       self._send_consumption_data(ven_id, resource_id, data[0])
 
     if data:
-      logger.debug(f'Data: {data}')
+      logger.info(f'Data: {data}')
 
     return self._ven_data
 
@@ -217,13 +224,13 @@ class VirtualTopNode(AdrBaseConfig):
     self, signal: str, sender: str, data: Dict[str, List[Interval]]
   ) -> None:
     """
-    Update the load profile.
+    Update the load profiler.
 
     :param signal: Signal name.
     :type signal: str
     :param sender: Signal sender.
     :type sender: str
-    :param data: Load profile data with ven_id as keys and intervals as values.
+    :param data: Load profiler data with ven_id as keys and intervals as values.
     :type data: Dict[str, List[Interval]]
     """
     if data:

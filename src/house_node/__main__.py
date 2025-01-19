@@ -1,86 +1,85 @@
+import asyncio
 import logging
-import os
-import sys
 from datetime import timedelta
-from typing import List
 
-import numpy as np
-from dotenv import load_dotenv
-
+from src.house_node.config import HouseNodeConfig
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.mqtt_config import MQTTConfig
-from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.node_controller import NodeController
+from src.openadr_node.models.topic_config import TopicConfig, TopicType
+from src.house_node.house_node import HouseNode
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+  level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
-seed = 42
-rng = np.random.default_rng(seed)
+def temperature_callback() -> float:
+  """Simulate temperature reading"""
+  return 22.5
 
 
-def sample_callback_1() -> float:
-  print('callback 1')
-  return rng.random() * 10
+def energy_callback() -> float:
+  """Simulate energy consumption reading"""
+  return 1250.0
 
 
-def sample_callback_2() -> float:
-  print('callback 2')
-  return rng.random() * 10
+async def main():
+  # Basic configuration
+  config = HouseNodeConfig(
+    node_id='house_001',
+    ven_name='ven_001',
+    vtn_url='http://localhost:8080/0/OpenADR2/Simple/2.0b',
+    rest_api_port=5000,
+  )
 
+  # Optional: Add MQTT configuration
+  mqtt_topics = [
+    TopicConfig(topic='house/load_profile', topic_type=TopicType.PUBLISH),
+    TopicConfig(topic='house/consumption', topic_type=TopicType.SUBSCRIBE),
+  ]
 
-def main() -> None:
-  load_dotenv()
-  reports: List[ReportConfiguration] = [
+  config.mqtt_config = MQTTConfig(
+    broker='localhost',
+    port=1883,
+    username='mqtt_user',
+    password='mqtt_pass',
+    client_id='house_001',
+    topics=mqtt_topics,
+  )
+
+  # Create house node
+  house = HouseNode(config)
+
+  # Add reports
+  reports = [
     ReportConfiguration(
-      resource_id='res_123',
-      measurement='energy',
-      sampling_rate=timedelta(seconds=5),
-      callback=sample_callback_1,
-      additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
+      resource_id='room_temp_001',
+      measurement='temperature',
+      sampling_rate=timedelta(seconds=60),
+      callback=temperature_callback,
+      additional_metadata={'unit': 'celsius', 'location': 'living_room'},
     ),
     ReportConfiguration(
-      resource_id='res_456',
-      measurement='energy',
-      sampling_rate=timedelta(seconds=5),
-      callback=sample_callback_2,
-      additional_metadata={'unit': '%', 'location': 'Room 202'},
+      resource_id='energy_001',
+      measurement='power',
+      sampling_rate=timedelta(seconds=300),
+      callback=energy_callback,
+      additional_metadata={'unit': 'watts'},
     ),
   ]
 
-  mqtt_config = None
+  house.add_reports(reports)
 
-  if os.getenv('PRIVATE_MQTT_BROKER_URL', None):
-    mqtt_config = MQTTConfig(
-      broker=os.getenv('PRIVATE_MQTT_BROKER_URL'),
-      port=int(os.getenv('PRIVATE_MQTT_PORT')),
-      topic_load_profile=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
-      topic_consumption=os.getenv('PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'),
-      username=os.getenv('PRIVATE_MQTT_USERNAME'),
-      password=os.getenv('PRIVATE_MQTT_PASSWORD'),
-    )
-
-  rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
-
-  node_manager = NodeController(
-    node_id=os.getenv('NODE_ID'),
-    ven_name=os.getenv('VEN_NAME'),
-    vtn_url=os.getenv('CONNECT_VTN_URL'),
-    mqtt_config=mqtt_config,
-    rest_api_config=rest_api_config,
-  )
-
-  node_manager.add_report(reports)
   try:
-    node_manager.run_node()
+    await house.run()
   except KeyboardInterrupt:
-    sys.exit(0)
+    logger.info('Shutting down house node...')
   except Exception as e:
-    logger.error(f'Error running node: {e}')
-    sys.exit(1)
+    logger.error(f'Error running house node: {e}')
+    raise
 
 
 if __name__ == '__main__':
-  main()
+  asyncio.run(main())

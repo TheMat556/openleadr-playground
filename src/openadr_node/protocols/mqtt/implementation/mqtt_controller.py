@@ -1,19 +1,24 @@
 import asyncio
 import json
 import time
-from typing import Any
-import numpy as np
 from threading import Event
+from typing import Any
+
+import numpy as np
 
 from src.openadr_node import logger
-from .helper.base_mqtt import BaseMQTT
-from .helper.mqtt_publisher import MQTTPublisher
-from .helper.mqtt_subscriber import MQTTSubscriber
-from ..database.energy_database_controller import EnergyDatabaseController
-from ..models.mqtt_config import MQTTConfig
+from src.openadr_node.database import EnergyDatabaseController
+from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.helper.base_mqtt import BaseMQTT
+from src.openadr_node.protocols.helper.mqtt_publisher import MQTTPublisher
+from src.openadr_node.protocols.helper.mqtt_subscriber import MQTTSubscriber
+from src.openadr_node.protocols.mqtt.interfaces.mqtt_interface import IMQTTController
+from src.openadr_node.protocols.mqtt.message_processors.consumption_message import (
+  ConsumptionMessageProcessor,
+)
 
 
-class MQTTController(BaseMQTT):
+class MQTTController(BaseMQTT, IMQTTController):
   """
   Manages MQTT connections, subscriptions, and publishing for the OpenADR node.
   """
@@ -25,54 +30,53 @@ class MQTTController(BaseMQTT):
     ven_id: str = '',
   ) -> None:
     """
-    Initialize the MQTTManager class.
+    Initialize the MQTTController class.
 
     Parameters
     ----------
     config : MQTTConfig
-        The MQTT configuration.
+        The MQTT configuration containing broker details, credentials, and topics.
     energy_database_controller : EnergyDatabaseController
-        The energy database controller.
+        The energy database controller responsible for database operations.
     ven_id : str, optional
         The VEN ID, by default "".
     """
+    # Validate the configuration
     if not config.is_valid():
       raise ValueError('Invalid MQTT configuration')
 
     super().__init__(
-      config.broker,
-      config.port,
-      config.username,
-      config.password,
-      config.use_tls,
-      config.ca_certs,
+      broker=config.broker,
+      port=config.port,
+      username=config.username,
+      password=config.password,
+      use_tls=config.use_tls,
+      ca_certs=config.ca_certs,
     )
 
     self.config = config
     self.energy_database_controller = energy_database_controller
     self._ven_id = ven_id
 
-    # Initialize publisher and subscriber
+    # Publisher/Subscriber setup
     self.publisher = MQTTPublisher(self.client)
     self.subscriber = MQTTSubscriber(self.client)
 
+    # Custom message processor for consumption data
+    self.consumption_processor = ConsumptionMessageProcessor(self._ven_id)
+
+    # PyPI's paho-mqtt callback
     self.client.on_message = self._on_message
 
+    # Event to coordinate stopping
     self._stop_event = Event()
 
-    # Additional setup
+    # Subscribe to topics if connected
     self._setup_subscriptions()
 
   def signal_handler(self, signum, frame) -> None:
     """
     Handle system signals for graceful shutdown.
-
-    Parameters
-    ----------
-    signum : int
-        The signal number.
-    frame : frame
-        The current stack frame.
     """
     logger.info(f'Received signal {signum}. Initiating graceful shutdown...')
     self.stop()
@@ -85,27 +89,20 @@ class MQTTController(BaseMQTT):
       try:
         for topic in self.config.topics:
           if topic.topic_type == 'sub':
+            # Each subscription can use different handlers if needed
             self.subscriber.subscribe_with_handler(
-              topic.topic, self._handle_consumption_message
+              topics=topic.topic, handlers=self._handle_consumption_message
             )
       except Exception as e:
         logger.error(f'Failed to setup subscriptions: {e}', exc_info=True)
 
   def _handle_consumption_message(self, topic: str, payload: Any) -> None:
     """
-    Handle consumption topic messages.
-
-    Parameters
-    ----------
-    topic : str
-        The topic of the message.
-    payload : Any
-        The payload of the message.
+    Handle consumption topic messages and delegate message processing.
     """
-    logger.debug('MQTT MESSAGE RECEIVED')
+    logger.debug('Consumption message received on MQTT.')
     try:
-      data = json.loads(payload)
-      data['ven_id'] = self._ven_id
+      data = self.consumption_processor.parse_consumption_message(payload)
       self.energy_database_controller.insert_consumption(data)
       logger.info(f'Processed consumption data from {topic}: {data}')
     except json.JSONDecodeError as e:
@@ -115,58 +112,45 @@ class MQTTController(BaseMQTT):
 
   def _on_connect(self, client, userdata, flags, rc) -> None:
     """
-    Override parent's _on_connect to add subscription.
-
-    Parameters
-    ----------
-    client : mqtt.Client
-        The MQTT client instance.
-    userdata : Any
-        User-defined data of any type.
-    flags : Dict
-        Response flags sent by the broker.
-    rc : int
-        The connection result.
+    Override parent's _on_connect to re-subscribe when connected.
     """
     super()._on_connect(client, userdata, flags, rc)
     if rc == 0:
-      # Resubscribe to topics on reconnection
+      # Re-subscribe after reconnect
       self._setup_subscriptions()
     else:
       logger.error(f'Failed to connect with result code {rc}')
 
   def _on_message(self, client, userdata, msg) -> None:
     """
-    Route incoming messages to appropriate handlers.
-
-    Parameters
-    ----------
-    client : mqtt.Client
-        The MQTT client instance.
-    userdata : Any
-        User-defined data of any type.
-    msg : mqtt.MQTTMessage
-        The MQTT message.
+    Route incoming messages to the MQTTSubscriber for handling.
     """
-    try:
-      if not self._stop_event.is_set():  # Only process messages if not stopping
-        payload = msg.payload.decode('utf-8')
-        logger.debug(f'Received message on topic {msg.topic}: {payload}')
-        self.subscriber.handle_message(msg.topic, payload)
-    except Exception as e:
-      logger.error(f'Error in message handling: {e}', exc_info=True)
+    if not self._stop_event.is_set():
+      try:
+        payload_str = msg.payload.decode('utf-8')
+        logger.debug(f'Received message on topic {msg.topic}: {payload_str}')
+        # Subscriber routes the message to the correct handler
+        self.subscriber.handle_message(msg.topic, payload_str)
+      except Exception as e:
+        logger.error(f'Error in message handling: {e}', exc_info=True)
 
   async def publish_load_profile(self) -> None:
     """
-    Asynchronously publish load profile data.
+    Asynchronously publish load profile data in small intervals with exponential backoff.
     """
+    max_attempts = 5
+    attempt = 0
+    backoff = 1
+
     while not self._stop_event.is_set():
       try:
         if not self.is_ready:
-          logger.warning('Not ready for publishing. Waiting for connection...')
+          logger.warning('Not ready for publishing. Waiting...')
           await asyncio.sleep(5)
           continue
 
+        # Example log for demonstration
+        logger.debug('About to publish load profile data.')
         load_profile = self.energy_database_controller.get_load_profile()
         if not load_profile['dstart'].size:
           await asyncio.sleep(10)
@@ -179,27 +163,38 @@ class MQTTController(BaseMQTT):
         payload = float(nearest_row['signal_payload'])
         for topic in self.config.topics:
           if topic.topic_type == 'pub' and topic.topic == 'load_profile':
-            self.publisher.publish(topic.topic, payload)
+            self.publisher.publish(topic=topic.topic, payload=payload)
             logger.info(f'Published load profile to {topic.topic}: {payload}')
 
+        # Reset attempt counter and backoff after successful publish
+        attempt = 0
+        backoff = 1
+
+        # Adjust the sleep interval as needed
         await asyncio.sleep(30)
 
       except Exception as e:
         logger.error(f'Failed to publish load profile: {e}', exc_info=True)
-        await asyncio.sleep(5)
+        attempt += 1
+        if attempt >= max_attempts:
+          logger.error('Max attempts reached. Cancelling publish_load_profile.')
+          break
+        await asyncio.sleep(backoff)
+        backoff *= 2  # Exponential backoff
 
   def start(self) -> None:
     """
-    Start the MQTT client.
+    Start the MQTT client loop and connect asynchronously to the broker.
     """
     try:
       self._stop_event.clear()
-      # Set last will and testament for clean disconnect notification
+      # Set Last Will & Testament
       self.client.will_set(f'status/{self._ven_id}', 'offline', qos=1, retain=True)
       self.client.loop_start()
       self.client.connect_async(
         self.config.broker, self.config.port, keepalive=self.config.keepalive
       )
+
       # Publish online status
       self.client.publish(f'status/{self._ven_id}', 'online', qos=1, retain=True)
       logger.info('MQTT client started and connecting...')
@@ -210,34 +205,32 @@ class MQTTController(BaseMQTT):
 
   def stop(self) -> None:
     """
-    Stop the MQTT client with guaranteed cleanup.
+    Stop the MQTT client with proper cleanup.
     """
     if not self._stop_event.is_set():
       try:
         logger.info('Initiating MQTT client shutdown...')
         self._stop_event.set()
 
-        # Publish offline status before disconnecting
+        # Publish offline before disconnect
         if self.is_connected:
           self.client.publish(f'status/{self._ven_id}', 'offline', qos=1, retain=True)
 
-        # Unsubscribe from all topics
+        # Unsubscribe from topics
         for topic in self.config.topics:
           if topic.topic_type == 'sub':
             self.client.unsubscribe(topic.topic)
 
-        # Wait briefly for pending operations
-        time.sleep(0.5)
+        time.sleep(0.5)  # Wait briefly for queued operations
 
         # Disconnect and stop the loop
         if self.client:
           self.client.disconnect()
           self.client.loop_stop()
-
         logger.info('MQTT client stopped successfully')
+
       except Exception as e:
         logger.error(f'Error during MQTT client shutdown: {e}', exc_info=True)
         raise RuntimeError(f'Failed to stop MQTT client: {str(e)}')
       finally:
-        # Ensure the stop event is set even if an error occurred
         self._stop_event.set()

@@ -1,206 +1,55 @@
 import asyncio
-import sys
-import uuid
 from datetime import timedelta
-from typing import Optional, List, Any, Dict, Callable
+from typing import Optional, List, Any, Dict
+
+from injector import inject
+from pydispatch import dispatcher
 
 from src.openadr_node import logger
-from src.openadr_node.adr_base_config import AdrBaseConfig
-from src.openadr_node.node_resource_controller import NodeResourceController
-from src.openadr_node.database.database_manager import DatabaseManager
-from src.openadr_node.database.energy_database_controller import (
-  EnergyDatabaseController,
+from src.openadr_node.config import AdrBaseConfig
+from src.openadr_node.config.app_config import ApplicationConfig
+from src.openadr_node.database.interfaces.database_interface import (
+  IEnergyDatabaseController,
+  IRestAPIController,
 )
-from src.openadr_node.node_dispatcher_controller import NodeDispatcherController
 from src.openadr_node.models import ReportConfiguration
-from src.openadr_node.models.event import ResourceConsumption
-from src.openadr_node.models.mqtt_config import MQTTConfig
-from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.protocols import RestAPIController
-from src.openadr_node.protocols.mqtt_controller import MQTTController
-from src.openadr_node.node_thread_controller import NodeThreadController
+from src.openadr_node.node_dispatcher_controller import NodeDispatcherController
 from src.openadr_node.node_open_adr_controller import NodeOpenADRController
-from pydispatch import dispatcher
+from src.openadr_node.node_resource_controller import NodeResourceController
+from src.openadr_node.node_thread_controller import NodeThreadController
+from src.openadr_node.protocols.mqtt.interfaces.mqtt_interface import IMQTTController
 
 
 class NodeController(AdrBaseConfig):
-  """
-  Manages the Virtual Top Node (VTN) and Virtual End Node (VEN) and handles communication between them.
-  """
-
+  @inject
   def __init__(
     self,
-    node_id: Optional[str] = None,
-    vtn_name: Optional[str] = None,
-    ven_name: Optional[str] = None,
-    vtn_url: Optional[str] = None,
-    openadr_http_host: Optional[str] = None,
-    openadr_http_port: Optional[int] = None,
-    openadr_vtn_path_prefix: Optional[str] = None,
-    mqtt_config: Optional[MQTTConfig] = None,
-    rest_api_config: Optional[RestApiConfig] = None,
+    config: ApplicationConfig,
+    energy_db_controller: IEnergyDatabaseController,
+    rest_controller: Optional[IRestAPIController],
+    mqtt_controller: Optional[IMQTTController],
+    resource_controller: NodeResourceController,
+    dispatcher_controller: NodeDispatcherController,
+    thread_controller: NodeThreadController,
+    open_adr_controller: NodeOpenADRController,
   ):
-    """
-    Initialize the NodeController with the given configuration.
-
-    Parameters
-    ----------
-    node_id : Optional[str]
-        The ID of the node.
-    vtn_name : Optional[str]
-        Name of the Virtual Top Node (VTN).
-    ven_name : Optional[str]
-        Name of the Virtual End Node (VEN).
-    vtn_url : Optional[str]
-        URL of the VTN.
-    openadr_http_host : Optional[str]
-        HTTP host for OpenADR.
-    openadr_http_port : Optional[int]
-        HTTP port for OpenADR.
-    openadr_vtn_path_prefix : Optional[str]
-        Path prefix for the VTN.
-    mqtt_config : Optional[MQTTConfig]
-        Configuration for MQTT.
-    rest_api_config : Optional[RestApiConfig]
-        Configuration for REST API.
-    """
+    """Initialize NodeController with injected dependencies"""
+    dispatcher_controller.set_node_controller(self)
     super().__init__()
-    self._vtn_name = vtn_name
-    self._vtn_url = vtn_url
-    self._ven_name = ven_name
-    self._openadr_http_host = openadr_http_host
-    self._openadr_http_port = openadr_http_port
-    self._openadr_vtn_path_prefix = openadr_vtn_path_prefix
-    self._mqtt_config = mqtt_config
-    self._rest_api_config = rest_api_config
-
-    self._subscribers: Dict[str, List[Callable]] = {}
-    self._ven_data: Dict[str, Dict[str, float]] = {}
-    self._current_consumption = 0.0
-    self._energy_database_controller = None
-
-    self._dispatcher_manager = NodeDispatcherController(self)
-    self._thread_manager = NodeThreadController()
+    self.config = config
+    self.energy_db_controller = energy_db_controller
+    self.rest_controller = rest_controller
+    self.mqtt_controller = mqtt_controller
+    self.resource_controller = resource_controller
+    self.dispatcher_controller = dispatcher_controller
+    self.thread_controller = thread_controller
+    self.open_adr_controller = open_adr_controller
 
     self._periodic_tasks = []
     self._loop = asyncio.get_event_loop()
 
-    database_id = node_id or str(uuid.uuid4())
-    self._energy_database_controller = EnergyDatabaseController(
-      DatabaseManager(f'{database_id}.db')
-    )
-
-    if self._energy_database_controller:
-      self.node_resource_controller = NodeResourceController(
-        self._energy_database_controller
-      )
-      self.start_periodic_task(
-        lambda: self.node_resource_controller.update_load_profile(
-          '', None, use_z_directly=False
-        ),
-        timedelta(minutes=1),
-      )
-    if self._rest_api_config:
-      self._initialize_rest_api_manager(self._rest_api_config)
-
-    if self._mqtt_config:
-      self._initialize_mqtt_controller(self._mqtt_config)
-
-    self._node_task_manager = NodeOpenADRController(
-      self._loop,
-      vtn_name=self._vtn_name,
-      ven_name=self._ven_name,
-      vtn_url=self._vtn_url,
-      openadr_http_host=self._openadr_http_host,
-      openadr_http_port=self._openadr_http_port,
-      openadr_vtn_path_prefix=self._openadr_vtn_path_prefix,
-    )
-    self.create_node_tasks()
-
-    dispatcher.send(signal='on_ready', sender='system')
-
-  def __del__(self):
-    """
-    Ensure all resources are cleaned up when the instance is destroyed.
-    """
-    self.cancel_periodic_tasks()
-    if hasattr(self, '_rest_api') and self._rest_api:
-      self._rest_api.shutdown()
-    if hasattr(self, '_mqtt_controller') and self._mqtt_controller:
-      self._mqtt_controller.stop()
-    logger.info('NodeController instance has been cleaned up.')
-
-  def create_node_tasks(self) -> None:
-    """
-    Create and start tasks for the VTN and VEN nodes.
-    """
-    try:
-      self._node_task_manager.create_node_tasks()
-      logger.info('Node tasks created successfully')
-    except Exception as e:
-      logger.error(f'Failed to create node tasks: {e}')
-      raise
-
-  def _initialize_rest_api_manager(self, config: RestApiConfig) -> None:
-    """
-    Initialize the REST API manager.
-
-    Parameters
-    ----------
-    config : RestApiConfig
-        Configuration for REST API.
-    """
-    if not config.port:
-      logger.warning(
-        'Incomplete REST API configuration provided. REST API manager will not be initialized.'
-      )
-      return
-    try:
-      self._rest_api = RestAPIController(config.port)
-      self._rest_api.set_load_profile_manager(self._energy_database_controller)
-      self._rest_api.init_routes(self._rest_api)
-      self._start_rest_api_thread()
-    except Exception as e:
-      logger.error(f'Failed to initialize REST API manager: {e}')
-      self._rest_api = None
-
-  def _start_rest_api_thread(self) -> None:
-    """
-    Start the REST API server in a separate thread.
-    """
-    self._thread_manager.start_thread(
-      target=self._rest_api.serve_forever, name='RestApiThread'
-    )
-
-  def _initialize_mqtt_controller(self, config: MQTTConfig) -> None:
-    """
-    Initialize the MQTT manager.
-
-    Parameters
-    ----------
-    config : MQTTConfig
-        Configuration for MQTT.
-    """
-    if config.is_valid():
-      self._mqtt_controller = MQTTController(
-        config=config,
-        energy_database_controller=self._energy_database_controller,
-        ven_id=self._ven_name,
-      )
-      self._mqtt_controller.start()
-      self._start_mqtt_threads()
-    else:
-      logger.warning(
-        'Incomplete MQTT configuration provided. MQTT manager will not be initialized.'
-      )
-
-  def _start_mqtt_threads(self) -> None:
-    """
-    Start the MQTT client and associated threads.
-    """
-    self._thread_manager.start_thread(
-      target=self._mqtt_controller.publish_load_profile, name='PublishThread'
-    )
+    self._setup_controllers()
+    self._initialize_periodic_tasks()
 
   def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
     """
@@ -215,171 +64,135 @@ class NodeController(AdrBaseConfig):
     data : str
         The data associated with the signal.
     """
-    self._dispatcher_manager.register_dispatcher(sender, signal, data)
+    self.dispatcher_controller.register_dispatcher(sender, signal, data)
+    dispatcher.send(signal='on_ready', sender='system')
 
-  def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
-    """
-    Handle the update load profile signal.
+  def _setup_controllers(self) -> None:
+    """Initialize and setup all controllers"""
+    try:
+      # Initialize OpenADR tasks
+      self.open_adr_controller.create_node_tasks()
 
-    Parameters
-    ----------
-    sender : str
-        The sender of the signal.
-    data : List[Dict[str, Any]]
-        The data associated with the signal.
-    """
-    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
-      self.node_resource_controller.update_load_profile(sender, data)
+      # Start REST API if configured
+      if self.rest_controller:
+        self.thread_controller.start_thread(
+          target=self.rest_controller.serve_forever, name='RestApiThread'
+        )
 
-  def _on_update_consumption_data(self, sender: str, data: ResourceConsumption) -> None:
-    """
-    Handle the update consumption data signal.
+      # Start MQTT if configured
+      if self.mqtt_controller:
+        self.mqtt_controller.start()
+        self.thread_controller.start_thread(
+          target=lambda: asyncio.run(self.mqtt_controller.publish_load_profile()),
+          name='MqttPublishThread',
+        )
 
-    Parameters
-    ----------
-    sender : str
-        The sender of the signal.
-    data : ResourceConsumption
-        The data associated with the signal.
-    """
-    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
-      self.node_resource_controller.update_consumption_data(sender, data)
+      logger.info('All controllers initialized successfully')
+    except Exception as e:
+      logger.error(f'Failed to setup controllers: {e}')
+      raise
 
-  def _on_register_report(self, sender: str, data: str) -> None:
-    """
-    Handle the register report signal.
+  def _initialize_periodic_tasks(self) -> None:
+    """Initialize periodic tasks"""
+    self.start_periodic_task(
+      lambda: self.resource_controller.update_load_profile('', None),
+      timedelta(minutes=1),
+    )
 
-    Parameters
-    ----------
-    sender : str
-        The sender of the signal.
-    data : str
-        The data associated with the signal.
-    """
-    if hasattr(self, 'node_resource_controller') and self.node_resource_controller:
-      self.node_resource_controller.on_register_report(data)
+  async def run(self) -> None:
+    """Run the node controller"""
+    try:
+      logger.info('Starting NodeController...')
+      await self._run_forever()
+    except Exception as e:
+      logger.error(f'Error in NodeController: {e}')
+      raise
+    finally:
+      self.cleanup()
 
-  def add_task(self, task: Callable) -> None:
-    """
-    Add a task to the event loop.
+  async def _run_forever(self) -> None:
+    """Run the event loop forever"""
+    try:
+      await self._loop.create_task(self._keep_alive())
+    except asyncio.CancelledError:
+      logger.info('NodeController shutdown requested')
+    except Exception as e:
+      logger.error(f'Error in event loop: {e}')
+      raise
 
-    Parameters
-    ----------
-    task : Callable
-        The task to be added.
-    """
-    self._loop.create_task(task())
+  async def _keep_alive(self) -> None:
+    """Keep the application alive and handle periodic health checks"""
+    while True:
+      await asyncio.sleep(1)  # Adjust sleep time as needed
+      # Add health checks or periodic maintenance here
 
-  def start_periodic_task(self, method: Callable, interval: timedelta) -> None:
-    """
-    Start a periodic task to trigger a method at a specified interval.
+  def cleanup(self) -> None:
+    """Cleanup resources and shutdown controllers"""
+    try:
+      logger.info('Starting cleanup...')
+      self.cancel_periodic_tasks()
 
-    Parameters
-    ----------
-    method : Callable
-        The method to be triggered.
-    interval : timedelta
-        The interval at which to trigger the method.
-    """
+      if self.rest_controller:
+        self.rest_controller.shutdown()
+
+      if self.mqtt_controller:
+        self.mqtt_controller.stop()
+
+      self.thread_controller.stop_all_threads()
+      logger.info('Cleanup completed successfully')
+    except Exception as e:
+      logger.error(f'Error during cleanup: {e}')
+      raise
+
+  def start_periodic_task(self, method: Any, interval: timedelta) -> None:
+    """Start a periodic task"""
     interval_seconds = interval.total_seconds()
     task = self._loop.create_task(
       self._trigger_method_periodically(
         method, interval_seconds, first_interval=4 / 3 * interval_seconds
       )
     )
-    if not hasattr(self, '_periodic_tasks'):
-      self._periodic_tasks = []
     self._periodic_tasks.append(task)
 
   def cancel_periodic_tasks(self) -> None:
-    """
-    Cancel all periodic tasks.
-    """
-    if hasattr(self, '_periodic_tasks'):
-      for task in self._periodic_tasks:
-        task.cancel()
-      self._periodic_tasks.clear()
+    """Cancel all periodic tasks"""
+    for task in self._periodic_tasks:
+      task.cancel()
+    self._periodic_tasks.clear()
 
   @staticmethod
   async def _trigger_method_periodically(
-    method: Callable, interval: float, first_interval: float
+    method: Any, interval: float, first_interval: float
   ) -> None:
-    """
-    Trigger a method at a specified interval without blocking execution.
-
-    Parameters
-    ----------
-    method : Callable
-        The method to be triggered.
-    interval : float
-        The interval in seconds at which to trigger the method.
-    first_interval : float
-        The interval in seconds to defer the first call.
-    """
+    """Trigger a method periodically"""
     await asyncio.sleep(first_interval)
     while True:
-      method()
-      await asyncio.sleep(interval)
-
-  def run_node(self) -> None:
-    """
-    Run the node event loop.
-    """
-    try:
-      self._loop.run_forever()
-    except Exception as e:
-      logger.error(f'Error running node: {e}')
-      sys.exit(1)
+      try:
+        method()
+        await asyncio.sleep(interval)
+      except Exception as e:
+        logger.error(f'Error in periodic task: {e}')
+        await asyncio.sleep(interval)
 
   def add_report(
     self, list_of_reports: Optional[List[ReportConfiguration]] = None
   ) -> None:
-    """
-    Add a report to the VEN.
-
-    Parameters
-    ----------
-    list_of_reports : Optional[List[ReportConfiguration]]
-        List of report configurations.
-    """
+    """Add reports to OpenADR controller"""
     try:
-      logger.debug(f'Adding reports: {list_of_reports}')
-      self._node_task_manager.add_reports(list_of_reports)
-      logger.info('Reports added successfully')
+      self.open_adr_controller.add_reports(list_of_reports)
     except Exception as e:
-      logger.error(f'Error adding report: {e}', exc_info=True)
-      raise RuntimeError(f'Failed to add reports: {e}') from e
-
-  def publish(self, signal: str, data: Any) -> None:
-    """
-    Publish a signal to subscribers.
-
-    Parameters
-    ----------
-    signal : str
-        The signal to publish.
-    data : Any
-        The data associated with the signal.
-    """
-    try:
-      self._node_task_manager.publish(signal, data)
-    except Exception as e:
-      logger.error(f'Failed to publish signal {signal}: {e}')
+      logger.error(f'Error adding reports: {e}')
       raise
 
-  def subscribe(self, signal: str, callback: Callable) -> None:
-    """
-    Subscribe to a signal.
+  def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
+    """Handle load profiler update signal"""
+    self.resource_controller.update_load_profile(sender, data)
 
-    Parameters
-    ----------
-    signal : str
-        The signal to subscribe to.
-    callback : Callable
-        The callback to be executed when the signal is received.
-    """
-    try:
-      self._node_task_manager.subscribe(signal, callback)
-    except Exception as e:
-      logger.error(f'Failed to subscribe to signal {signal}: {e}')
-      raise
+  def _on_update_consumption_data(self, sender: str, data: Any) -> None:
+    """Handle consumption data update signal"""
+    print('_on_update_consumption_data', data)
+    self.resource_controller.update_consumption_data(sender, data)
+
+  def _on_register_report(self, sender: str, data: str) -> None:
+    """Handle report registration signal"""
+    self.resource_controller.on_register_report(data)

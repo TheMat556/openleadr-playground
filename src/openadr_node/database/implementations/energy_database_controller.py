@@ -3,11 +3,15 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 
 from src.openadr_node import logger
-from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
+from src.openadr_node.database.interfaces.database_interface import IDatabaseManager
+from src.openadr_node.database.database_manager import DatabaseError
+from src.openadr_node.database.interfaces.database_interface import (
+  IEnergyDatabaseController,
+)
 
 
-class EnergyDatabaseController:
-  def __init__(self, db_manager: DatabaseManager, batch_size: int = 1000):
+class EnergyDatabaseController(IEnergyDatabaseController):
+  def __init__(self, db_manager: IDatabaseManager, batch_size: int = 1000):
     """
     Initialize the EnergyDatabaseController
 

@@ -1,53 +1,27 @@
+import asyncio
 import os
-import threading
-
 from dotenv import load_dotenv
-
-from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
-from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.node_controller import NodeController
+from src.mock_node.config import MockNodeConfig
+from src.mock_node.mock_node import MockNode
 
 
-def run_gradio_thread(interface: AsyncGradioApp) -> None:
-  """Run Gradio in a separate thread"""
-  try:
-    interface.launch(
-      server_port=int(os.getenv('GRADIO_PORT', 7860)),
-      server_name=os.getenv('GRADIO_SERVER_NAME', '0.0.0.0'),
-    )
-  except Exception as e:
-    print(f'Failed to launch Gradio interface: {e}')
-
-
-def main() -> None:
-  def cleanup() -> None:
-    if gradio_thread.is_alive():
-      interface.close()
-      gradio_thread.join(timeout=1)
-
+async def main() -> None:
   load_dotenv()
 
-  rest_api_config = RestApiConfig(port=int(os.getenv('REST_API_PORT', 5000)))
-
-  node_manager = NodeController(
+  config = MockNodeConfig(
     node_id=os.getenv('NODE_ID'),
     vtn_name=os.getenv('VTN_NAME', 'default_vtn'),
+    openadr_http_host=os.getenv('VTN_URL', '127.0.0.1'),
+    openadr_http_port=int(os.getenv('OPENADR_HTTP_PORT', 8080)),
     openadr_vtn_path_prefix=os.getenv('VTN_PATH_PREFIX', '/0/OpenADR2/Simple/2.0b'),
-    rest_api_config=rest_api_config,
+    rest_api_port=int(os.getenv('REST_API_PORT', 5000)),
+    gradio_port=int(os.getenv('GRADIO_PORT', 7860)),
+    gradio_host=os.getenv('GRADIO_SERVER_NAME', '0.0.0.0'),
   )
-  app = AsyncGradioApp(slider_file='./slider_values.txt')
-  interface = app.create_interface()
 
-  gradio_thread = threading.Thread(
-    target=run_gradio_thread, args=(interface,), daemon=True
-  )
-  gradio_thread.start()
-
-  try:
-    node_manager.run_node()
-  finally:
-    cleanup()
+  node = MockNode(config)
+  await node.run()
 
 
 if __name__ == '__main__':
-  main()
+  asyncio.run(main())

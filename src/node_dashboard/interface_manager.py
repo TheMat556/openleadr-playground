@@ -44,7 +44,7 @@ class InterfaceManager:
 
     This method sets up the Gradio interface, including the layout,
     sidebar, and main content area. It also handles the timers for updating
-    load profile and consumption data asynchronously.
+    load profiler and consumption data asynchronously.
 
     Returns
     -------
@@ -192,7 +192,7 @@ class InterfaceManager:
 
   def _setup_update_callbacks(self, state_var: gr.State) -> None:
     """
-    Sets up update callbacks for load profile and consumption data.
+    Sets up update callbacks for load profiler and consumption data.
     """
 
     async def combined_update():

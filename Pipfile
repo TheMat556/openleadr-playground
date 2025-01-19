@@ -26,6 +26,7 @@ jsonschema = "*"
 cachetools = "*"
 "paho.mqtt" = "*"
 yappi = "*"
+injector = "*"
 
 [dev-packages]
 ruff = "*"

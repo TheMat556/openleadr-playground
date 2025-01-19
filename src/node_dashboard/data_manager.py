@@ -70,7 +70,7 @@ class DataManager:
 
   async def update_load_profile_data(self) -> None:
     """
-    Fetches and updates load profile data for each container.
+    Fetches and updates load profiler data for each container.
 
     Returns
     -------
@@ -90,7 +90,7 @@ class DataManager:
           if load_profile_data:
             await self._process_load_profile_data(config, load_profile_data)
       except (aiohttp.ClientError, json.JSONDecodeError) as e:
-        logger.error(f'Error fetching load profile data: {e}')
+        logger.error(f'Error fetching load profiler data: {e}')
 
   @staticmethod
   @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=10))
@@ -190,14 +190,14 @@ class DataManager:
     self, config: ContainerConfig, load_profile_data: Optional[Dict[str, Any]]
   ) -> None:
     """
-    Processes and buffers the fetched load profile data.
+    Processes and buffers the fetched load profiler data.
 
     Parameters
     ----------
     config : ContainerConfig
         The container configuration.
     load_profile_data : Optional[Dict[str, Any]]
-        The fetched load profile data.
+        The fetched load profiler data.
 
     Returns
     -------
@@ -219,7 +219,7 @@ class DataManager:
     }
 
     if not load_profile_data:
-      logger.warning(f'No load profile data received for {config.container_name}')
+      logger.warning(f'No load profiler data received for {config.container_name}')
       return
 
     async with self.lock:
@@ -247,13 +247,13 @@ class DataManager:
         logger.info(f'Updated buffer for {config.container_name} (load_profile)')
       except ValidationError as e:
         logger.error(
-          f'Invalid load profile data format for {config.container_name}: {e.message}. Data: {load_profile_data}'
+          f'Invalid load profiler data format for {config.container_name}: {e.message}. Data: {load_profile_data}'
         )
       except (KeyError, TypeError) as e:
         logger.error(
-          f'Invalid load profile data format for {config.container_name}: {str(e)}. Data: {load_profile_data}'
+          f'Invalid load profiler data format for {config.container_name}: {str(e)}. Data: {load_profile_data}'
         )
       except Exception as e:
         logger.error(
-          f'Error processing load profile data for {config.container_name}: {e}'
+          f'Error processing load profiler data for {config.container_name}: {e}'
         )

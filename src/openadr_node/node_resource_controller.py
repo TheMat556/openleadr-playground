@@ -9,9 +9,7 @@ from numpy.typing import NDArray
 from pydispatch import dispatcher
 
 from src.openadr_node import logger
-from src.openadr_node.database.energy_database_controller import (
-  EnergyDatabaseController,
-)
+from src.openadr_node.database import IEnergyDatabaseController
 from src.openadr_node.errors.node_controller_errors import (
   LoadProfileError,
   ConsumptionError,
@@ -42,7 +40,7 @@ class NodeResourceController:
 
   This class coordinates updates between VENs and delegates complex calculations
   to NodeResourceCalculator. It manages VEN states, consumption data, and load
-  profile updates while maintaining thread safety.
+  profiler updates while maintaining thread safety.
 
   Attributes:
       _ven_data: Mapping of VEN IDs to their resource consumption data
@@ -54,7 +52,7 @@ class NodeResourceController:
   TIMESTAMP_MULTIPLIER: int = 1000  # Convert seconds to milliseconds
   DISPATCHER_SENDER: str = 'nm'
 
-  def __init__(self, energy_database_controller: EnergyDatabaseController):
+  def __init__(self, energy_database_controller: IEnergyDatabaseController):
     """
     Initialize the NodeResourceController.
 
@@ -108,13 +106,13 @@ class NodeResourceController:
 
   def _transform_load_profile(self, df: Any) -> List[Dict[str, Union[int, float]]]:
     """
-    Transform load profile data from database format.
+    Transform load profiler data from database format.
 
     Args:
-        df: Database load profile data
+        df: Database load profiler data
 
     Returns:
-        List of transformed load profile entries
+        List of transformed load profiler entries
     """
     return [
       {
@@ -174,7 +172,7 @@ class NodeResourceController:
 
     Args:
         sender: Identity of the update sender
-        data: Load profile data to update
+        data: Load profiler data to update
         use_z_directly: Flag to use direct z-value calculation
 
     Raises:
@@ -233,7 +231,7 @@ class NodeResourceController:
 
     except (ValueError, KeyError) as e:
       logger.error(f'Error calculating load distribution: {str(e)}')
-      raise LoadProfileError(f'Failed to update load profile: {str(e)}') from e
+      raise LoadProfileError(f'Failed to update load profiler: {str(e)}') from e
 
   def _calculate_total_consumption(self) -> float:
     """

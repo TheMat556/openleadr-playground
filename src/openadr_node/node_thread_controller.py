@@ -61,3 +61,10 @@ class NodeThreadController:
         except Exception as e:
           logger.error(f'Error joining thread {thread.name}: {e}')
       self._threads.clear()
+
+  def stop_all_threads(self) -> None:
+    """
+    Stop all threads by joining them with a timeout.
+    """
+    self.join_threads()
+    logger.info('All threads stopped successfully.')

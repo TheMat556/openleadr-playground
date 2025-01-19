@@ -23,7 +23,7 @@ class MQTTConfig:
   port: int
   username: str
   password: str
-  use_tls: bool = True
+  use_tls: bool = False
   ca_certs: Optional[str] = None
   client_id: Optional[str] = None
   keepalive: int = 60

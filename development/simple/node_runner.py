@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import random
@@ -8,13 +9,16 @@ from typing import Any, List, Optional
 
 import numpy as np
 from dotenv import load_dotenv
+from injector import Injector
 
 from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.node_dashboard.dashboard import GradioNodeDashboard
+from src.openadr_node.config import ApplicationConfig
+from src.openadr_node.di.modules import ApplicationModule
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.models.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
-from src.openadr_node.models.topic_config import TopicConfig
+from src.openadr_node.models.topic_config import TopicConfig, TopicType
 from src.openadr_node.node_controller import NodeController
 
 logging.basicConfig(level=logging.INFO)
@@ -90,30 +94,34 @@ def run_node(node: NodeController, queue: Optional[Any] = None) -> None:
     node.subscribe('vtn_created', notify_main_process)
 
   try:
-    node.run_node()
+    asyncio.run(node.run())
   except KeyboardInterrupt:
     sys.exit(0)
-  except (ConnectionError, ValueError) as e:
-    logger.error(f'Error running node: {e}')
-    sys.exit(1)
   except Exception as e:
-    logger.error(f'Unexpected error running node: {e}')
+    logger.error(f'Error running node: {e}')
     sys.exit(1)
 
 
 def run_mock_node(queue: Any) -> None:
   """Run the mock node."""
   load_environment('./development/simple/.env')
-  rest_api_config = create_rest_api_config('DEV_MOCK_NODE_REST_API_PORT')
 
-  mock_node = NodeController(
+  config = ApplicationConfig(
     node_id=os.getenv('DEV_NODE_ID'),
     vtn_name=os.getenv('DEV_VTN_NAME'),
     openadr_vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
     openadr_http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
     openadr_http_port=int(os.getenv('DEV_VTN_HTTP_PORT', 80)),
-    rest_api_config=rest_api_config,
+    rest_api_config=RestApiConfig(
+      port=int(os.getenv('DEV_MOCK_NODE_REST_API_PORT', 5000))
+    ),
   )
+
+  # Create injector with config
+  injector = Injector([ApplicationModule(config)])
+
+  # Get fully configured NodeController
+  node = injector.get(NodeController)
 
   app = AsyncGradioApp(slider_file='./slider_values.txt')
   interface = app.create_interface()
@@ -121,7 +129,7 @@ def run_mock_node(queue: Any) -> None:
   gradio_thread = threading.Thread(target=run_gradio, args=(interface,), daemon=True)
   gradio_thread.start()
 
-  run_node(mock_node, queue)
+  run_node(node, queue)
 
 
 def create_report_configurations() -> List[ReportConfiguration]:
@@ -150,33 +158,38 @@ def run_house_node(
   mqtt_password: Optional[str] = None,
 ) -> None:
   """Create and configure a house node."""
+  mqtt_config = None
+  if mqtt_broker:
+    topic_config = [
+      TopicConfig(topic=mqtt_topic_load_profile, topic_type=TopicType.PUBLISH),
+      TopicConfig(topic=mqtt_topic_consumption, topic_type=TopicType.SUBSCRIBE),
+    ]
+    mqtt_config = MQTTConfig(
+      broker=mqtt_broker,
+      port=mqtt_port,
+      username=mqtt_username,
+      password=mqtt_password,
+      topics=topic_config,
+    )
 
-  rest_api_config = RestApiConfig(port=int(rest_api_port))
-
-  topic_config = [
-    TopicConfig(topic=mqtt_topic_load_profile, topic_type='pub'),
-    TopicConfig(topic=mqtt_topic_consumption, topic_type='sub'),
-  ]
-
-  mqtt_config = MQTTConfig(
-    username=mqtt_username,
-    broker=mqtt_broker,
-    port=mqtt_port,
-    password=mqtt_password,
-    topics=topic_config,
-  )
-
-  house_node = NodeController(
+  config = ApplicationConfig(
     node_id=node_id,
     ven_name=ven_name,
     vtn_url=vtn_url,
-    rest_api_config=rest_api_config,
+    rest_api_config=RestApiConfig(port=int(rest_api_port)),
     mqtt_config=mqtt_config,
   )
-  house_node.add_report(create_report_configurations())
-  house_node.add_report(create_report_configurations())
 
-  run_node(house_node)
+  # Create injector with config
+  injector = Injector([ApplicationModule(config)])
+
+  # Get fully configured NodeController
+  node = injector.get(NodeController)
+
+  # Add reports if needed
+  node.add_report(create_report_configurations())
+
+  run_node(node)
 
 
 def run_node_dashboard() -> None:

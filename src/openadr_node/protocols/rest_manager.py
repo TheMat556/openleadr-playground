@@ -5,29 +5,30 @@ from typing import Any, Dict, Optional, Callable, Tuple, List
 from werkzeug.serving import make_server
 
 from src.openadr_node import logger
-from src.openadr_node.database.energy_database_controller import (
-  EnergyDatabaseController,
-)
+from src.openadr_node.database import IEnergyDatabaseController
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
+from src.openadr_node.database.interfaces.database_interface import IRestAPIController
 
 
-class RestAPIController:
+class RestAPIController(IRestAPIController):
   """
   Manages the REST API for the OpenADR node.
 
   This class initializes a Flask server to handle REST API requests.
-  It provides endpoints for retrieving load profile and consumption data.
+  It provides endpoints for retrieving load profiler and consumption data.
   The actual server running is handled by the NodeController.
 
   Attributes:
       app (Flask): The Flask application instance.
       _rest_api_port (int): The port on which the REST API runs.
-      _load_profile_manager (Any): The load profile manager instance.
+      _energy_db_controller (Any): The load profiler manager instance.
       _get_current_consumption_callback (Any): Callback for getting current consumption.
       _server (werkzeug.serving.BaseWSGIServer): The WSGI server instance.
   """
 
-  def __init__(self, port: int):
+  def __init__(
+    self, port: int, energy_db_controller: IEnergyDatabaseController
+  ) -> None:
     """
     Initialize the REST API manager.
 
@@ -36,20 +37,13 @@ class RestAPIController:
     """
     self.app = Flask(__name__)
     self._rest_api_port = port
-    self._load_profile_manager: Optional[EnergyDatabaseController] = None
+    self._energy_db_controller: Optional[IEnergyDatabaseController] = (
+      energy_db_controller
+    )
     self._get_current_consumption_callback: Optional[Callable[[], Dict[str, Any]]] = (
       None
     )
     self._server = None
-
-  def set_load_profile_manager(self, load_profile_manager: Any) -> None:
-    """
-    Set the load profile manager instance.
-
-    Args:
-        load_profile_manager (Any): The load profile manager instance.
-    """
-    self._load_profile_manager = load_profile_manager
 
   def init_routes(self, instance: Any) -> None:
     """
@@ -67,6 +61,7 @@ class RestAPIController:
     """
     Start the Flask server. This method is called by the NodeController's thread manager.
     """
+    self.init_routes(self)
     if self._server is None:
       self._server = make_server('0.0.0.0', self._rest_api_port, self.app)
     try:
@@ -87,13 +82,13 @@ class RestAPIController:
 
   def _check_manager_initialized(self) -> Optional[Tuple[Response, int]]:
     """
-    Check if the load profile manager is initialized.
+    Check if the load profiler manager is initialized.
 
     Returns:
         Optional[Tuple[Response, int]]: JSON response if not initialized, otherwise None.
     """
-    if self._load_profile_manager is None:
-      return jsonify({'error': 'Load profile manager not initialized'}), 500
+    if self._energy_db_controller is None:
+      return jsonify({'error': 'Load profiler manager not initialized'}), 500
     return None
 
   def _check_data_exists(
@@ -115,14 +110,14 @@ class RestAPIController:
 
   @rest_endpoint('/data/load_profile')
   def get_load_profile(self) -> Any:
-    """Get the load profile data."""
+    """Get the load profiler data."""
     try:
       response = self._check_manager_initialized()
       if response:
         return response
 
-      df = self._load_profile_manager.get_load_profile()
-      response = self._check_data_exists(df, 'Load profile')
+      df = self._energy_db_controller.get_load_profile()
+      response = self._check_data_exists(df, 'Load profiler')
       if response:
         return response
 
@@ -135,7 +130,7 @@ class RestAPIController:
 
       return jsonify(formatted_data), 200, {'Content-Type': 'application/json'}
     except Exception as e:
-      logger.error(f'Failed to serialize load profile: {e}')
+      logger.error(f'Failed to serialize load profiler: {e}')
       return jsonify({'error': 'Failed to serialize data'}), 500
 
   def _process_consumption_points(
@@ -158,7 +153,7 @@ class RestAPIController:
 
       current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-      consumption_points = self._load_profile_manager.get_closest_consumption_points(
+      consumption_points = self._energy_db_controller.get_closest_consumption_points(
         current_timestamp
       )
       if not consumption_points:

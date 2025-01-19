@@ -17,7 +17,7 @@ from src.openadr_node.errors.node_calculation_errors import (
 
 @dataclass
 class TimeInterval:
-  """Data class representing a time interval with load profile data."""
+  """Data class representing a time interval with load profiler data."""
 
   dstart: int
   duration: int
@@ -26,10 +26,10 @@ class TimeInterval:
 
 class NodeResourceCalculator:
   """
-  Handles load profile and consumption-related calculations for Virtual End Nodes (VENs).
+  Handles load profiler and consumption-related calculations for Virtual End Nodes (VENs).
 
   This class manages complex calculations related to load distribution, consumption analysis,
-  and profile generation. It uses vectorized operations for efficient computation and
+  and profiler generation. It uses vectorized operations for efficient computation and
   maintains a functional programming approach where possible.
 
   Args:
@@ -70,7 +70,7 @@ class NodeResourceCalculator:
   @staticmethod
   def transform_intervals(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Transform load profile data into the desired format using a loop.
+    Transform load profiler data into the desired format using a loop.
 
     :param data: List of intervals to transform.
     :return: Transformed list of intervals.
@@ -88,9 +88,9 @@ class NodeResourceCalculator:
     self, data: List[Dict[str, Any]]
   ) -> List[Dict[str, Any]]:
     """
-    Validate and transform the load profile data into the desired format.
+    Validate and transform the load profiler data into the desired format.
 
-    :param data: List of intervals containing load profile data.
+    :param data: List of intervals containing load profiler data.
     :return: Transformed list of intervals.
     :raises ValueError: If the data format is invalid.
     """
@@ -327,7 +327,7 @@ class NodeResourceCalculator:
         Dictionary mapping VEN IDs to their load profiles
 
     Raises:
-        ProcessingError: If profile creation fails
+        ProcessingError: If profiler creation fails
     """
     try:
       if ven_ids.size == 0 or z_neu.size == 0:
@@ -343,4 +343,4 @@ class NodeResourceCalculator:
       return dict(map(build_profile, zip(ven_ids, z_neu)))
     except Exception as e:
       logger.error(f'Failed to create VEN profiles: {str(e)}')
-      raise ProcessingError(f'VEN profile creation failed: {str(e)}') from e
+      raise ProcessingError(f'VEN profiler creation failed: {str(e)}') from e

@@ -9,7 +9,7 @@ import math
 import logging
 
 from gradio import Timer
-from src.openadr_node.adr_base_config import AdrBaseConfig
+from src.openadr_node.config.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class AsyncGradioApp(AdrBaseConfig):
   TIMEZONE = timezone(timedelta(hours=1))
   """
-  A Gradio application for interactive slider-based load profile visualization.
+  A Gradio application for interactive slider-based load profiler visualization.
 
   This class creates a web interface with multiple sliders representing hourly load values,
   with real-time chart updates and the ability to save and interpolate slider values.
@@ -151,7 +151,7 @@ class AsyncGradioApp(AdrBaseConfig):
 
   def save_slider_values(self, *args: int) -> None:
     """
-    Save slider values and generate interpolated load profile.
+    Save slider values and generate interpolated load profiler.
 
     Args:
         *args: Variable number of slider values
@@ -173,7 +173,7 @@ class AsyncGradioApp(AdrBaseConfig):
   @SignalSender('update_load_profile', 'ui')
   def _send_interpolated_values(self, interpolated_values: pd.DataFrame) -> List[dict]:
     """
-    Send interpolated slider values as load profile data.
+    Send interpolated slider values as load profiler data.
 
     Args:
         interpolated_values: DataFrame containing interpolated values with unix_timestamp column

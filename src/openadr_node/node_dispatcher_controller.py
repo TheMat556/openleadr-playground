@@ -17,7 +17,7 @@ class NodeDispatcherController:
       Instance of NodeManager that contains signal handling methods.
   """
 
-  def __init__(self, node_controller: 'NodeController'):
+  def __init__(self):
     """
     Initialize the DispatcherManager with a reference to the NodeManager instance.
 
@@ -26,7 +26,10 @@ class NodeDispatcherController:
     node_controller : NodeManager
         Instance of NodeManager that contains signal handling methods.
     """
-    self._node_manager = node_controller
+    self._node_controller = None
+
+  def set_node_controller(self, node_controller: 'NodeController'):
+    self._node_controller = node_controller
 
   def get_method(self, signal: str) -> Optional[Callable]:
     """
@@ -43,7 +46,7 @@ class NodeDispatcherController:
         The method associated with the signal.
     """
     method_name = f'_on_{signal}'
-    return getattr(self._node_manager, method_name, None)
+    return getattr(self._node_controller, method_name, None)
 
   def register_dispatcher(
     self, sender: str, signal: str, dispatcher_signal: str
