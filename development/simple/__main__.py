@@ -13,7 +13,7 @@ from src.mock_node.mock_node import MockNode
 from src.mock_node.config import MockNodeConfig
 from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.models import ReportConfiguration
-from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.mqtt.config.mqtt_config import MQTTConfig
 from src.openadr_node.models.topic_config import TopicConfig, TopicType
 
 logging.basicConfig(

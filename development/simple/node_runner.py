@@ -14,9 +14,9 @@ from injector import Injector
 from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 from src.node_dashboard.dashboard import GradioNodeDashboard
 from src.openadr_node.config import ApplicationConfig
-from src.openadr_node.di.modules import ApplicationModule
+from src.openadr_node.dependency_injection.modules import ApplicationModule
 from src.openadr_node.models import ReportConfiguration
-from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.mqtt.config.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
 from src.openadr_node.models.topic_config import TopicConfig, TopicType
 from src.openadr_node.node_controller import NodeController

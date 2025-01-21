@@ -13,11 +13,11 @@ from src.openadr_node.database.interfaces.database_interface import (
   IRestAPIController,
 )
 from src.openadr_node.models import ReportConfiguration
+from src.openadr_node.mqtt_controller import MQTTManager
 from src.openadr_node.node_dispatcher_controller import NodeDispatcherController
 from src.openadr_node.node_open_adr_controller import NodeOpenADRController
 from src.openadr_node.node_resource_controller import NodeResourceController
 from src.openadr_node.node_thread_controller import NodeThreadController
-from src.openadr_node.protocols.mqtt.interfaces.mqtt_interface import IMQTTController
 
 
 class NodeController(AdrBaseConfig):
@@ -27,7 +27,7 @@ class NodeController(AdrBaseConfig):
     config: ApplicationConfig,
     energy_db_controller: IEnergyDatabaseController,
     rest_controller: Optional[IRestAPIController],
-    mqtt_controller: Optional[IMQTTController],
+    mqtt_controller: Optional[MQTTManager],
     resource_controller: NodeResourceController,
     dispatcher_controller: NodeDispatcherController,
     thread_controller: NodeThreadController,
@@ -74,18 +74,18 @@ class NodeController(AdrBaseConfig):
       self.open_adr_controller.create_node_tasks()
 
       # Start REST API if configured
-      if self.rest_controller:
-        self.thread_controller.start_thread(
-          target=self.rest_controller.serve_forever, name='RestApiThread'
-        )
+      # if self.rest_controller:
+      #   self.thread_controller.start_thread(
+      #     target=self.rest_controller.serve_forever, name='RestApiThread'
+      #   )
 
-      # Start MQTT if configured
-      if self.mqtt_controller:
-        self.mqtt_controller.start()
-        self.thread_controller.start_thread(
-          target=lambda: asyncio.run(self.mqtt_controller.publish_load_profile()),
-          name='MqttPublishThread',
-        )
+      # # Start MQTT if configured
+      # if self.mqtt_controller:
+      #   self.mqtt_controller.start()
+      #   self.thread_controller.start_thread(
+      #     target=lambda: asyncio.run(self.mqtt_controller.publish_load_profile()),
+      #     name='MqttPublishThread',
+      #   )
 
       logger.info('All controllers initialized successfully')
     except Exception as e:

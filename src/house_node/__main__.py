@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from src.house_node.config import HouseNodeConfig
 from src.openadr_node.models import ReportConfiguration
-from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.mqtt.config.mqtt_config import MQTTConfig
 from src.openadr_node.models.topic_config import TopicConfig, TopicType
 from src.house_node.house_node import HouseNode
 

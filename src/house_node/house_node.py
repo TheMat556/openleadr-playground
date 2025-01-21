@@ -3,7 +3,7 @@ from typing import List
 import logging
 
 from src.house_node.config import HouseNodeConfig
-from src.openadr_node.di.modules import ApplicationModule
+from src.openadr_node.dependency_injection.modules import ApplicationModule
 from src.openadr_node.node_controller import NodeController
 from src.openadr_node.models import ReportConfiguration
 

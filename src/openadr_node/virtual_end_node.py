@@ -1,11 +1,10 @@
-import asyncio
 from datetime import timedelta, datetime, timezone
 from typing import Optional, List, Dict, Any, Callable, Tuple
 from functools import wraps
 
 from openleadr import OpenADRClient
 
-from src.openadr_node.config.adr_base_config import AdrBaseConfig
+from src.openadr_node.config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models import ReportConfiguration
@@ -16,97 +15,34 @@ BASE_RESOURCE_ID = 'base'
 
 
 class VirtualEndNode(AdrBaseConfig):
+  """
+  Represents a Virtual End Node (VEN) in the OpenADR system.
+  """
+
   def __init__(self, ven_name: str, vtn_url: str):
+    """
+    Initialize the VirtualEndNode.
+
+    :param ven_name: Name of the Virtual End Node.
+    :type ven_name: str
+    :param vtn_url: URL of the Virtual Top Node.
+    :type vtn_url: str
+    """
     super().__init__()
     self._ven_name = ven_name
     self._vtn_url = vtn_url
-    self._open_adr_client = None
-    self._open_adr_client = self._create_client()
+    self._open_adr_client = OpenADRClient(self._ven_name, self._vtn_url)
     self._init_default_handler()
     self._base_event_registered = False
-    self._loxone_event_registered = False
     self._base_consumption = 0.0
-    self._loxone_consumption = 0.0
-    self._client_task = None
-
-  async def _shutdown_client(self):
-    """Shutdown the current client and clean up"""
-    if hasattr(self._open_adr_client, '_scheduler'):
-      self._open_adr_client._scheduler.shutdown(wait=False)
-    if self._client_task:
-      self._client_task.cancel()
-      try:
-        await self._client_task
-      except asyncio.CancelledError:
-        pass
-
-  async def _wait_for_registration(self, timeout: int = 30) -> bool:
-    start_time = asyncio.get_event_loop().time()
-    while True:
-      if (
-        hasattr(self._open_adr_client, 'registration_id')
-        and self._open_adr_client.registration_id
-      ):
-        logger.info(
-          f'Registration ID received: {self._open_adr_client.registration_id}'
-        )
-        return True
-      if asyncio.get_event_loop().time() - start_time > timeout:
-        return False
-      await asyncio.sleep(1)
-
-  def _create_client(self) -> OpenADRClient:
-    """Create a new OpenADR client instance"""
-    openadr_client = OpenADRClient(self._ven_name, self._vtn_url)
-    self._init_default_handler()
-    return openadr_client
-
-  async def _reinitialize_client(self) -> None:
-    """Reinitialize the OpenADR client"""
-    logger.warning('Reinitializing OpenADR client due to registration timeout')
-    await self._shutdown_client()
-    self._open_adr_client = self._create_client()
-    self._init_default_handler()
-    self._base_event_registered = False
-    self._loxone_event_registered = False
-
-  async def get_open_adr_server_run1(self) -> Any:
-    while True:
-      try:
-        # Start client first without waiting
-        client_task = asyncio.create_task(self._open_adr_client.run())
-
-        # Allow some time for client to start
-        await asyncio.sleep(2)
-
-        # Check registration in parallel
-        try:
-          is_registered = await self._wait_for_registration()
-          if not is_registered:
-            # Cancel client and retry if not registered
-            client_task.cancel()
-            await self._reinitialize_client()
-            continue
-
-          # Registration successful, wait for client task
-          await client_task
-
-        except asyncio.CancelledError:
-          client_task.cancel()
-          raise
-
-      except Exception as e:
-        logger.error(f'Error in OpenADR client: {e}')
-        await asyncio.sleep(5)
 
   def _init_default_handler(self) -> None:
     """
     Initialize the default event handler for the OpenADR client.
     """
-    if self._open_adr_client:
-      self._open_adr_client.add_handler('on_event', self.handle_event)
+    self._open_adr_client.add_handler('on_event', self.handle_event)
 
-  def get_open_adr_server_run(self) -> Any:
+  def get_open_adr_server_run1(self) -> Any:
     """
     Get the OpenADR server run method.
 
@@ -149,49 +85,6 @@ class VirtualEndNode(AdrBaseConfig):
       return 0.0
 
     return wrapper
-
-  def register_loxone_report(self) -> None:
-    """
-    Register the report for the Loxone system.
-
-    :raises Exception: If an error occurs during the registration process.
-    """
-    try:
-      if not self._open_adr_client:
-        raise ValueError('OpenADR client not initialized')
-
-      if not self._loxone_event_registered:
-        logger.info('Registering Loxone report')
-        report: List[ReportConfiguration] = [
-          ReportConfiguration(
-            resource_id='loxone',
-            measurement='energy',
-            sampling_rate=timedelta(seconds=5),
-            callback=lambda: self._loxone_consumption,
-          )
-        ]
-        self.add_reports(report)
-        self._loxone_event_registered = True
-        logger.info('Loxone report registered successfully')
-    except ValueError as e:
-      logger.error(f'OpenADR client initialization failed: {str(e)}')
-      self._loxone_event_registered = False
-      raise
-    except TypeError as e:
-      logger.error(
-        f'Invalid Loxone report configuration - Check measurement type and sampling rate: {str(e)}'
-      )
-      self._loxone_event_registered = False
-      raise
-    except (ConnectionError, TimeoutError) as e:
-      logger.error(
-        f'Network error while registering Loxone report - Check VTN connectivity: {str(e)}'
-      )
-      self._loxone_event_registered = False
-      raise
-    except Exception as e:
-      logger.error(f'Failed to register Loxone report: {e}')
-      raise
 
   def register_base_report(self) -> None:
     """
@@ -350,14 +243,14 @@ class VirtualEndNode(AdrBaseConfig):
   @SignalSender('update_load_profile', 'ven')
   def update_load_profile(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Update the load profiler.
+    Update the load profile.
 
-    :param data: The load profiler data.
+    :param data: The load profile data.
     :type data: List[Dict[str, Any]] containing dtstart, duration, and signal_payload
-    :return: Updated load profiler data.
-    :rtype: List[Dict[str, Any]] with processed load profiler information
+    :return: Updated load profile data.
+    :rtype: List[Dict[str, Any]] with processed load profile information
     """
-    logger.info('Updating load profiler')
+    logger.info('Updating load profile')
     return data
 
   @SignalConnector('update_consumption_data', 'nm')

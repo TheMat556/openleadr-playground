@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, List
-from .topic_config import TopicConfig
+from src.openadr_node.models.topic_config import TopicConfig
 
 
 @dataclass

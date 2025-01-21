@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
-from ..models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.mqtt.config.mqtt_config import MQTTConfig
 from ..models.rest_config import RestApiConfig
 
 

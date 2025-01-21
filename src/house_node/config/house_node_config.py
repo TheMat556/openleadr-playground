@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 from src.openadr_node.config.app_config import ApplicationConfig
-from src.openadr_node.models.mqtt_config import MQTTConfig
+from src.openadr_node.protocols.mqtt.config.mqtt_config import MQTTConfig
 from src.openadr_node.models.rest_config import RestApiConfig
 
 

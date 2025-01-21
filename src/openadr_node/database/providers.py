@@ -1,7 +1,7 @@
 from injector import singleton, provider, Module
 from .interfaces.database_interface import IDatabaseManager, IEnergyDatabaseController
-from .implementations.database_manager import DatabaseManager
-from .implementations.energy_database_controller import EnergyDatabaseController
+from .services.database_manager import DatabaseManager
+from .services.energy_database_controller import EnergyDatabaseController
 
 
 class DatabaseModule(Module):

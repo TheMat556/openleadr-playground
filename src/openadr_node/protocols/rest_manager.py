@@ -5,7 +5,12 @@ from typing import Any, Dict, Optional, Callable, Tuple, List
 from werkzeug.serving import make_server
 
 from src.openadr_node import logger
-from src.openadr_node.database import IEnergyDatabaseController
+from src.openadr_node.database.interfaces.services.iconsumption_service import (
+  IConsumptionService,
+)
+from src.openadr_node.database.interfaces.services.iloadprofile_service import (
+  ILoadProfileService,
+)
 from src.openadr_node.decorator.rest_endpoint import rest_endpoint
 from src.openadr_node.database.interfaces.database_interface import IRestAPIController
 
@@ -27,7 +32,10 @@ class RestAPIController(IRestAPIController):
   """
 
   def __init__(
-    self, port: int, energy_db_controller: IEnergyDatabaseController
+    self,
+    port: int,
+    load_profile_service: ILoadProfileService,
+    consumption_service: IConsumptionService,
   ) -> None:
     """
     Initialize the REST API manager.
@@ -37,9 +45,8 @@ class RestAPIController(IRestAPIController):
     """
     self.app = Flask(__name__)
     self._rest_api_port = port
-    self._energy_db_controller: Optional[IEnergyDatabaseController] = (
-      energy_db_controller
-    )
+    self._load_profile_service = load_profile_service
+    self._consumption_service = consumption_service
     self._get_current_consumption_callback: Optional[Callable[[], Dict[str, Any]]] = (
       None
     )
@@ -87,8 +94,8 @@ class RestAPIController(IRestAPIController):
     Returns:
         Optional[Tuple[Response, int]]: JSON response if not initialized, otherwise None.
     """
-    if self._energy_db_controller is None:
-      return jsonify({'error': 'Load profiler manager not initialized'}), 500
+    if self._consumption_service or self._load_profile_service is None:
+      return jsonify({'error': 'Database services not initialized'}), 500
     return None
 
   def _check_data_exists(
@@ -116,7 +123,7 @@ class RestAPIController(IRestAPIController):
       if response:
         return response
 
-      df = self._energy_db_controller.get_load_profile()
+      df = self._load_profile_service.get_load_profile_data()
       response = self._check_data_exists(df, 'Load profiler')
       if response:
         return response
@@ -153,7 +160,7 @@ class RestAPIController(IRestAPIController):
 
       current_timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
 
-      consumption_points = self._energy_db_controller.get_closest_consumption_points(
+      consumption_points = self._consumption_service.get_closest_consumption_points(
         current_timestamp
       )
       if not consumption_points:

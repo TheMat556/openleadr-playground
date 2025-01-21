@@ -3,7 +3,7 @@ from injector import Injector
 import logging
 
 from src.mock_node.config.mock_node_config import MockNodeConfig
-from src.openadr_node.di.modules import ApplicationModule
+from src.openadr_node.dependency_injection.modules import ApplicationModule
 from src.openadr_node.node_controller import NodeController
 from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 
