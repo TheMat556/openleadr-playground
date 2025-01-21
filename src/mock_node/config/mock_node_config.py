@@ -24,5 +24,5 @@ class MockNodeConfig:
       openadr_http_host=self.openadr_http_host,
       openadr_http_port=self.openadr_http_port,
       openadr_vtn_path_prefix=self.openadr_vtn_path_prefix,
-      rest_api_config=RestApiConfig(port=self.rest_api_port),
+      flask_app_service=RestApiConfig(port=self.rest_api_port),
     )

@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 
 from src.openadr_node import logger
-from src.openadr_node.database.database_manager import DatabaseManager, DatabaseError
+from src.openadr_node.database import DatabaseManager, DatabaseError
 
 
 class EnergyDatabaseController:

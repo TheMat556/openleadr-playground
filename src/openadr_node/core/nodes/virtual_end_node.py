@@ -167,6 +167,7 @@ class VirtualEndNode(AdrBaseConfig):
     :param reports: List of report configurations.
     :type reports: Optional[List[ReportConfiguration]]
     """
+    print('ADD REPORT!!!', reports)
     if reports:
       for report in reports:
         if not report.resource_id or not report.measurement:

@@ -14,6 +14,7 @@ class HouseNode:
   def __init__(self, config: HouseNodeConfig):
     self.config = config
     self.reports: List[ReportConfiguration] = []
+    self.node = None
     self._setup_node()
 
   def _setup_node(self) -> None:
@@ -28,6 +29,7 @@ class HouseNode:
     self.reports.extend(reports)
 
   async def run(self) -> None:
+    self.node._setup_controllers()
     if self.reports:
       self.node.add_report(self.reports)
     try:

@@ -1,19 +1,21 @@
 import asyncio
+import threading
 from datetime import timedelta
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any
 
 from injector import inject
 
 from src.openadr_node import logger
+from src.openadr_node.communication.rest.interfaces.iflask_app_service import (
+  IFlaskAppService,
+)
 from src.openadr_node.config import AdrBaseConfig
 from src.openadr_node.config.app_config import ApplicationConfig
 from src.openadr_node.database.interfaces.database_interface import (
   IEnergyDatabaseController,
-  IRestAPIController,
 )
 from src.openadr_node.models import ReportConfiguration
 from src.openadr_node.mqtt_controller import MQTTManager
-from src.openadr_node.node_dispatcher_controller import NodeDispatcherController
 from src.openadr_node.node_open_adr_controller import NodeOpenADRController
 from src.openadr_node.node_resource_controller import NodeResourceController
 from src.openadr_node.node_thread_controller import NodeThreadController
@@ -25,41 +27,54 @@ class NodeController(AdrBaseConfig):
     self,
     config: ApplicationConfig,
     energy_db_controller: IEnergyDatabaseController,
-    rest_controller: Optional[IRestAPIController],
+    flask_app_service: IFlaskAppService,
     mqtt_controller: Optional[MQTTManager],
     resource_controller: NodeResourceController,
-    dispatcher_controller: NodeDispatcherController,
     thread_controller: NodeThreadController,
     open_adr_controller: NodeOpenADRController,
   ):
     """Initialize NodeController with injected dependencies"""
-    dispatcher_controller.set_node_controller(self)
     super().__init__()
+    print('IEnergyDatabaseController', IEnergyDatabaseController)
     self.config = config
     self.energy_db_controller = energy_db_controller
-    self.rest_controller = rest_controller
+    self.flask_app_service = flask_app_service
     self.mqtt_controller = mqtt_controller
     self.resource_controller = resource_controller
-    self.dispatcher_controller = dispatcher_controller
     self.thread_controller = thread_controller
     self.open_adr_controller = open_adr_controller
 
     self._periodic_tasks = []
     self._loop = asyncio.get_event_loop()
 
-    self._setup_controllers()
+  # def _setup_flask_server(self) -> None:
+  #       """Initialize and setup Flask server"""
+  #       if self.flask_app and self.config.rest_api_config:
+  #           try:
+  #               self._server = make_server(
+  #                   '0.0.0.0',
+  #                   self.config.rest_api_config.port,
+  #                   self.flask_app
+  #               )
+  #               logger.info(f'Flask server initialized on port {self.config.rest_api_config.port}')
+  #           except Exception as e:
+  #               logger.error(f'Failed to initialize Flask server: {e}')
+  #               raise
 
   def _setup_controllers(self) -> None:
     """Initialize and setup all controllers"""
     try:
       # Initialize OpenADR tasks
-      # self.open_adr_controller.create_node_tasks()
+      self.open_adr_controller.create_node_tasks()
 
-      # Start REST API if configured
-      # if self.rest_controller:
-      #   self.thread_controller.start_thread(
-      #     target=self.rest_controller.serve_forever, name='RestApiThread'
-      #   )
+      # Setup and start Flask server if configured
+      print('!!!!Flask app!!!', self.flask_app)
+      if self.flask_app:
+        print('Starting Flask server')
+        flask_thread = threading.Thread(
+          target=self.flask_app.serve_forever, name='FlaskServerThread'
+        )
+        flask_thread.start()
 
       # Start MQTT if configured
       # if self.mqtt_controller:
@@ -158,16 +173,3 @@ class NodeController(AdrBaseConfig):
     except Exception as e:
       logger.error(f'Error adding reports: {e}')
       raise
-
-  def _on_update_load_profile(self, sender: str, data: List[Dict[str, Any]]) -> None:
-    """Handle load profiler update signal"""
-    self.resource_controller.update_load_profile(sender, data)
-
-  def _on_update_consumption_data(self, sender: str, data: Any) -> None:
-    """Handle consumption data update signal"""
-    print('_on_update_consumption_data', data)
-    self.resource_controller.update_consumption_data(sender, data)
-
-  def _on_register_report(self, sender: str, data: str) -> None:
-    """Handle report registration signal"""
-    self.resource_controller.on_register_report(data)

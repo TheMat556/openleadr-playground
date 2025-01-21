@@ -1,10 +1,10 @@
+from sqlite3 import DatabaseError
 from typing import List, Dict, Any, Optional
 
 import numpy as np
 
 from src.openadr_node import logger
 from src.openadr_node.database.interfaces.database_interface import IDatabaseManager
-from src.openadr_node.database.database_manager import DatabaseError
 from src.openadr_node.database.interfaces.database_interface import (
   IEnergyDatabaseController,
 )

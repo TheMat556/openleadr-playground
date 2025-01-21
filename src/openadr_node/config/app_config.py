@@ -16,4 +16,4 @@ class ApplicationConfig:
   openadr_http_port: Optional[int] = None
   openadr_vtn_path_prefix: Optional[str] = None
   mqtt_config: Optional[MQTTConfig] = None
-  rest_api_config: Optional[RestApiConfig] = None
+  flask_app_service: Optional[RestApiConfig] = None

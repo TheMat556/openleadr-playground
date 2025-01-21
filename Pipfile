@@ -27,6 +27,8 @@ cachetools = "*"
 "paho.mqtt" = "*"
 yappi = "*"
 injector = "*"
+fastapi = "*"
+uvicorn = "*"
 
 [dev-packages]
 ruff = "*"

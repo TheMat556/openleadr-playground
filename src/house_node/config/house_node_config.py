@@ -30,5 +30,5 @@ class HouseNodeConfig:
       openadr_http_port=self.openadr_http_port,
       openadr_vtn_path_prefix=self.openadr_vtn_path_prefix,
       mqtt_config=self.mqtt_config,
-      rest_api_config=self.rest_api_config or RestApiConfig(port=self.rest_api_port),
+      flask_app_service=self.rest_api_config or RestApiConfig(port=self.rest_api_port),
     )

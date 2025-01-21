@@ -25,7 +25,7 @@ from ..node_resource_controller import NodeResourceController
 from ..node_open_adr_controller import NodeOpenADRController
 from ..config.app_config import ApplicationConfig
 
-from ..protocols.rest_manager import RestAPIController
+from src.openadr_node.communication.rest.rest_manager import RestAPIController
 from src.openadr_node.mqtt_controller import (
   MQTTManager,
 )
@@ -96,9 +96,9 @@ class ApplicationModule(Module):
     load_profile_service: ILoadProfileService,
     consumption_service: IConsumptionService,
   ) -> IRestAPIController:
-    if config.rest_api_config:
+    if config.flask_app_service:
       rest_controller = RestAPIController(
-        config.rest_api_config.port, load_profile_service, consumption_service
+        config.flask_app_service.port, load_profile_service, consumption_service
       )
       return rest_controller
     return None

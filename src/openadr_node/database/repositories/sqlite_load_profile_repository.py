@@ -2,6 +2,7 @@ from sqlite3 import DatabaseError
 from typing import Dict, List, Any, Optional
 
 import numpy as np
+from injector import inject
 
 from src.openadr_node import logger
 from src.openadr_node.database.interfaces.services.idatabase_service import (
@@ -13,6 +14,7 @@ from src.openadr_node.database.interfaces.repositories.iload_profile_repository 
 
 
 class SQLiteLoadProfileRepository(ILoadProfileRepository):
+  @inject
   def __init__(self, db_service: IDatabaseService):
     self.db_service = db_service
 

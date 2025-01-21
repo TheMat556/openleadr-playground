@@ -1,6 +1,6 @@
 from datetime import timezone, datetime
 import numpy as np
-from flask import Flask, jsonify, Response
+from flask import jsonify, Response
 from typing import Any, Dict, Optional, Callable, Tuple, List
 from werkzeug.serving import make_server
 
@@ -43,7 +43,7 @@ class RestAPIController(IRestAPIController):
     Args:
         port (int): Port for the REST API.
     """
-    self.app = Flask(__name__)
+    # self.app = Flask(__name__)
     self._rest_api_port = port
     self._load_profile_service = load_profile_service
     self._consumption_service = consumption_service

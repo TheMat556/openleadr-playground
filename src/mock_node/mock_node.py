@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 class MockNode:
   def __init__(self, config: MockNodeConfig):
     self.config = config
+    self.node = None
     self._setup_node()
     self._setup_gradio()
 
@@ -39,6 +40,7 @@ class MockNode:
 
     try:
       print('running mock node')
+      self.node._setup_controllers()
       await self.node.run()
     finally:
       if self.interface and gradio_thread.is_alive():

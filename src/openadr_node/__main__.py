@@ -18,7 +18,7 @@ async def main() -> None:
 
     # Set up dependency injection
     injector = Injector([ApplicationModule(config)])
-
+    print('INJECTOR', injector)
     # Get NodeController instance with all dependencies injected
     node_controller = injector.get(NodeController)
 
@@ -63,7 +63,7 @@ def create_application_config() -> ApplicationConfig:
       openadr_http_port=8080,
       openadr_vtn_path_prefix='/OpenADR2/Simple/2.0b',
       mqtt_config=mqtt_config,
-      rest_api_config=rest_config,
+      flask_app_service=rest_config,
     )
   except Exception as e:
     logger.error(f'Failed to create application config: {e}')

@@ -2,8 +2,8 @@ import asyncio
 from typing import Optional, Callable, Dict, List, Any
 from src.openadr_node import logger
 from src.openadr_node.models import ReportConfiguration
-from src.openadr_node.virtual_end_node import VirtualEndNode
-from src.openadr_node.virtual_top_node import VirtualTopNode
+from src.openadr_node.core.nodes.virtual_end_node import VirtualEndNode
+from src.openadr_node.core.nodes.virtual_top_node import VirtualTopNode
 
 
 class NodeOpenADRController:

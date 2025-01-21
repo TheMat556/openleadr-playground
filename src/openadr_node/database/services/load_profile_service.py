@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Optional
 
 import numpy as np
+from injector import inject
 
 from src.openadr_node import logger
 from src.openadr_node.database.interfaces.repositories.iload_profile_repository import (
@@ -12,6 +13,7 @@ from src.openadr_node.database.interfaces.services.iloadprofile_service import (
 
 
 class LoadProfileService(ILoadProfileService):
+  @inject
   def __init__(self, repository: ILoadProfileRepository):
     self.repository = repository
 

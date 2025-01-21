@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import threading
 from datetime import timedelta
 from typing import List
 
@@ -42,7 +43,7 @@ def create_report_configurations() -> List[ReportConfiguration]:
   return reports
 
 
-async def run_dashboard():
+def run_dashboard():
   """Run node dashboard asynchronously"""
   dashboard = GradioNodeDashboard(file_path='./development/simple/env_variables.json')
   interface = dashboard.create_interface()
@@ -101,7 +102,7 @@ async def main():
     )
 
   house_node_0 = HouseNode(house_node_0_config)
-  house_node_0.add_reports(create_report_configurations())
+  house_node_0.add_report(create_report_configurations()[0])
 
   house_node_1 = HouseNode(
     HouseNodeConfig(
@@ -111,7 +112,7 @@ async def main():
       rest_api_port=int(os.getenv('DEV_HOUSE_NODE_1_REST_API')),
     )
   )
-  house_node_1.add_reports(create_report_configurations())
+  house_node_1.add_report(create_report_configurations()[0])
 
   # Start each task individually
   tasks = []
@@ -126,7 +127,9 @@ async def main():
   tasks.append(asyncio.create_task(house_node_1.run()))
   await asyncio.sleep(10)
 
-  tasks.append(asyncio.create_task(run_dashboard()))
+  # Start the Gradio dashboard in a separate thread
+  dashboard_thread = threading.Thread(target=run_dashboard)
+  dashboard_thread.start()
 
   try:
     # Wait for all tasks to complete

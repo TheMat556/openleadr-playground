@@ -112,7 +112,7 @@ def run_mock_node(queue: Any) -> None:
     openadr_vtn_path_prefix=os.getenv('DEV_VTN_PATH_PREFIX'),
     openadr_http_host=os.getenv('DEV_VTN_HTTP_DOMAIN'),
     openadr_http_port=int(os.getenv('DEV_VTN_HTTP_PORT', 80)),
-    rest_api_config=RestApiConfig(
+    flask_app_service=RestApiConfig(
       port=int(os.getenv('DEV_MOCK_NODE_REST_API_PORT', 5000))
     ),
   )
@@ -176,7 +176,7 @@ def run_house_node(
     node_id=node_id,
     ven_name=ven_name,
     vtn_url=vtn_url,
-    rest_api_config=RestApiConfig(port=int(rest_api_port)),
+    flask_app_service=RestApiConfig(port=int(rest_api_port)),
     mqtt_config=mqtt_config,
   )
 

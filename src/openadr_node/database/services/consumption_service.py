@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 
+from injector import inject
 
 from src.openadr_node import logger
 from src.openadr_node.database.interfaces.repositories.iconsumption_repository import (
@@ -11,6 +12,7 @@ from src.openadr_node.database.interfaces.services.iconsumption_service import (
 
 
 class ConsumptionService(IConsumptionService):
+  @inject
   def __init__(self, repository: IConsumptionRepository):
     self.repository = repository
 
