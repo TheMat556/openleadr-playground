@@ -3,7 +3,6 @@ from datetime import timedelta
 from typing import Optional, List, Any, Dict
 
 from injector import inject
-from pydispatch import dispatcher
 
 from src.openadr_node import logger
 from src.openadr_node.config import AdrBaseConfig
@@ -49,29 +48,12 @@ class NodeController(AdrBaseConfig):
     self._loop = asyncio.get_event_loop()
 
     self._setup_controllers()
-    self._initialize_periodic_tasks()
-
-  def _register_dispatcher(self, sender: str, signal: str, data: str) -> None:
-    """
-    Register a dispatcher for a signal.
-
-    Parameters
-    ----------
-    sender : str
-        The sender of the signal.
-    signal : str
-        The signal to register.
-    data : str
-        The data associated with the signal.
-    """
-    self.dispatcher_controller.register_dispatcher(sender, signal, data)
-    dispatcher.send(signal='on_ready', sender='system')
 
   def _setup_controllers(self) -> None:
     """Initialize and setup all controllers"""
     try:
       # Initialize OpenADR tasks
-      self.open_adr_controller.create_node_tasks()
+      # self.open_adr_controller.create_node_tasks()
 
       # Start REST API if configured
       # if self.rest_controller:
@@ -79,11 +61,11 @@ class NodeController(AdrBaseConfig):
       #     target=self.rest_controller.serve_forever, name='RestApiThread'
       #   )
 
-      # # Start MQTT if configured
+      # Start MQTT if configured
       # if self.mqtt_controller:
       #   self.mqtt_controller.start()
       #   self.thread_controller.start_thread(
-      #     target=lambda: asyncio.run(self.mqtt_controller.publish_load_profile()),
+      #     target=lambda: asyncio.run(self.mqtt_controller._publish_loop()),
       #     name='MqttPublishThread',
       #   )
 
@@ -91,13 +73,6 @@ class NodeController(AdrBaseConfig):
     except Exception as e:
       logger.error(f'Failed to setup controllers: {e}')
       raise
-
-  def _initialize_periodic_tasks(self) -> None:
-    """Initialize periodic tasks"""
-    self.start_periodic_task(
-      lambda: self.resource_controller.update_load_profile('', None),
-      timedelta(minutes=1),
-    )
 
   async def run(self) -> None:
     """Run the node controller"""

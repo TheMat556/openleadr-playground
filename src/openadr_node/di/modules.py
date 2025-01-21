@@ -1,22 +1,19 @@
 import asyncio
 from injector import Module, singleton, provider
+
+from ..database import DatabaseManager, EnergyDatabaseController
 from ..database.interfaces.database_interface import (
   IDatabaseManager,
   IEnergyDatabaseController,
   IRestAPIController,
 )
-from ..database.implementations.database_manager import DatabaseManager
-from ..database.implementations.energy_database_controller import (
-  EnergyDatabaseController,
-)
+
 from ..node_resource_controller import NodeResourceController
 from ..node_open_adr_controller import NodeOpenADRController
 from ..config.app_config import ApplicationConfig
 from src.openadr_node.protocols.mqtt.interfaces.mqtt_interface import IMQTTController
 from ..protocols.rest_manager import RestAPIController
-from src.openadr_node.protocols.mqtt.implementation.mqtt_controller import (
-  MQTTController,
-)
+
 from ..node_dispatcher_controller import NodeDispatcherController
 
 
@@ -59,7 +56,7 @@ class ApplicationModule(Module):
     self, config: ApplicationConfig, db_controller: IEnergyDatabaseController
   ) -> IMQTTController:
     if config.mqtt_config:
-      return MQTTController(config.mqtt_config, db_controller, config.ven_name)
+      return MQTTController(config.mqtt_config, db_controller, config.ven_name)  # noqa: F821
     return None
 
   @singleton
