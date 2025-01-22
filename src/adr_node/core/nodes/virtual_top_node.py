@@ -7,18 +7,12 @@ from openleadr import OpenADRServer
 from openleadr.utils import generate_id
 
 from src.openadr_node import logger
-from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models.event import ResourceConsumption, Interval
-from src.openadr_node.node_resource_controller import NodeResourceController
 
 
-class VirtualTopNode(AdrBaseConfig):
-  """
-  Represents a Virtual Top Node (VTN) in the OpenADR system.
-  """
-
+class VirtualTopNode:
   def __init__(
     self,
     server_name: str,
@@ -26,18 +20,6 @@ class VirtualTopNode(AdrBaseConfig):
     http_host: Optional[str] = '0.0.0.0',
     path_prefix: Optional[str] = None,
   ):
-    """
-    Initialize the VirtualTopNode.
-
-    :param server_name: Name of the server.
-    :type server_name: str
-    :param http_port: HTTP port for the server.
-    :type http_port: Optional[int]
-    :param http_host: HTTP host for the server.
-    :type http_host: Optional[str]
-    :param path_prefix: Path prefix for the server.
-    :type path_prefix: Optional[str]
-    """
     super().__init__()
     self._ven_data: Dict[str, Dict[str, float]] = {}
     self._registration_info: Dict[str, str] = {}
@@ -52,9 +34,6 @@ class VirtualTopNode(AdrBaseConfig):
     self._init_default_handler()
 
   def _init_default_handler(self) -> None:
-    """
-    Initialize the default handlers for the OpenADR server.
-    """
     self._open_adr_server.add_handler(
       'on_create_party_registration', self._on_create_party_registration
     )
@@ -63,14 +42,6 @@ class VirtualTopNode(AdrBaseConfig):
   async def _on_create_party_registration(
     self, registration_info: Dict[str, Any]
   ) -> Tuple[str, str]:
-    """
-    Handle party registration.
-
-    :param registration_info: Registration information.
-    :type registration_info: Dict[str, Any]
-    :return: Tuple containing VEN ID and registration ID.
-    :rtype: Tuple[str, str]
-    """
     ven_name = registration_info.get('ven_name')
     ven_id = generate_id('ven_id')
     registration_id = generate_id()
@@ -90,26 +61,6 @@ class VirtualTopNode(AdrBaseConfig):
     min_sampling_interval: int,
     max_sampling_interval: int,
   ) -> Tuple[partial, int]:
-    """
-    Handle report registration.
-
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param resource_id: Resource ID.
-    :type resource_id: str
-    :param measurement: Measurement type.
-    :type measurement: str
-    :param unit: Unit of measurement.
-    :type unit: str
-    :param scale: Scale of measurement.
-    :type scale: str
-    :param min_sampling_interval: Minimum sampling interval.
-    :type min_sampling_interval: int
-    :param max_sampling_interval: Maximum sampling interval.
-    :type max_sampling_interval: int
-    :return: Tuple containing the callback and sampling interval.
-    :rtype: Tuple[partial, int]
-    """
     callback = partial(
       self._on_update_report,
       ven_id=ven_id,
@@ -132,20 +83,6 @@ class VirtualTopNode(AdrBaseConfig):
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
   ) -> Dict[str, Dict[str, float]]:
-    """
-    Handle report updates.
-
-    :param data: Report data.
-    :type data: List[Any]
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param resource_id: Resource ID.
-    :type resource_id: str
-    :param measurement: Measurement type.
-    :type measurement: str
-    :return: Updated VEN data.
-    :rtype: Dict[str, Dict[str, float]]
-    """
     logger.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
@@ -166,46 +103,16 @@ class VirtualTopNode(AdrBaseConfig):
   def _send_consumption_data(
     self, ven_id: str, resource_id: str, data: float
   ) -> ResourceConsumption:
-    """
-    Send consumption data.
-
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param resource_id: Resource ID.
-    :type resource_id: str
-    :param data: Consumption data.
-    :type data: float
-    :return: Resource consumption object.
-    :rtype: ResourceConsumption
-    """
     resource_consumption = ResourceConsumption(
       ven_id=ven_id, resource_id=resource_id, data=data
     )
     return resource_consumption
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
-    """
-    Callback for event responses.
-
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param event_id: Event ID.
-    :type event_id: str
-    :param opt_type: Opt type.
-    :type opt_type: str
-    """
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
     await self.handle_device_status(ven_id, opt_type)
 
   async def handle_device_status(self, ven_id: str, opt_type: str) -> None:
-    """
-    Handle device status changes.
-
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param opt_type: Opt type.
-    :type opt_type: str
-    """
     logger.info(
       f'Handling device status change for VEN ID: {ven_id}, Opt type: {opt_type}'
     )
@@ -216,16 +123,6 @@ class VirtualTopNode(AdrBaseConfig):
   def _on_update_load_profile(
     self, signal: str, sender: str, data: Dict[str, List[Interval]]
   ) -> None:
-    """
-    Update the load profile.
-
-    :param signal: Signal name.
-    :type signal: str
-    :param sender: Signal sender.
-    :type sender: str
-    :param data: Load profile data with ven_id as keys and intervals as values.
-    :type data: Dict[str, List[Interval]]
-    """
     if data:
       for ven_id, intervals in data.items():
         if not isinstance(intervals, list):
@@ -249,7 +146,9 @@ class VirtualTopNode(AdrBaseConfig):
           logger.error(
             f'Missing required fields for VEN {ven_id}: {", ".join(missing_fields)}'
           )
-          intervals = NodeResourceController.process_load_profile_data(intervals)
+          intervals = (
+            None  # NodeResourceController.process_load_profile_data(intervals)
+          )
 
         transformed_intervals = [
           {
@@ -300,12 +199,6 @@ class VirtualTopNode(AdrBaseConfig):
           )
 
   def get_open_adr_server_run(self) -> Any:
-    """
-    Get the OpenADR server run method.
-
-    :return: The run method of the OpenADR server.
-    :rtype: Any
-    """
     return self._open_adr_server.run()
 
   async def event_response_callback(

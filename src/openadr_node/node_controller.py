@@ -16,7 +16,7 @@ from src.openadr_node.models.rest_config import RestApiConfig
 from src.openadr_node.protocols import RestApiManager
 from src.openadr_node.protocols.mqtt_manager import MQTTManager
 from src.openadr_node.node_thread_controller import NodeThreadController
-from src.openadr_node.node_open_adr_controller import NodeOpenADRController
+from src.adr_node.core.services.adr.adr_service import AdrService
 from pydispatch import dispatcher
 
 
@@ -74,7 +74,7 @@ class NodeController(AdrBaseConfig):
 
     self._periodic_tasks = []
     self._loop = asyncio.get_event_loop()
-    self._node_task_manager = NodeOpenADRController(
+    self._node_task_manager = AdrService(
       self._loop,
       vtn_name=self._vtn_name,
       ven_name=self._ven_name,

@@ -4,7 +4,6 @@ from functools import wraps
 
 from openleadr import OpenADRClient
 
-from src.openadr_node.adr_base_config import AdrBaseConfig
 from src.openadr_node.decorator.signal_connector import SignalConnector
 from src.openadr_node.decorator.signal_sender import SignalSender
 from src.openadr_node.models import ReportConfiguration
@@ -14,7 +13,7 @@ from src.openadr_node.models.event import ResourceConsumption
 BASE_RESOURCE_ID = 'base'
 
 
-class VirtualEndNode(AdrBaseConfig):
+class VirtualEndNode:
   """
   Represents a Virtual End Node (VEN) in the OpenADR system.
   """
@@ -49,6 +48,7 @@ class VirtualEndNode(AdrBaseConfig):
     :return: The OpenADR server run method.
     :rtype: Any
     """
+    print('!!!')
     return self._open_adr_client.run()
 
   def _wrap_callback(
@@ -167,6 +167,7 @@ class VirtualEndNode(AdrBaseConfig):
     :param reports: List of report configurations.
     :type reports: Optional[List[ReportConfiguration]]
     """
+    print('add_reports', reports)
     if reports:
       for report in reports:
         if not report.resource_id or not report.measurement:
