@@ -1,8 +1,9 @@
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 from sqlite3 import DatabaseError
-from typing import Dict, List, Any
 
-import numpy as np
-
+from src.adr_node.database.domain.consumption_data import ConsumptionData
+from src.adr_node.database.domain.consumption_query import ConsumptionQuery
 from src.adr_node.database.interfaces.repositories.iconsumption_repository import (
   IConsumptionRepository,
 )
@@ -14,89 +15,268 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
   def __init__(self, db_service: IDatabaseService):
     self.db_service = db_service
 
-  def insert_consumption(self, data: Dict[str, Any]) -> None:
-    """Insert a single consumption record."""
-    try:
-      query = """
-                INSERT OR REPLACE INTO consumption
-                (timestamp, ven_id, resource_id, value)
-                VALUES (?, ?, ?, ?)
-            """
-      values = [data['timestamp'], data['ven_id'], data['resource_id'], data['value']]
-      self.db_service.execute_query(query, values)
-      logger.info('Successfully inserted consumption record')
-    except (DatabaseError, KeyError) as e:
-      logger.error(f'Failed to insert consumption record: {str(e)}')
-      raise
+  def _map_to_domain(self, row: Dict[str, Any]) -> ConsumptionData:
+    return ConsumptionData(
+      id=row.get('id'),
+      timestamp=row['timestamp'],
+      ven_id=row['ven_id'],
+      resource_id=row['resource_id'],
+      value=row['value'],
+      created_at=datetime.fromisoformat(row['created_at']),
+      updated_at=datetime.fromisoformat(row['updated_at'])
+      if row.get('updated_at')
+      else None,
+    )
 
-  def save_consumption_batch(self, data: List[Dict[str, Any]]) -> None:
-    if not data:
-      logger.warning('No consumption data provided for insertion')
-      return
-
-    try:
-      batch_values = [
-        [record['timestamp'], record['ven_id'], record['resource_id'], record['value']]
-        for record in data
-      ]
-
-      query = """
-                INSERT OR REPLACE INTO consumption
-                (timestamp, ven_id, resource_id, value)
-                VALUES (?, ?, ?, ?)
-            """
-      self.db_service.execute_batch(query, batch_values)
-      logger.info(f'Successfully inserted {len(data)} consumption records')
-    except (DatabaseError, KeyError) as e:
-      logger.error(f'Failed to insert consumption batch: {str(e)}')
-      raise
-
-  def get_consumption(self) -> Dict[str, np.ndarray]:
-    query = 'SELECT timestamp, ven_id, resource_id, value FROM consumption'
-    try:
-      rows = self.db_service.execute_query(query)
-      if not rows:
-        return {
-          'timestamp': np.array([]),
-          'ven_id': np.array([]),
-          'resource_id': np.array([]),
-          'value': np.array([]),
-        }
-
-      return {
-        'timestamp': np.array([row['timestamp'] for row in rows]),
-        'ven_id': np.array([row['ven_id'] for row in rows]),
-        'resource_id': np.array([row['resource_id'] for row in rows]),
-        'value': np.array([row['value'] for row in rows]),
-      }
-    except DatabaseError as e:
-      logger.error(f'Failed to retrieve consumption data: {str(e)}')
-      raise
-
-  def get_closest_consumption_points(
-    self, target_timestamp: int
-  ) -> List[Dict[str, Any]]:
+  # Base Repository Methods (CRUD)
+  def create(self, entity: ConsumptionData) -> ConsumptionData:
     query = """
-            SELECT t1.timestamp, t1.ven_id, t1.resource_id, t1.value
-            FROM consumption t1
-            INNER JOIN (
-                SELECT ven_id, MIN(ABS(timestamp - ?)) AS min_diff
-                FROM consumption
-                GROUP BY ven_id
-            ) t2
-            ON t1.ven_id = t2.ven_id AND ABS(t1.timestamp - ?) = t2.min_diff
+            INSERT INTO consumption
+            (timestamp, ven_id, resource_id, value, created_at)
+            VALUES (?, ?, ?, ?, ?)
         """
     try:
-      return self.db_service.execute_query(query, [target_timestamp, target_timestamp])
+      values = [
+        entity.timestamp,
+        entity.ven_id,
+        entity.resource_id,
+        entity.value,
+        entity.created_at.isoformat(),
+      ]
+      self.db_service.execute_query(query, values)
+      return entity
     except DatabaseError as e:
-      logger.error(f'Failed to get closest consumption points: {str(e)}')
+      logger.error(f'Failed to create consumption record: {e}')
       raise
 
-  def get_unique_vens(self) -> int:
+  def create_batch(self, entities: List[ConsumptionData]) -> List[ConsumptionData]:
+    if not entities:
+      return []
+
+    query = """
+            INSERT INTO consumption
+            (timestamp, ven_id, resource_id, value, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """
+    try:
+      batch_values = [
+        [
+          entity.timestamp,
+          entity.ven_id,
+          entity.resource_id,
+          entity.value,
+          entity.created_at.isoformat(),
+        ]
+        for entity in entities
+      ]
+      self.db_service.execute_batch(query, batch_values)
+      return entities
+    except DatabaseError as e:
+      logger.error(f'Failed to create consumption batch: {e}')
+      raise
+
+  def read(self, id: Any) -> Optional[ConsumptionData]:
+    query = 'SELECT * FROM consumption WHERE id = ?'
+    try:
+      result = self.db_service.execute_query(query, [id])
+      return self._map_to_domain(result[0]) if result else None
+    except DatabaseError as e:
+      logger.error(f'Failed to read consumption record: {e}')
+      raise
+
+  def read_all(self, query: Optional[ConsumptionQuery] = None) -> List[ConsumptionData]:
+    base_query = 'SELECT * FROM consumption'
+    params = []
+    where_clauses = []
+
+    if query:
+      if query.timestamp_start:
+        where_clauses.append('timestamp >= ?')
+        params.append(query.timestamp_start)
+      if query.timestamp_end:
+        where_clauses.append('timestamp <= ?')
+        params.append(query.timestamp_end)
+      if query.ven_id:
+        where_clauses.append('ven_id = ?')
+        params.append(query.ven_id)
+      if query.resource_id:
+        where_clauses.append('resource_id = ?')
+        params.append(query.resource_id)
+
+      if where_clauses:
+        base_query += f" WHERE {' AND '.join(where_clauses)}"
+
+      base_query += f' ORDER BY {query.order_by} {query.order_direction}'
+      base_query += ' LIMIT ? OFFSET ?'
+      params.extend([query.limit, query.offset])
+
+    try:
+      results = self.db_service.execute_query(base_query, params)
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(f'Failed to read consumption records: {e}')
+      raise
+
+  def update(self, entity: ConsumptionData) -> ConsumptionData:
+    query = """
+            UPDATE consumption
+            SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?,
+                updated_at = ?
+            WHERE id = ?
+        """
+    try:
+      values = [
+        entity.timestamp,
+        entity.ven_id,
+        entity.resource_id,
+        entity.value,
+        datetime.utcnow().isoformat(),
+        entity.id,
+      ]
+      self.db_service.execute_query(query, values)
+      return entity
+    except DatabaseError as e:
+      logger.error(f'Failed to update consumption record: {e}')
+      raise
+
+  def update_batch(self, entities: List[ConsumptionData]) -> List[ConsumptionData]:
+    query = """
+            UPDATE consumption
+            SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?,
+                updated_at = ?
+            WHERE id = ?
+        """
+    try:
+      current_time = datetime.utcnow().isoformat()
+      batch_values = [
+        [
+          entity.timestamp,
+          entity.ven_id,
+          entity.resource_id,
+          entity.value,
+          current_time,
+          entity.id,
+        ]
+        for entity in entities
+      ]
+      self.db_service.execute_batch(query, batch_values)
+      return entities
+    except DatabaseError as e:
+      logger.error(f'Failed to update consumption batch: {e}')
+      raise
+
+  def delete(self, id: Any) -> bool:
+    query = 'DELETE FROM consumption WHERE id = ?'
+    try:
+      self.db_service.execute_query(query, [id])
+      return True
+    except DatabaseError as e:
+      logger.error(f'Failed to delete consumption record: {e}')
+      raise
+
+  def delete_batch(self, ids: List[Any]) -> bool:
+    if not ids:
+      return True
+
+    placeholders = ','.join(['?' for _ in ids])
+    query = f'DELETE FROM consumption WHERE id IN ({placeholders})'
+    try:
+      self.db_service.execute_query(query, ids)
+      return True
+    except DatabaseError as e:
+      logger.error(f'Failed to delete consumption batch: {e}')
+      raise
+
+  # Consumption-specific methods
+  def find_by_timestamp_range(
+    self, start_timestamp: int, end_timestamp: int
+  ) -> List[ConsumptionData]:
+    query = """
+            SELECT * FROM consumption
+            WHERE timestamp BETWEEN ? AND ?
+            ORDER BY timestamp ASC
+        """
+    try:
+      results = self.db_service.execute_query(query, [start_timestamp, end_timestamp])
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(f'Failed to find consumption by timestamp range: {e}')
+      raise
+
+  def find_by_ven(self, ven_id: str, limit: int = 100) -> List[ConsumptionData]:
+    query = """
+            SELECT * FROM consumption
+            WHERE ven_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+    try:
+      results = self.db_service.execute_query(query, [ven_id, limit])
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(f'Failed to find consumption by VEN: {e}')
+      raise
+
+  def find_by_resource(
+    self, resource_id: str, limit: int = 100
+  ) -> List[ConsumptionData]:
+    query = """
+            SELECT * FROM consumption
+            WHERE resource_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+    try:
+      results = self.db_service.execute_query(query, [resource_id, limit])
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(f'Failed to find consumption by resource: {e}')
+      raise
+
+  def find_nearest_to_timestamp(
+    self, timestamp: int, max_distance: Optional[int] = None
+  ) -> Optional[ConsumptionData]:
+    query = """
+            SELECT *, ABS(timestamp - ?) as distance
+            FROM consumption
+            WHERE 1=1
+            {max_distance_clause}
+            ORDER BY distance ASC
+            LIMIT 1
+        """
+    params = [timestamp]
+
+    max_distance_clause = ''
+    if max_distance:
+      max_distance_clause = 'AND ABS(timestamp - ?) <= ?'
+      params.extend([timestamp, max_distance])
+
+    query = query.format(max_distance_clause=max_distance_clause)
+    try:
+      results = self.db_service.execute_query(query, params)
+      return self._map_to_domain(results[0]) if results else None
+    except DatabaseError as e:
+      logger.error(f'Failed to find nearest consumption: {e}')
+      raise
+
+  def count_unique_vens(self) -> int:
     query = 'SELECT COUNT(DISTINCT ven_id) as count FROM consumption'
     try:
       result = self.db_service.execute_query(query)
       return result[0]['count'] if result else 0
     except DatabaseError as e:
-      logger.error(f'Failed to get unique VENs count: {str(e)}')
+      logger.error(f'Failed to count unique VENs: {e}')
+      raise
+
+  def get_latest_readings(self, limit: int = 10) -> List[ConsumptionData]:
+    query = """
+            SELECT * FROM consumption
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+    try:
+      results = self.db_service.execute_query(query, [limit])
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(f'Failed to get latest readings: {e}')
       raise

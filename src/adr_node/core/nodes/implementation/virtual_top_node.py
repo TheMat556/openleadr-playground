@@ -8,25 +8,23 @@ from openleadr.utils import generate_id
 from src.adr_node.core.nodes.configs.virtual_top_node_config import VirtualTopNodeConfig
 from src.adr_node.core.nodes.interfaces.ivirtual_top_node import IVirtualTopNode
 
-# from src.adr_node.database.interfaces.services.iconsumption_service import (
-#   IConsumptionService,
-# )
+from src.adr_node.database.interfaces.services.iconsumption_service import (
+  IConsumptionService,
+)
 from src.openadr_node import logger
 from src.openadr_node.models.event import ResourceConsumption, Interval
 
 
 class VirtualTopNode(IVirtualTopNode):
   def __init__(
-    self,
-    config: VirtualTopNodeConfig,
-    # sqlite_consumption_service: IConsumptionService
+    self, config: VirtualTopNodeConfig, sqlite_consumption_service: IConsumptionService
   ):
     super().__init__()
     self._vtn_id = config.vtn_id
     self.http_host = config.http_host
     self.http_port = config.http_port
     self.path_prefix = config.path_prefix
-    # self.sqlite_consumption_service = sqlite_consumption_service
+    self.sqlite_consumption_service = sqlite_consumption_service
     self._open_adr_server = config.server_factory(
       vtn_id=config.vtn_id,
       http_host=config.http_host,
@@ -109,7 +107,8 @@ class VirtualTopNode(IVirtualTopNode):
     resource_consumption = ResourceConsumption(
       ven_id=ven_id, resource_id=resource_id, data=data
     )
-    # self.sqlite_consumption_service.add_consumption(resource_consumption)
+    print('resource_consumption', resource_consumption)
+    self.sqlite_consumption_service.insert_consumption([resource_consumption])
     return resource_consumption
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:

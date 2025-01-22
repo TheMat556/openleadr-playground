@@ -77,11 +77,13 @@ class Container(containers.DeclarativeContainer):
 
   # Components (Tier 3)
   virtual_top_node = providers.Singleton(
-    lambda config: VirtualTopNode(config)
+    lambda config, sqlite_consumption_service: VirtualTopNode(
+      config=config, sqlite_consumption_service=sqlite_consumption_service
+    )
     if config and config.http_host and config.http_port and config.path_prefix
     else None,
     config=virtual_top_node_config.provided,
-    # sqlite_consumption_service=consumption_service
+    sqlite_consumption_service=consumption_service,
   )
 
   rest_service = providers.Singleton(
