@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from sqlite3 import DatabaseError
 
-from src.adr_node.database.domain.consumption_data import ConsumptionData
-from src.adr_node.database.domain.consumption_query import ConsumptionQuery
+from src.adr_node.database.domain.data.consumption_data import ConsumptionData
+from src.adr_node.database.domain.query.consumption_query import ConsumptionQuery
 from src.adr_node.database.interfaces.repositories.iconsumption_repository import (
   IConsumptionRepository,
 )
@@ -17,15 +17,12 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
 
   def _map_to_domain(self, row: Dict[str, Any]) -> ConsumptionData:
     return ConsumptionData(
-      id=row.get('id'),
       timestamp=row['timestamp'],
       ven_id=row['ven_id'],
       resource_id=row['resource_id'],
       value=row['value'],
-      created_at=datetime.fromisoformat(row['created_at']),
-      updated_at=datetime.fromisoformat(row['updated_at'])
-      if row.get('updated_at')
-      else None,
+      created_at=row['created_at'],
+      updated_at=row['updated_at'] if row.get('updated_at') else None,
     )
 
   # Base Repository Methods (CRUD)
@@ -41,7 +38,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         entity.ven_id,
         entity.resource_id,
         entity.value,
-        entity.created_at.isoformat(),
+        entity.created_at,
       ]
       self.db_service.execute_query(query, values)
       return entity
@@ -104,7 +101,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         params.append(query.resource_id)
 
       if where_clauses:
-        base_query += f" WHERE {' AND '.join(where_clauses)}"
+        base_query += f' WHERE {" AND ".join(where_clauses)}'
 
       base_query += f' ORDER BY {query.order_by} {query.order_direction}'
       base_query += ' LIMIT ? OFFSET ?'
@@ -279,4 +276,109 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
       logger.error(f'Failed to get latest readings: {e}')
+      raise
+
+  def find_closest_consumption_points(
+    self, target_timestamp: int, time_window_ms: Optional[int] = None
+  ) -> List[ConsumptionData]:
+    """
+    Retrieve the nearest consumption point for each unique VEN ID to the given timestamp.
+
+    Args:
+        target_timestamp (int): The target timestamp to search for
+        time_window_ms (Optional[int]): Optional time window in milliseconds to limit the search
+
+    Returns:
+        List[ConsumptionData]: List of nearest consumption points for each VEN
+    """
+    base_query = """
+            SELECT t1.*
+            FROM consumption t1
+            INNER JOIN (
+                SELECT ven_id,
+                       MIN(ABS(timestamp - ?)) AS min_diff
+                FROM consumption
+                {where_clause}
+                GROUP BY ven_id
+            ) t2
+            ON t1.ven_id = t2.ven_id
+            AND ABS(t1.timestamp - ?) = t2.min_diff
+            ORDER BY t1.ven_id
+        """
+
+    params = [target_timestamp]
+    where_clause = ''
+
+    if time_window_ms is not None:
+      where_clause = """
+                WHERE timestamp >= ? - ?
+                AND timestamp <= ? + ?
+            """
+      params.extend(
+        [target_timestamp, time_window_ms, target_timestamp, time_window_ms]
+      )
+
+    query = base_query.format(where_clause=where_clause)
+    params.append(target_timestamp)  # For the outer query's timestamp comparison
+
+    try:
+      results = self.db_service.execute_query(query, params)
+      if not results:
+        return []
+
+      return [self._map_to_domain(row) for row in results]
+    except DatabaseError as e:
+      logger.error(
+        f'Failed to find closest consumption points for timestamp {target_timestamp}: {e}'
+      )
+      raise
+
+  def find_closest_consumption_for_ven(
+    self, target_timestamp: int, ven_id: str, time_window_ms: Optional[int] = None
+  ) -> Optional[ConsumptionData]:
+    """
+    Find the closest consumption point for a specific VEN ID near the target timestamp.
+
+    Args:
+        target_timestamp (int): The target timestamp to search for
+        ven_id (str): The VEN ID to search for
+        time_window_ms (Optional[int]): Optional time window in milliseconds to limit the search
+
+    Returns:
+        Optional[ConsumptionData]: The nearest consumption point or None if not found
+    """
+    base_query = """
+            SELECT *,
+                   ABS(timestamp - ?) as distance
+            FROM consumption
+            WHERE ven_id = ?
+            {time_window_clause}
+            ORDER BY distance ASC
+            LIMIT 1
+        """
+
+    params = [target_timestamp, ven_id]
+    time_window_clause = ''
+
+    if time_window_ms is not None:
+      time_window_clause = """
+                AND timestamp >= ? - ?
+                AND timestamp <= ? + ?
+            """
+      params.extend(
+        [target_timestamp, time_window_ms, target_timestamp, time_window_ms]
+      )
+
+    query = base_query.format(time_window_clause=time_window_clause)
+
+    try:
+      results = self.db_service.execute_query(query, params)
+      if not results:
+        return None
+
+      return self._map_to_domain(results[0])
+    except DatabaseError as e:
+      logger.error(
+        f'Failed to find closest consumption for VEN {ven_id} at timestamp {target_timestamp}: {e}'
+      )
       raise

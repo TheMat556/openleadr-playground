@@ -83,6 +83,10 @@ class InterfaceManager:
         CSS styles for the dashboard layout.
     """
     css_path = Path('./src/node_dashboard/styles.css').resolve()
+    css_path_parts = css_path.parts
+    if 'development' in css_path_parts:
+      css_path_parts = tuple(part for part in css_path_parts if part != 'development')
+      css_path = Path(*css_path_parts)
     return css_path.read_text()
 
   def _create_layout(self, state_var: gr.State) -> None:

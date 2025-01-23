@@ -9,7 +9,7 @@ from src.mock_node.addons.gradio_ui.async_gradio_app import AsyncGradioApp
 
 def run_gradio_thread(interface):
   """Run Gradio in a separate thread"""
-  interface.launch(server_port=7861, server_name='0.0.0.0')
+  interface.launch(server_port=7861, server_name='127.0.0.1')
 
 
 async def run_other_coroutines():

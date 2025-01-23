@@ -1,3 +1,4 @@
+import os
 from typing import List
 import sys
 
@@ -40,6 +41,7 @@ class GradioNodeDashboard:
     file_path : str, optional
         Path to the configuration file (default is "./env_variables.json").
     """
+    print('FILE PATH', os.path.abspath(file_path))
     self.config_manager = ConfigManager(file_path)
     self.configs = self.config_manager.configs
     self.state = self.configs.copy()

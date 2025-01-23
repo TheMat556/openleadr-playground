@@ -1,22 +1,23 @@
 from datetime import timezone, datetime, timedelta
-from functools import wraps
-from typing import Any, Callable, List, Tuple, Optional, Dict
+from typing import Any, List, Tuple, Optional, Dict
 
 from src.adr_node.config.report_config import ReportConfig
 from src.adr_node.core.nodes.configs.virtual_end_node_config import VirtualEndNodeConfig
 from src.adr_node.core.nodes.domains.resource_consumption import ResourceConsumption
 from src.adr_node.core.nodes.interfaces.ivirtual_end_node import IVirtualEndNode
+from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
 from src.openadr_node import logger
 
 BASE_RESOURCE_ID = 'base'
 
 
 class VirtualEndNode(IVirtualEndNode):
-  def __init__(self, config: VirtualEndNodeConfig):
+  def __init__(self, config: VirtualEndNodeConfig, event_bus: IEventBus):
     super().__init__()
     self._ven_name = config.ven_name
     self._vtn_url = config.vtn_url
     self._open_adr_client = config.client_factory(self._ven_name, self._vtn_url)
+    self._event_bus = event_bus
     self._init_default_handler()
     self._base_event_registered = False
     self._base_consumption = 0.0
@@ -29,41 +30,6 @@ class VirtualEndNode(IVirtualEndNode):
     Initialize the default event handler for the OpenADR client.
     """
     self._open_adr_client.add_handler('on_event', self.handle_event)
-
-  def _wrap_callback(
-    self, callback: Callable[..., float], resource_id: str
-  ) -> Callable[..., float]:
-    """
-    Wrap a callback to include a timestamp with the result.
-    :param callback: The callback function.
-    :type callback: Callable[..., float]
-    :param resource_id: Resource ID.
-    :type resource_id: str
-    :return: Wrapped callback function.
-    :rtype: Callable[..., float]
-    """
-
-    @wraps(callback)
-    def wrapper(*args, **kwargs):
-      if callable(callback):
-        timestamp = datetime.now(timezone.utc)  # Capture time before execution
-        result = callback(*args, **kwargs)
-        if result is None:
-          logger.warning(f'Callback for resource {resource_id} returned None')
-          return 0.0
-        if not isinstance(result, (int, float)):
-          logger.error(
-            f'Callback for resource {resource_id} returned non-numeric value: {result}'
-          )
-          return 0.0
-        timestamped_result = (timestamp, float(result))
-        self._send_consumption_data(
-          ven_id=self._ven_name, resource_id=resource_id, data=timestamped_result
-        )
-        return result
-      return 0.0
-
-    return wrapper
 
   def register_base_report(self) -> None:
     """
@@ -145,7 +111,6 @@ class VirtualEndNode(IVirtualEndNode):
     :param reports: List of report configurations.
     :type reports: Optional[List[ReportConfiguration]]
     """
-    print('add_reports', reports)
     if reports:
       for report in reports:
         if not report.resource_id or not report.measurement:
@@ -157,16 +122,11 @@ class VirtualEndNode(IVirtualEndNode):
         if not report.callback:
           logger.error(f'Missing callback for report: {report}')
           continue
-        callback = (
-          self._wrap_callback(report.callback, report.resource_id)
-          if report.resource_id != BASE_RESOURCE_ID
-          else report.callback
-        )
         self._open_adr_client.add_report(
           resource_id=report.resource_id,
           measurement=report.measurement,
           sampling_rate=report.sampling_rate,
-          callback=callback,
+          callback=report.callback,
         )
         logger.debug(f'Successfully added report for resource: {report.resource_id}')
     logger.info('Reports added to OpenADR client')

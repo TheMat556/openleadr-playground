@@ -1,9 +1,11 @@
 from abc import abstractmethod
 from typing import List, Optional
 
-from src.adr_node.database.domain.consumption_data import ConsumptionData
-from src.adr_node.database.domain.consumption_query import ConsumptionQuery
-from src.adr_node.database.interfaces.ibase_repository import IBaseRepository
+from src.adr_node.database.domain.data.consumption_data import ConsumptionData
+from src.adr_node.database.domain.query.consumption_query import ConsumptionQuery
+from src.adr_node.database.interfaces.repositories.ibase_repository import (
+  IBaseRepository,
+)
 
 
 class IConsumptionRepository(IBaseRepository[ConsumptionData, ConsumptionQuery]):
@@ -41,4 +43,18 @@ class IConsumptionRepository(IBaseRepository[ConsumptionData, ConsumptionQuery])
   @abstractmethod
   def get_latest_readings(self, limit: int = 10) -> List[ConsumptionData]:
     """Get the most recent consumption readings."""
+    pass
+
+  @abstractmethod
+  def find_closest_consumption_points(
+    self, target_timestamp: int, time_window_ms: Optional[int] = None
+  ) -> List[ConsumptionData]:
+    """Find closest consumption points for all VENs."""
+    pass
+
+  @abstractmethod
+  def find_closest_consumption_for_ven(
+    self, target_timestamp: int, ven_id: str, time_window_ms: Optional[int] = None
+  ) -> Optional[ConsumptionData]:
+    """Find closest consumption point for a specific VEN."""
     pass

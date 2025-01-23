@@ -13,8 +13,9 @@ from src.adr_node.config.report_config import ReportConfig
 from src.adr_node.config.rest_api_config import RestApiConfig
 from src.adr_node.house_node.config.house_node_config import HouseNodeConfig
 from src.adr_node.house_node.house_node import HouseNode
-from src.adr_node.mock_node_node.config.house_node_config import MockNodeConfig
-from src.adr_node.mock_node_node.mock_node import MockNode
+from src.adr_node.mock_node.addons.async_gradio_app import AsyncGradioApp
+from src.adr_node.mock_node.config.mock_node_config import MockNodeConfig
+from src.adr_node.mock_node.mock_node import MockNode
 from src.node_dashboard.dashboard import GradioNodeDashboard
 
 logging.basicConfig(
@@ -43,15 +44,20 @@ def create_report_configurations() -> List[ReportConfig]:
   return reports
 
 
-def run_dashboard():
+def run_mock_dashboard(interface: AsyncGradioApp):
+  interface.launch(
+    server_port=7860,
+    server_name='127.0.0.1',
+  )
+
+
+def run_network_dashboard():
   """Run node dashboard asynchronously"""
-  dashboard = GradioNodeDashboard(file_path='./development/simple/env_variables.json')
+  dashboard = GradioNodeDashboard(file_path='./env/env_variables.json')
   interface = dashboard.create_interface()
   interface.launch(
-    show_api=False,
-    share=False,
-    server_port=int(os.getenv('DEV_NODE_DASHBOARD_PORT', 7860)),
-    server_name=os.getenv('DEV_GRADIO_SERVER_NAME', '0.0.0.0'),
+    server_port=7862,
+    server_name='127.0.0.1',
   )
 
 
@@ -108,12 +114,19 @@ def main():
     while True:
       time.sleep(1)
 
-  # Create and start the threads
-  house_node_thread = threading.Thread(target=run_house_node)
-  mock_node_thread = threading.Thread(target=run_mock_node)
+  dashboard = AsyncGradioApp(slider_file='./slider_values.txt')
+  interface = dashboard.create_interface()
 
-  house_node_thread.start()
-  mock_node_thread.start()
+  # Create and start the threads
+  # house_node_thread = threading.Thread(target=run_house_node)
+  # mock_node_thread = threading.Thread(target=run_mock_node)
+  # network_dashboard_thread = threading.Thread(target=run_network_dashboard)
+  mock_dashboard_thread = threading.Thread(target=run_mock_dashboard, args=(interface,))
+
+  # house_node_thread.start()
+  # mock_node_thread.start()
+  # network_dashboard_thread.start()
+  mock_dashboard_thread.start()
 
 
 if __name__ == '__main__':

@@ -7,17 +7,30 @@ from openleadr.utils import generate_id
 
 from src.adr_node.core.nodes.configs.virtual_top_node_config import VirtualTopNodeConfig
 from src.adr_node.core.nodes.interfaces.ivirtual_top_node import IVirtualTopNode
+from src.adr_node.database.domain.data.consumption_data import ConsumptionData
 
 from src.adr_node.database.interfaces.services.iconsumption_service import (
   IConsumptionService,
 )
+from src.adr_node.database.domain.results.consumption_service_result import (
+  ConsumptionServiceResult,
+)
+from src.adr_node.event_bus.constants.signal_types import SignalType
+from src.adr_node.event_bus.decorators.emits_signal import emits_signal
+from src.adr_node.event_bus.decorators.handle_signal import handle_signal
+from src.adr_node.event_bus.decorators.init_signal_handlers import init_signal_handlers
+
+from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
 from src.openadr_node import logger
-from src.openadr_node.models.event import ResourceConsumption, Interval
+from src.openadr_node.models.event import Interval
 
 
 class VirtualTopNode(IVirtualTopNode):
   def __init__(
-    self, config: VirtualTopNodeConfig, sqlite_consumption_service: IConsumptionService
+    self,
+    config: VirtualTopNodeConfig,
+    sqlite_consumption_service: IConsumptionService,
+    event_bus: IEventBus,
   ):
     super().__init__()
     self._vtn_id = config.vtn_id
@@ -31,10 +44,10 @@ class VirtualTopNode(IVirtualTopNode):
       http_port=config.http_port,
       http_path_prefix=config.path_prefix,
     )
-    print('VTN SERVER', self._open_adr_server)
-    self._ven_data: Dict[str, Dict[str, float]] = {}
+    self.event_bus = event_bus
     self._registration_info: Dict[str, str] = {}
     self._init_default_handler()
+    init_signal_handlers(self)
 
   def _init_default_handler(self) -> None:
     self._open_adr_server.add_handler(
@@ -82,34 +95,38 @@ class VirtualTopNode(IVirtualTopNode):
   def _send_register_report(self, ven_id: str):
     return ven_id
 
+  @emits_signal(SignalType.LOAD_PROFILE_UPDATED)
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
-  ) -> Dict[str, Dict[str, float]]:
+  ) -> None:
     logger.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
 
     if measurement == 'energy':
-      if ven_id not in self._ven_data:
-        self._ven_data[ven_id] = {}
+      self.create_consumption_record(ven_id, resource_id, data[0])
 
-      self._ven_data[ven_id][resource_id] = data[0]
-      self._send_consumption_data(ven_id, resource_id, data[0])
+  @handle_signal(SignalType.LOAD_PROFILE_UPDATED)
+  def _tst(self, sender):  # Only accept sender parameter
+    print(f'!!HANDLE_SIGNAL!! from {sender}')
+    print('LOAD_PROFILE_UPDATED')
 
-    if data:
-      logger.debug(f'Data: {data}')
-
-    return self._ven_data
-
-  def _send_consumption_data(
-    self, ven_id: str, resource_id: str, data: float
-  ) -> ResourceConsumption:
-    resource_consumption = ResourceConsumption(
-      ven_id=ven_id, resource_id=resource_id, data=data
+  def create_consumption_record(
+    self, ven_id: str, resource_id: str, data: Tuple[datetime, float]
+  ) -> ConsumptionServiceResult:
+    timestamp, value = data
+    consumption_data = ConsumptionData(
+      timestamp=int(timestamp.timestamp()),
+      ven_id=ven_id,
+      resource_id=resource_id,
+      value=value,
+      created_at=int(datetime.now(timezone.utc).timestamp()),
+      updated_at=None,
     )
-    print('resource_consumption', resource_consumption)
-    self.sqlite_consumption_service.insert_consumption([resource_consumption])
-    return resource_consumption
+    consumption_service_result = (
+      self.sqlite_consumption_service.create_consumption_record(consumption_data)
+    )
+    return consumption_service_result
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
     logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
@@ -201,7 +218,6 @@ class VirtualTopNode(IVirtualTopNode):
           )
 
   def run(self):
-    print('RUNNING', self._open_adr_server)
     return self._open_adr_server.run()
 
   async def event_response_callback(

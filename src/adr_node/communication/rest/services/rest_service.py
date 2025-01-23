@@ -1,16 +1,23 @@
-from flask import Flask, jsonify
-from datetime import datetime
+from flask import Flask
 
 import threading
 
-from src.adr_node.communication.rest.domain.domain import NodeStatus, ApiResponse
-from src.adr_node.communication.rest.exceptions.rest import (
-  ServiceStartupError,
+from src.adr_node.communication.rest.exceptions.service_shutdown_error import (
   ServiceShutdownError,
 )
+from src.adr_node.communication.rest.exceptions.service_startup_error import (
+  ServiceStartupError,
+)
 from src.adr_node.communication.rest.interfaces.irest_service import IRestService
-from src.adr_node.database.services.consumption_service import ConsumptionService
-from src.adr_node.database.services.load_profile_service import LoadProfileService
+from src.adr_node.communication.rest.routes.handlers.consumption_handler import (
+  ConsumptionHandler,
+)
+from src.adr_node.communication.rest.routes.handlers.load_profile_handler import (
+  LoadProfileHandler,
+)
+from src.adr_node.communication.rest.routes.handlers.status_handler import StatusHandler
+from src.adr_node.database.services.core.consumption_service import ConsumptionService
+from src.adr_node.database.services.core.load_profile_service import LoadProfileService
 from src.openadr_node import logger
 
 
@@ -22,41 +29,38 @@ class RestService(IRestService):
     load_profile_service: LoadProfileService,
     consumption_service: ConsumptionService,
   ):
-    self.host = host
-    self.port = port
-    self.app = Flask(__name__)
-    self.server = None
-    self._setup_routes()
-    print('load_profile_service', load_profile_service)
-    print('consumption_service', consumption_service)
-    logger.info('REST service initialized successfully')
+    self._host = host
+    self._port = port
+    self._app = Flask(__name__)
+    self._server = None
 
-  def _setup_routes(self):
-    @self.app.route('/api/status')
-    def get_status():
-      status = NodeStatus(
-        node_id='node-001',
-        status='running',
-        last_updated=datetime.utcnow(),
-        uptime=123.45,
-        version='1.0.0',
-      )
+    # Initialize handlers
+    self._handlers = [
+      StatusHandler(),
+      ConsumptionHandler(consumption_service),
+      LoadProfileHandler(load_profile_service),
+    ]
 
-      response = ApiResponse(
-        status='success', timestamp=datetime.utcnow(), data=status.__dict__
-      )
+    self._register_routes()
 
-      return jsonify(response.__dict__)
+  def _register_routes(self):
+    """Register all routes from handlers."""
+    for handler in self._handlers:
+      for method_name in dir(handler):
+        method = getattr(handler, method_name)
+        if hasattr(method, '_endpoint'):
+          self._app.add_url_rule(
+            method._endpoint, view_func=method, methods=method._methods
+          )
 
   def start(self) -> None:
     try:
-      logger.info(f'Starting REST service on {self.host}:{self.port}')
-      self.server = threading.Thread(
-        target=self.app.run, kwargs={'host': self.host, 'port': self.port}
+      self._server = threading.Thread(
+        target=self._app.run, kwargs={'host': self._host, 'port': self._port}
       )
-      self.server.daemon = True
-      self.server.start()
-      logger.info('REST service started successfully')
+      self._server.daemon = True
+      self._server.start()
+      logger.info(f'REST service started on {self._host}:{self._port}')
     except Exception as e:
       error_msg = f'Failed to start REST service: {str(e)}'
       logger.error(error_msg)
@@ -64,8 +68,11 @@ class RestService(IRestService):
 
   def stop(self) -> None:
     try:
-      if self.server and self.server.is_alive():
+      if self._server and self._server.is_alive():
         # Implement proper Flask shutdown
         pass
     except Exception as e:
       raise ServiceShutdownError(f'Failed to stop REST service: {str(e)}')
+
+  def run(self):
+    self.start()

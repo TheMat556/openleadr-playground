@@ -5,7 +5,7 @@ from src.adr_node.core.interfaces.irunable import IRunnable
 from src.openadr_node.models import ReportConfiguration
 
 
-class IVirtualEndNode(IRunnable, ABC):
+class IVirtualEndNode(ABC, IRunnable):
   @abstractmethod
   def register_base_report(self) -> None:
     pass

@@ -1,4 +1,6 @@
-from src.adr_node.communication.rest.exceptions.rest import RestServiceException
+from src.adr_node.communication.rest.exceptions.rest_service_exception import (
+  RestServiceException,
+)
 from src.adr_node.communication.rest.interfaces.irest_service import IRestService
 from src.adr_node.core.services.adr.interfaces.iadr_service import IAdrService
 from src.adr_node.core.controller.thread_controller import ThreadController
@@ -29,7 +31,7 @@ class NodeComponentController(IComponentController):
   def start(self) -> None:
     try:
       self._thread_controller.start_thread(self.adr_service.run, 'ADR Service')
-      self._thread_controller.start_thread(self.rest_service.start, 'REST Service')
+      self._thread_controller.start_thread(self.rest_service.run, 'REST Service')
 
       self._running = True
       logger.info('NodeController started successfully.')

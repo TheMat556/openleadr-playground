@@ -17,9 +17,12 @@ from src.adr_node.database.repositories.sqlite_consumption_repository import (
 from src.adr_node.database.repositories.sqlite_load_profile_repository import (
   SQLiteLoadProfileRepository,
 )
-from src.adr_node.database.services.consumption_service import ConsumptionService
-from src.adr_node.database.services.database_service import SQLiteDatabaseService
-from src.adr_node.database.services.load_profile_service import LoadProfileService
+from src.adr_node.database.services.core.consumption_service import ConsumptionService
+from src.adr_node.database.services.base.database_service import SQLiteDatabaseService
+from src.adr_node.database.services.core.load_profile_service import LoadProfileService
+from src.adr_node.event_bus.implementation.pydispatch_event_bus import (
+  PyDispatchEventBus,
+)
 
 
 class Container(containers.DeclarativeContainer):
@@ -48,6 +51,8 @@ class Container(containers.DeclarativeContainer):
     ConsumptionService, repository=consumption_repository
   )
 
+  event_bus = providers.Singleton(PyDispatchEventBus)
+
   # Components (Tier 2)
   openadr_client_factory = providers.Factory(OpenADRClient)
 
@@ -58,10 +63,11 @@ class Container(containers.DeclarativeContainer):
   )
 
   virtual_end_node = providers.Singleton(
-    lambda config: VirtualEndNode(config)
+    lambda config, event_bus: VirtualEndNode(config, event_bus)
     if config and config.ven_name and config.vtn_url
     else None,
     config=virtual_end_node_config.provided,
+    event_bus=event_bus,
   )
 
   # Updated server factory (accepts parameters to pass to OpenADRServer)
@@ -77,13 +83,16 @@ class Container(containers.DeclarativeContainer):
 
   # Components (Tier 3)
   virtual_top_node = providers.Singleton(
-    lambda config, sqlite_consumption_service: VirtualTopNode(
-      config=config, sqlite_consumption_service=sqlite_consumption_service
+    lambda config, sqlite_consumption_service, event_bus: VirtualTopNode(
+      config=config,
+      sqlite_consumption_service=sqlite_consumption_service,
+      event_bus=event_bus,
     )
     if config and config.http_host and config.http_port and config.path_prefix
     else None,
     config=virtual_top_node_config.provided,
     sqlite_consumption_service=consumption_service,
+    event_bus=event_bus,
   )
 
   rest_service = providers.Singleton(
