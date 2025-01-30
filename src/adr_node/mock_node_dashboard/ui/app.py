@@ -105,7 +105,8 @@ class AsyncGradioApp:
 
         # Wire up events
         for slider in slider_inputs:
-          slider.change(fn=self.update_chart, inputs=slider_inputs, outputs=plot_output)
+          print("slider", slider)
+          slider.change(fn=self.tst, inputs=slider_inputs, outputs=plot_output)
           slider.release(fn=self.slider_service.save_values, inputs=slider_inputs)
 
         # Add consumption labels
@@ -122,3 +123,6 @@ class AsyncGradioApp:
           )
 
     return interface
+
+  def tst(self, tst: any):
+    print("!!! tst print", tst)

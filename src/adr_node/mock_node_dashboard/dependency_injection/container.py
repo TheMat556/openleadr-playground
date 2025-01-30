@@ -3,10 +3,10 @@ from dependency_injector import containers, providers
 import logging.config
 
 from src.adr_node.mock_node_dashboard.core.services.consumption_service import (
-  ConsumptionServiceImpl,
+    ConsumptionService,
 )
 from src.adr_node.mock_node_dashboard.core.services.slider_service import (
-  SliderServiceImpl,
+  SliderService,
 )
 from src.adr_node.mock_node_dashboard.persistence.repository.file_slider_repository import (
   FileSliderRepository,
@@ -53,13 +53,13 @@ class Container(containers.DeclarativeContainer):
 
   # Services
   consumption_service = providers.Singleton(
-    ConsumptionServiceImpl,
+    ConsumptionService,
     base_url=config.api_base_url,
     update_interval=config.update_interval,
   )
 
   slider_service = providers.Singleton(
-    SliderServiceImpl,
+    SliderService,
     slider_repository=slider_repository,
     num_sliders=config.num_sliders,
     timezone_offset=config.timezone_offset,

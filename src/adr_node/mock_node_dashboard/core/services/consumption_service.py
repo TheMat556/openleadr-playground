@@ -13,7 +13,7 @@ from src.adr_node.mock_node_dashboard.core.interfaces.iconsumption_service impor
 )
 
 
-class ConsumptionServiceImpl(IConsumptionService):
+class ConsumptionService(IConsumptionService):
   def __init__(self, base_url: str, update_interval: int = 5):
     self.base_url = base_url
     self.update_interval = update_interval

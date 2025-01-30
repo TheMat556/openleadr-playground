@@ -59,7 +59,6 @@ class SliderGrid:
             slider = self.create_slider(slider_index)
             self._sliders.append(slider)
           else:
-            # Add empty slider to maintain grid layout
             gr.Slider(visible=False)
 
     return self._sliders

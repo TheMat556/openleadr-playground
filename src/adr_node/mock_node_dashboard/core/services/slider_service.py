@@ -9,7 +9,7 @@ from src.adr_node.mock_node_dashboard.core.interfaces.islider_service import (
 )
 
 
-class SliderServiceImpl(ISliderService):
+class SliderService(ISliderService):
   def __init__(
     self,
     slider_repository,
@@ -39,10 +39,11 @@ class SliderServiceImpl(ISliderService):
       return [self.default_value] * self.num_sliders
 
   def save_values(self, values: List[int]) -> None:
+    print("slider_values - save_values")
     try:
       self._current_values = values[: self.num_sliders]
       self.repository.save(self._current_values)
-      # UPDATE SLIDERself.event_bus.publish("slider_values_updated", self._current_values)
+      # UPDATE SLIDER self.event_bus.publish("slider_values_updated", self._current_values)
     except Exception as e:
       self.logger.error(f'Error saving slider values: {e}')
 
