@@ -10,15 +10,15 @@ class ThreadController:
 
   Attributes
   ----------
-  threads : List[Thread]
+  _threads : List[Thread]
       List to store active threads.
-  lock : Lock
+  _lock : Lock
       Lock to ensure thread safety.
   """
 
   def __init__(self):
     """
-    Initialize the NodeThreadController.
+    Initialize the ThreadController.
     """
     self._threads: List[Thread] = []
     self._lock = Lock()

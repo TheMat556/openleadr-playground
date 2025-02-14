@@ -30,6 +30,33 @@ from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
 
 
 class VirtualTopNode(IVirtualTopNode):
+  """
+  Represents a Virtual Top Node (VTN) in the OpenADR system.
+
+  Attributes
+  ----------
+  _vtn_id : str
+      The ID of the Virtual Top Node.
+  http_host : str
+      The HTTP host for the VTN server.
+  http_port : int
+      The HTTP port for the VTN server.
+  path_prefix : str
+      The path prefix for the VTN server.
+  sqlite_consumption_service : IConsumptionService
+      Service for managing consumption data.
+  _load_profile_service : ILoadProfileService
+      Service for managing load profiles.
+  _z_value_service : IZValueService
+      Service for managing z-values.
+  _open_adr_server : OpenADRServer
+      The OpenADR server instance.
+  event_bus : IEventBus
+      The event bus for handling events.
+  _registration_info : Dict[str, str]
+      Dictionary to store registration information.
+  """
+
   def __init__(
     self,
     config: VirtualTopNodeConfig,
@@ -58,6 +85,9 @@ class VirtualTopNode(IVirtualTopNode):
     init_signal_handlers(self)
 
   def _init_default_handler(self) -> None:
+    """
+    Initialize the default event handlers for the OpenADR server.
+    """
     self._open_adr_server.add_handler(
       'on_create_party_registration', self._on_create_party_registration
     )
@@ -66,6 +96,15 @@ class VirtualTopNode(IVirtualTopNode):
   async def _on_create_party_registration(
     self, registration_info: Dict[str, Any]
   ) -> Tuple[str, str]:
+    """
+    Handle the creation of a party registration.
+
+    Args:
+        registration_info (Dict[str, Any]): The registration information.
+
+    Returns:
+        Tuple[str, str]: The VEN ID and registration ID.
+    """
     ven_name = registration_info.get('ven_name')
     ven_id = generate_id('ven_id')
     registration_id = generate_id()
@@ -85,6 +124,21 @@ class VirtualTopNode(IVirtualTopNode):
     min_sampling_interval: int,
     max_sampling_interval: int,
   ) -> Tuple[partial, int]:
+    """
+    Handle the registration of a report.
+
+    Args:
+        ven_id (str): The VEN ID.
+        resource_id (str): The resource ID.
+        measurement (str): The measurement type.
+        unit (str): The unit of measurement.
+        scale (str): The scale of measurement.
+        min_sampling_interval (int): The minimum sampling interval.
+        max_sampling_interval (int): The maximum sampling interval.
+
+    Returns:
+        Tuple[partial, int]: The callback and sampling interval.
+    """
     callback = partial(
       self._on_update_report,
       ven_id=ven_id,
@@ -101,11 +155,26 @@ class VirtualTopNode(IVirtualTopNode):
     return callback, sampling_interval
 
   def _send_register_report(self, ven_id: str):
+    """
+    Send the register report.
+
+    Args:
+        ven_id (str): The VEN ID.
+    """
     return ven_id
 
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
   ) -> None:
+    """
+    Handle the update of a report.
+
+    Args:
+        data (List[Any]): The report data.
+        ven_id (str): The VEN ID.
+        resource_id (str): The resource ID.
+        measurement (str): The measurement type.
+    """
     logging.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
@@ -117,6 +186,17 @@ class VirtualTopNode(IVirtualTopNode):
   def create_consumption_record(
     self, ven_id: str, resource_id: str, data: Tuple[datetime, float]
   ) -> ConsumptionServiceResult | None:
+    """
+    Create a consumption record.
+
+    Args:
+        ven_id (str): The VEN ID.
+        resource_id (str): The resource ID.
+        data (Tuple[datetime, float]): The consumption data.
+
+    Returns:
+        ConsumptionServiceResult | None: The result of the consumption service.
+    """
     timestamp, value = data
     consumption_data = ConsumptionData(
       timestamp=int(timestamp.timestamp()),
@@ -134,10 +214,25 @@ class VirtualTopNode(IVirtualTopNode):
     return consumption_service_result
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
+    """
+    Callback for handling event responses.
+
+    Args:
+        ven_id (str): The VEN ID.
+        event_id (str): The event ID.
+        opt_type (str): The opt type.
+    """
     logging.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
     await self.handle_device_status(ven_id, opt_type)
 
   async def handle_device_status(self, ven_id: str, opt_type: str) -> None:
+    """
+    Handle the device status change.
+
+    Args:
+        ven_id (str): The VEN ID.
+        opt_type (str): The opt type.
+    """
     logging.info(
       f'Handling device status change for VEN ID: {ven_id}, Opt type: {opt_type}'
     )
@@ -266,6 +361,12 @@ class VirtualTopNode(IVirtualTopNode):
       return False
 
   def run(self):
+    """
+    Run the OpenADR server.
+
+    Returns:
+        The result of the server run method.
+    """
     return self._open_adr_server.run()
 
   async def event_response_callback(
@@ -274,12 +375,10 @@ class VirtualTopNode(IVirtualTopNode):
     """
     Callback that receives the response from a VEN to an Event.
 
-    :param ven_id: VEN ID.
-    :type ven_id: str
-    :param event_id: Event ID.
-    :type event_id: str
-    :param opt_type: Opt type.
-    :type opt_type: str
+    Args:
+        ven_id (str): The VEN ID.
+        event_id (str): The event ID.
+        opt_type (str): The opt type.
     """
     logging.info(
       f'[event_response_callback] VEN={ven_id}, event_id={event_id}, opt_type={opt_type}'

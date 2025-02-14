@@ -21,6 +21,29 @@ BASE_RESOURCE_ID = 'base'
 
 
 class VirtualEndNode(IVirtualEndNode):
+  """
+  Represents a Virtual End Node (VEN) in the OpenADR system.
+
+  Attributes
+  ----------
+  _ven_name : str
+      The name of the Virtual End Node.
+  _vtn_url : str
+      The URL of the Virtual Top Node (VTN).
+  _open_adr_client : OpenADRClient
+      The OpenADR client instance.
+  _event_bus : IEventBus
+      The event bus for handling events.
+  _load_profile_service : ILoadProfileService
+      Service for managing load profiles.
+  _consumption_service : IConsumptionService
+      Service for managing consumption data.
+  _base_event_registered : bool
+      Flag indicating if the base event is registered.
+  _base_consumption : float
+      The base consumption value.
+  """
+
   def __init__(
     self,
     config: VirtualEndNodeConfig,
@@ -49,6 +72,15 @@ class VirtualEndNode(IVirtualEndNode):
     self._open_adr_client.add_handler('on_event', self.tst)
 
   async def tst(self, event):
+    """
+    Handle an OpenADR event.
+
+    Args:
+        event (dict): The OpenADR event data.
+
+    Returns:
+        str: The response to the event.
+    """
     print('GOT EVENT', event)
     logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {
@@ -292,6 +324,15 @@ class VirtualEndNode(IVirtualEndNode):
     logging.info('Reports added to OpenADR client')
 
   async def handle_event(self, event: Dict[str, Any]) -> str:
+    """
+    Handle an OpenADR event.
+
+    Args:
+        event (dict): The OpenADR event data.
+
+    Returns:
+        str: The response to the event.
+    """
     print('!!!Processing OpenADR event!!!')
     logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {
