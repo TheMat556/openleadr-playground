@@ -32,7 +32,7 @@ class GradioNodeDashboard:
       Manages the Gradio interface creation and updates.
   """
 
-  def __init__(self, file_path: str = './env_variables.json') -> None:
+  def __init__(self, file_path: str = './development/env/env_variables.json') -> None:
     """
     Initializes the GradioNodeDashboard with configurations and managers.
 

@@ -20,6 +20,7 @@ class ContainerConfig:
   gradio_port: int
   gradio_server_name: str
   rest_api_port: int
+  rest_api_host: str
   vtn_self_host: str
   layer: int
   container_name: str
@@ -30,16 +31,18 @@ class ConfigManager:
 
   REQUIRED_KEYS: frozenset[str] = frozenset(
     {
-      'NODE_ID',
-      'VTN_NAME',
-      'VTN_URL',
-      'VTN_PATH_PREFIX',
-      'VEN_NAME',
-      'GRADIO_PORT',
-      'GRADIO_SERVER_NAME',
-      'REST_API_PORT',
-      'VTN_SELF_HOST',
-      'LAYER',
+      'OPENADR_NODE_ID',
+      'OPENADR_VTN_IDENTIFIER',
+      'OPENADR_VTN_ENDPOINT_URL',
+      'OPENADR_VTN_PATH_PREFIX',
+      'OPENADR_VEN_IDENTIFIER',
+      'UI_GRADIO_PORT',
+      'UI_GRADIO_HOST',
+      'API_REST_PORT',
+      'API_REST_HOST',
+      'OPENADR_VTN_PORT',
+      'OPENADR_VTN_HOST',
+      'OPENADR_LAYER_ID',
     }
   )
 
@@ -52,16 +55,19 @@ class ConfigManager:
         'type': 'object',
         'required': list(REQUIRED_KEYS),
         'properties': {
-          'NODE_ID': {'type': 'string'},
-          'VTN_NAME': {'type': 'string'},
-          'VTN_URL': {'type': 'string'},
-          'VTN_PATH_PREFIX': {'type': 'string'},
-          'VEN_NAME': {'type': 'string'},
-          'GRADIO_PORT': {'type': ['string', 'integer']},  # Accept as string or integer
-          'GRADIO_SERVER_NAME': {'type': 'string'},
-          'REST_API_PORT': {'type': ['string', 'integer']},
-          'VTN_SELF_HOST': {'type': 'string'},
-          'LAYER': {'type': ['string', 'integer']},
+          'OPENADR_NODE_ID': {'type': 'string'},
+          'OPENADR_VTN_IDENTIFIER': {'type': 'string'},
+          'OPENADR_VTN_ENDPOINT_URL': {'type': 'string'},
+          'OPENADR_VTN_PATH_PREFIX': {'type': 'string'},
+          'OPENADR_VEN_IDENTIFIER': {'type': 'string'},
+          'UI_GRADIO_PORT': {'type': ['string', 'integer']},
+          'UI_GRADIO_HOST': {'type': 'string'},
+          'API_REST_PORT': {'type': ['string', 'integer']},
+          'API_REST_HOST': {'type': 'string'},
+          'OPENADR_VTN_PORT': {'type': ['string', 'integer']},
+          'OPENADR_VTN_HOST': {'type': 'string'},
+          'OPENADR_LAYER_ID': {'type': ['string', 'integer']},
+          'OPENADR_VTN_CONNECT_URL': {'type': 'string'},
         },
       }
     },
@@ -100,6 +106,7 @@ class ConfigManager:
       with self.file_path.open() as f:
         data = json.load(f)
       logger.info(f'Successfully loaded configuration from {self.file_path}')
+      print('DATA', data)
 
       try:
         jsonschema.validate(data, self.JSON_SCHEMA)
@@ -157,25 +164,26 @@ class ConfigManager:
         return False
 
     try:
-      layer = int(values['LAYER'])
+      layer = int(values['OPENADR_LAYER_ID'])
       if layer < 0:
         raise ValueError(f'Invalid layer value: {layer}')
-      gradio_port = values['GRADIO_PORT']
-      rest_api_port = values['REST_API_PORT']
+      gradio_port = values['UI_GRADIO_PORT']
+      rest_api_port = values['API_REST_PORT']
       if not validate_port(gradio_port):
         raise ValueError(f'Invalid Gradio port: {gradio_port}')
       if not validate_port(rest_api_port):
-        raise ValueError(f'Invalid REST API port: {rest_api_port}')
+        raise ValueError(f'Invalid REST API port: {rest_api_port}')  #
       config_dict = {
-        'node_id': values['NODE_ID'],
-        'vtn_name': values['VTN_NAME'],
-        'vtn_url': values['VTN_URL'],
-        'vtn_path_prefix': values['VTN_PATH_PREFIX'],
-        'ven_name': values['VEN_NAME'],
+        'node_id': values['OPENADR_NODE_ID'],
+        'vtn_name': values['OPENADR_VTN_IDENTIFIER'],
+        'vtn_url': values['OPENADR_VTN_ENDPOINT_URL'],
+        'vtn_path_prefix': values['OPENADR_VTN_PATH_PREFIX'],
+        'ven_name': values['OPENADR_VEN_IDENTIFIER'],
         'gradio_port': int(gradio_port),
-        'gradio_server_name': values['GRADIO_SERVER_NAME'],
+        'gradio_server_name': values['UI_GRADIO_HOST'],
         'rest_api_port': int(rest_api_port),
-        'vtn_self_host': values['VTN_SELF_HOST'],
+        'rest_api_host': values['API_REST_HOST'],
+        'vtn_self_host': values['OPENADR_VTN_HOST'],
         'layer': layer,
         'container_name': container_name,
       }

@@ -10,6 +10,8 @@ class RestApiConfig:
   ----------
   port : int
       The port number for the REST API.
+  host : str
+      The host address for the REST API.
   """
 
   port: int

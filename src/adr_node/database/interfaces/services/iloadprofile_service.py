@@ -5,6 +5,10 @@ import numpy as np
 
 class ILoadProfileService(ABC):
   @abstractmethod
+  def save_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    pass
+
+  @abstractmethod
   def process_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
     pass
 

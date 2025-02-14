@@ -67,3 +67,11 @@ class IConsumptionService(ABC):
     self, timestamp: int, ven_id: str, resource_id: str
   ) -> ConsumptionServiceResult:
     pass
+
+  @abstractmethod
+  def get_current_consumption(self) -> ConsumptionServiceResult:
+    pass
+
+  @abstractmethod
+  def get_vens_active_last_hour(self) -> ConsumptionServiceResult:
+    pass

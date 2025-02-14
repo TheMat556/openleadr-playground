@@ -15,7 +15,7 @@ class IVirtualEndNode(ABC, IRunnable):
     pass
 
   @abstractmethod
-  def handle_event(self, event: Dict[str, Any]) -> str:
+  async def handle_event(self, event: Dict[str, Any]) -> str:
     pass
 
   @abstractmethod

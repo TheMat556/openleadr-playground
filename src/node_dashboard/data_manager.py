@@ -1,169 +1,169 @@
 import os
-import json
 import asyncio
 from typing import Dict, Any, Optional, List
+from datetime import datetime, timezone, timedelta
 import aiohttp
 from tenacity import retry, stop_after_attempt, wait_exponential
 from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
 from src.node_dashboard.helper.constants import Environment
-from src.node_dashboard.helper.utils import fetch_data_async
 from src.node_dashboard.helper.config import ContainerConfig
 from src.node_dashboard.helper.logger import logger
 
 
 class DataManager:
-  """
-  Manages data fetching and buffering for container configurations.
-
-  Attributes
-  ----------
-  configs : List[ContainerConfig]
-      List of container configurations.
-  data_buffers : Dict[str, Dict[str, List[Dict[str, Any]]]]
-      Buffers to store fetched data.
-  max_buffer_size : int
-      Maximum size of the data buffers.
-  """
-
   def __init__(self, configs: List[ContainerConfig], max_buffer_size: int):
-    """
-    Initializes the DataManager with configurations and buffer size.
-
-    Parameters
-    ----------
-    configs : List[ContainerConfig]
-        List of container configurations.
-    max_buffer_size : int
-        Maximum size of the data buffers.
-    """
     self.configs = configs
     self.data_buffers: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
     self.max_buffer_size = max_buffer_size
     self.lock = asyncio.Lock()
+    self.timezone_offset = timezone(timedelta(hours=1))
 
-  async def update_consumption_data(self) -> None:
-    """
-    Fetches and updates consumption data for each container.
-
-    Returns
-    -------
-    None
-    """
-    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
-    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-      tasks = [
-        self._fetch_data(session, config, 'consumption') for config in self.configs
-      ]
-
-      try:
-        results = await asyncio.gather(*tasks)
-        for idx, config in enumerate(self.configs):
-          consumption_data = results[idx]
-          if consumption_data:
-            await self._process_consumption_data(config, consumption_data)
-      except (aiohttp.ClientError, json.JSONDecodeError) as e:
-        logger.error(f'Error fetching consumption data: {e}')
-
-      logger.info('Consumption data updated for all containers.')
-
-  async def update_load_profile_data(self) -> None:
-    """
-    Fetches and updates load profile data for each container.
-
-    Returns
-    -------
-    None
-    """
-    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
-    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-      tasks = [
-        self._fetch_data(session, config, 'load_profile') for config in self.configs
-      ]
-
-      try:
-        results = await asyncio.gather(*tasks)
-        for idx, config in enumerate(self.configs):
-          load_profile_data = results[idx]
-          if load_profile_data:
-            await self._process_load_profile_data(config, load_profile_data)
-      except (aiohttp.ClientError, json.JSONDecodeError) as e:
-        logger.error(f'Error fetching load profile data: {e}')
+  def _convert_timestamp(self, timestamp: int) -> int:
+    try:
+      utc_dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+      cet_dt = utc_dt.astimezone(self.timezone_offset)
+      return int(cet_dt.timestamp() * 1000)
+    except Exception as e:
+      logger.error(f'Error converting timestamp {timestamp}: {e}')
+      return timestamp * 1000
 
   @staticmethod
   @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=10))
   async def _fetch_data(
     session: aiohttp.ClientSession, config: ContainerConfig, data_type: str
   ) -> Optional[Dict[str, Any]]:
-    """
-    Fetches data from the container's REST API with retry logic.
-
-    Parameters
-    ----------
-    session : aiohttp.ClientSession
-        The aiohttp client session.
-    config : ContainerConfig
-        The container configuration.
-    data_type : str
-        The type of data to fetch ('consumption' or 'load_profile').
-
-    Returns
-    -------
-    Optional[Dict[str, Any]]
-        The fetched data.
-    """
     env = os.getenv('DOCKER_ENVIRONMENT', Environment.DOCKER)
     is_local = env == Environment.LOCAL
-    base_url = 'http://localhost' if is_local else config.vtn_self_host
-    url = f'{base_url}:{config.rest_api_port}/data/{data_type}'
-    return await fetch_data_async(session, url)
+
+    base_url = (
+      f'http://localhost:{config.rest_api_port}'
+      if is_local
+      else f'http://{config.container_name}:{config.rest_api_port}'
+    )
+    url = f'{base_url}/api/{data_type}'
+    logger.debug(f'Fetching data from URL: {url}')
+
+    try:
+      async with session.get(
+        url,
+        timeout=aiohttp.ClientTimeout(total=5),
+        headers={'Accept': 'application/json'},
+      ) as response:
+        if response.status == 200:
+          return await response.json()
+        logger.error(f'HTTP {response.status} from {url}: {await response.text()}')
+        return None
+    except Exception as e:
+      logger.error(f'Error fetching from {url}: {str(e)}')
+      raise
+
+  async def update_consumption_data(self) -> None:
+    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
+    connector = aiohttp.TCPConnector(
+      keepalive_timeout=30, force_close=False, enable_cleanup_closed=True
+    )
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+
+    async with aiohttp.ClientSession(
+      timeout=timeout, connector=connector, raise_for_status=True
+    ) as session:
+      tasks = [
+        self._fetch_data(session, config, 'consumption') for config in self.configs
+      ]
+
+      try:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for idx, result in enumerate(results):
+          if isinstance(result, Exception):
+            logger.error(
+              f'Error fetching consumption data for {self.configs[idx].container_name}: {result}'
+            )
+            continue
+          if result and result.get('status') == 'success':
+            await self._process_consumption_data(
+              self.configs[idx], result.get('data', {})
+            )
+      except Exception as e:
+        logger.error(f'Unexpected error in update_consumption_data: {e}')
+
+  async def update_load_profile_data(self) -> None:
+    timeout_seconds = int(os.getenv('DATA_FETCH_TIMEOUT', 30))
+    connector = aiohttp.TCPConnector(
+      keepalive_timeout=30, force_close=False, enable_cleanup_closed=True
+    )
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+
+    async with aiohttp.ClientSession(
+      timeout=timeout, connector=connector, raise_for_status=True
+    ) as session:
+      tasks = [
+        self._fetch_data(session, config, 'load-profile') for config in self.configs
+      ]
+
+      try:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for idx, result in enumerate(results):
+          if isinstance(result, Exception):
+            logger.error(
+              f'Error fetching load profile data for {self.configs[idx].container_name}: {result}'
+            )
+            continue
+          if result and result.get('status') == 'success':
+            await self._process_load_profile_data(
+              self.configs[idx], result.get('data', {})
+            )
+      except Exception as e:
+        logger.error(f'Unexpected error in update_load_profile_data: {e}')
 
   async def _process_consumption_data(
     self, config: ContainerConfig, consumption_data: Dict[str, Any]
   ) -> None:
-    """
-    Processes and buffers the fetched consumption data.
-
-    Parameters
-    ----------
-    config : ContainerConfig
-        The container configuration.
-    consumption_data : Dict[str, Any]
-        The fetched consumption data in the format:
-        {
-            "overall_value": float,
-            "timestamp": int,
-            "unit": str,
-            "ven_id": str
-        }
-
-    Returns
-    -------
-    None
-    """
     schema = {
       'type': 'object',
       'properties': {
-        'overall_value': {'type': 'number'},
+        'average_consumption': {'type': 'number'},
+        'measurement_unit': {'type': 'string'},
+        'statistics': {
+          'type': 'object',
+          'properties': {
+            'point_count': {'type': 'integer'},
+            'time_window': {
+              'type': 'object',
+              'properties': {
+                'end': {'type': 'integer'},
+                'start': {'type': 'integer'},
+                'window_ms': {'type': 'integer'},
+              },
+              'required': ['end', 'start', 'window_ms'],
+            },
+          },
+          'required': ['point_count', 'time_window'],
+        },
         'timestamp': {'type': 'integer'},
-        'unit': {'type': 'string'},
-        'ven_id': {'type': 'string'},
+        'total_consumption': {'type': 'number'},
       },
-      'required': ['overall_value', 'timestamp', 'unit', 'ven_id'],
+      'required': [
+        'average_consumption',
+        'measurement_unit',
+        'statistics',
+        'timestamp',
+        'total_consumption',
+      ],
     }
 
-    logger.info(f'Processing consumption data: {consumption_data}')
+    logger.debug(f'Processing consumption data: {consumption_data}')
 
     async with self.lock:
       try:
+        print('consumption data', consumption_data)
         validate(instance=consumption_data, schema=schema)
 
-        # Transform data to match buffer format
         transformed_data = {
-          k2: consumption_data[k1]
-          for k1, k2 in [('timestamp', 'timestamp'), ('overall_value', 'value')]
+          'timestamp': self._convert_timestamp(
+            consumption_data['statistics']['time_window']['end']
+          ),
+          'value': consumption_data['average_consumption'],
         }
 
         buffer = self.data_buffers.setdefault(
@@ -173,49 +173,32 @@ class DataManager:
         buffer['consumption'].append(transformed_data)
 
         if len(buffer['consumption']) > self.max_buffer_size:
-          buffer['consumption'].pop(0)
+          buffer['consumption'] = buffer['consumption'][-self.max_buffer_size :]
 
-        logger.info(f'Updated buffer for {config.container_name} (consumption)')
+        logger.debug(
+          f'Updated consumption buffer for {config.container_name}: {transformed_data}'
+        )
 
       except ValidationError as e:
         logger.error(
-          f'Invalid consumption data format for {config.container_name}: {e.message}. Data: {consumption_data}'
+          f'Invalid consumption data format for {config.container_name}: {e.message}'
         )
-      except KeyError as e:
+      except Exception as e:
         logger.error(
-          f'Invalid consumption data format for {config.container_name}: Missing key {e}. Data: {consumption_data}'
+          f'Error processing consumption data for {config.container_name}: {e}'
         )
 
   async def _process_load_profile_data(
-    self, config: ContainerConfig, load_profile_data: Optional[Dict[str, Any]]
+    self, config: ContainerConfig, load_profile_data: Dict[str, Any]
   ) -> None:
-    """
-    Processes and buffers the fetched load profile data.
-
-    Parameters
-    ----------
-    config : ContainerConfig
-        The container configuration.
-    load_profile_data : Optional[Dict[str, Any]]
-        The fetched load profile data.
-
-    Returns
-    -------
-    None
-    """
     schema = {
       'type': 'object',
-      'patternProperties': {
-        '^[0-9]{13}$': {
-          'type': 'object',
-          'properties': {
-            'duration': {'type': 'number'},
-            'signal_payload': {'type': 'number'},
-          },
-          'required': ['duration', 'signal_payload'],
-        }
+      'properties': {
+        'dstart': {'type': 'array', 'items': {'type': 'integer'}},
+        'duration': {'type': 'array', 'items': {'type': 'integer'}},
+        'signal_payload': {'type': 'array', 'items': {'type': 'number'}},
       },
-      'additionalProperties': False,
+      'required': ['dstart', 'duration', 'signal_payload'],
     }
 
     if not load_profile_data:
@@ -225,33 +208,39 @@ class DataManager:
     async with self.lock:
       try:
         validate(instance=load_profile_data, schema=schema)
+
         buffer = self.data_buffers.setdefault(
           config.container_name, {'consumption': [], 'load_profile': []}
         )
-        valid_entries = []
-        for time, value in load_profile_data.items():
-          if not isinstance(value, dict):
-            continue
-          if not all(key in value for key in ['duration', 'signal_payload']):
-            continue
-          entry = {
-            'timestamp': int(time),
-            'duration': value['duration'],
-            'signal_payload': value['signal_payload'],
+
+        min_length = min(
+          len(load_profile_data['dstart']),
+          len(load_profile_data['duration']),
+          len(load_profile_data['signal_payload']),
+        )
+
+        valid_entries = [
+          {
+            'timestamp': self._convert_timestamp(load_profile_data['dstart'][i]),
+            'duration': load_profile_data['duration'][i],
+            'signal_payload': load_profile_data['signal_payload'][i],
           }
-          valid_entries.append(entry)
+          for i in range(min_length)
+        ]
+
+        valid_entries.sort(key=lambda x: x['timestamp'])
         buffer['load_profile'].extend(valid_entries)
 
         if len(buffer['load_profile']) > self.max_buffer_size:
           buffer['load_profile'] = buffer['load_profile'][-self.max_buffer_size :]
-        logger.info(f'Updated buffer for {config.container_name} (load_profile)')
+
+        logger.debug(
+          f'Updated load profile buffer for {config.container_name}: {len(valid_entries)} entries'
+        )
+
       except ValidationError as e:
         logger.error(
-          f'Invalid load profile data format for {config.container_name}: {e.message}. Data: {load_profile_data}'
-        )
-      except (KeyError, TypeError) as e:
-        logger.error(
-          f'Invalid load profile data format for {config.container_name}: {str(e)}. Data: {load_profile_data}'
+          f'Invalid load profile data format for {config.container_name}: {e.message}'
         )
       except Exception as e:
         logger.error(

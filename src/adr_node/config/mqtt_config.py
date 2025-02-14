@@ -15,10 +15,8 @@ class MQTTConfig:
       The MQTT broker address.
   port : int
       The port number for the MQTT broker.
-  topic_load_profile : str
-      The MQTT topic for load profile.
-  topic_consumption : str
-      The MQTT topic for consumption.
+  topics : List[TopicConfig]
+      The list of MQTT topics.
   username : str
       The username for MQTT authentication.
   password : str

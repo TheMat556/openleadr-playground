@@ -6,10 +6,18 @@ from src.openadr_node import logger
 
 
 class ConsumptionHandler:
+  """
+  Handler for consumption-related API endpoints.
+
+  This class provides methods to handle requests for consumption data,
+  including current consumption, consumption by VEN, and consumption summary.
+  """
+
   def __init__(self, consumption_service):
     self.consumption_service = consumption_service
 
-  def _process_consumption_points(self, points: List[Any]) -> Dict[str, Any]:
+  @staticmethod
+  def _process_consumption_points(points: List[Any]) -> Dict[str, Any]:
     """
     Process consumption points to calculate totals and organize data.
 
@@ -48,38 +56,53 @@ class ConsumptionHandler:
 
   @api_route('/api/consumption', methods=['GET'])
   def get_current_consumption(self):
-    """Get current consumption data for all VENs with totals."""
+    """
+    Get current consumption data for all VENs with detailed statistics.
+
+    Returns:
+        JSON response containing current consumption data
+    """
     try:
       timestamp = int(datetime.now(timezone.utc).timestamp())
-      result = self.consumption_service.get_closest_consumption_points(
-        target_timestamp=timestamp
-      )
+      consumption_result = self.consumption_service.get_current_consumption()
 
-      if not result.success:
-        raise ValueError(result.error)
+      if not consumption_result.success:
+        raise ValueError(consumption_result.error or 'Failed to get consumption data')
 
-      if not result.data.get('consumption_points'):
-        raise ValueError('No consumption points found')
-
-      consumption_points = result.data['consumption_points']
-      processed_data = self._process_consumption_points(consumption_points)
-
-      return {
+      # Extract all relevant data from the service result
+      data = consumption_result.data
+      response = {
         'timestamp': timestamp,
-        'overall_value': processed_data['total_consumption'],
-        'unit': processed_data['unit'],
-        'ven_count': processed_data['ven_count'],
-        'ven_details': processed_data['ven_details'],
-        'last_updated': datetime.now(timezone.utc).isoformat(),
+        'total_consumption': data.get('total_consumption', 0.0),
+        'average_consumption': data.get('average_consumption', 0.0),
+        'measurement_unit': data.get('unit', 'kWh'),
+        'statistics': {
+          'point_count': data.get('point_count', 0),
+          'time_window': {
+            'start': data.get('timestamp_range', {}).get('start'),
+            'end': data.get('timestamp_range', {}).get('end'),
+            'window_ms': data.get('timestamp_range', {}).get('window_ms'),
+          },
+        },
       }
+
+      return response
 
     except Exception as e:
       logger.error(f'Failed to get current consumption: {str(e)}')
-      raise ValueError(f'Failed to get consumption data: {str(e)}')
+      raise ValueError(f'Failed to retrieve consumption data: {str(e)}')
 
   @api_route('/api/consumption/ven/<ven_id>', methods=['GET'])
   def get_ven_consumption(self, ven_id: str):
-    """Get consumption data for a specific VEN with totals."""
+    """
+    Get consumption data for a specific VEN with totals.
+
+    Args:
+        ven_id: The ID of the VEN
+
+    Returns:
+        JSON response containing consumption data for the specified VEN
+    """
     try:
       timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
       result = self.consumption_service.get_closest_consumption_point(
@@ -105,7 +128,12 @@ class ConsumptionHandler:
 
   @api_route('/api/consumption/summary', methods=['GET'])
   def get_consumption_summary(self):
-    """Get a summary of all consumption data."""
+    """
+    Get a summary of all consumption data.
+
+    Returns:
+        JSON response containing a summary of all consumption data
+    """
     try:
       timestamp = int(datetime.now(timezone.utc).timestamp())
       result = self.consumption_service.get_closest_consumption_points(
@@ -120,7 +148,6 @@ class ConsumptionHandler:
 
       consumption_points = result.data['consumption_points']
       processed_data = self._process_consumption_points(consumption_points)
-      print('!!!!processed_data', processed_data)
 
       # Add additional statistics
       stats_result = self.consumption_service.get_ven_statistics()

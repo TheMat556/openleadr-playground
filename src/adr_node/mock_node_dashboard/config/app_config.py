@@ -3,9 +3,8 @@ from dataclasses import dataclass
 
 
 @dataclass
-class AppConfig:
+class EnergyControlPanelConfig:
   slider_file_path: str
-  api_base_url: str
   num_sliders: int = 24
   timezone_offset: int = 1  # UTC+1
   update_interval: int = 5  # seconds

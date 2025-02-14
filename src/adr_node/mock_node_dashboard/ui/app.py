@@ -1,10 +1,11 @@
-# src/ui/app.py
-import gradio as gr
-from typing import List
-import logging
+from datetime import datetime, timezone
 
-from src.adr_node.mock_node_dashboard.core.interfaces.iconsumption_service import (
+from src.adr_node.core.interfaces.irunable import IRunnable
+from src.adr_node.database.interfaces.services.iconsumption_service import (
   IConsumptionService,
+)
+from src.adr_node.database.interfaces.services.iloadprofile_service import (
+  ILoadProfileService,
 )
 from src.adr_node.mock_node_dashboard.core.interfaces.islider_service import (
   ISliderService,
@@ -12,41 +13,40 @@ from src.adr_node.mock_node_dashboard.core.interfaces.islider_service import (
 from src.adr_node.mock_node_dashboard.ui.components.chart import ChartComponent
 from src.adr_node.mock_node_dashboard.ui.components.slider_grid import SliderGrid
 
+import gradio as gr
+import threading
+from typing import List, Dict, Any
+import logging
+import queue
 
-class AsyncGradioApp:
-  """
-  Main Gradio application class that integrates all UI components and services.
-  """
 
+class EnergyControlPanel(IRunnable):
   def __init__(
     self,
     consumption_service: IConsumptionService,
+    loadprofile_service: ILoadProfileService,
     slider_service: ISliderService,
     num_sliders: int = 24,
     max_slider_value: int = 30,
     update_interval: int = 5,
   ):
     self.consumption_service = consumption_service
+    self.loadprofile_service = loadprofile_service
     self.slider_service = slider_service
     self.num_sliders = num_sliders
     self.max_slider_value = max_slider_value
     self.update_interval = update_interval
     self.logger = logging.getLogger(__name__)
 
-    # Initialize UI components
+    self._stop_event = threading.Event()
+    self._thread = None
+    self.queue = queue.Queue()
+
     self.chart = ChartComponent()
     self.slider_grid = SliderGrid(num_sliders=num_sliders, max_value=max_slider_value)
+    self.interface = self.create_interface()
 
   def update_chart(self, *slider_values: List[int]) -> gr.Plot:
-    """
-    Update the chart with new slider values.
-
-    Args:
-        *slider_values: Variable number of slider values
-
-    Returns:
-        Updated Plotly figure
-    """
     try:
       values = list(slider_values)
       fig = self.chart.create_figure(values)
@@ -55,27 +55,59 @@ class AsyncGradioApp:
       self.logger.error(f'Error updating chart: {e}')
       return self.chart.create_figure([0] * self.num_sliders)
 
-  def get_current_consumption(self) -> str:
+  def _process_consumption_points(self, points: List[Any]) -> Dict[str, Any]:
     """
-    Get formatted string of current consumption.
+    Process consumption points to calculate totals and organize data.
+
+    Args:
+        points: List of ConsumptionData objects
 
     Returns:
-        Formatted consumption string
+        Dict containing processed consumption data
     """
+    if not points:
+      raise ValueError('No consumption points available')
+
+    # Calculate total consumption value
+    total_value = sum(point.value for point in points)
+
+    # Group consumption by VEN
+    ven_consumption = {}
+    for point in points:
+      if point.ven_id not in ven_consumption:
+        ven_consumption[point.ven_id] = {'value': 0, 'points': []}
+      ven_consumption[point.ven_id]['value'] += point.value
+      ven_consumption[point.ven_id]['points'].append(
+        {
+          'timestamp': point.timestamp,
+          'value': point.value,
+          'resource_id': point.resource_id,
+        }
+      )
+
+    return {
+      'total_consumption': total_value,
+      'ven_count': len(ven_consumption),
+      'unit': 'kWh',
+      'ven_details': ven_consumption,
+    }
+
+  def get_current_consumption(self) -> str:
     try:
-      consumption = self.consumption_service.get_current_consumption()
-      return f'{consumption:.2f} kWh'
+      timestamp = int(datetime.now(timezone.utc).timestamp())
+      result = self.consumption_service.get_closest_consumption_points(
+        target_timestamp=timestamp
+      )
+      consumption_points = result.data['consumption_points']
+      processed_data = self._process_consumption_points(consumption_points)[
+        'total_consumption'
+      ]
+      return f'{processed_data:.2f} kWh'
     except Exception as e:
-      self.logger.error(f'Error getting current consumption: {e}')
+      self.logger.error(f'Error getting consumption: {e}')
       return 'N/A'
 
   def get_current_allowed_consumption(self) -> str:
-    """
-    Get formatted string of current allowed consumption.
-
-    Returns:
-        Formatted allowed consumption string
-    """
     try:
       allowed = self.slider_service.get_current_allowed_consumption()
       return f'{allowed:.2f} kWh'
@@ -84,45 +116,81 @@ class AsyncGradioApp:
       return 'N/A'
 
   def create_interface(self) -> gr.Blocks:
-    """
-    Create the complete Gradio interface.
+    initial_values = self.slider_service.load_values()
 
-    Returns:
-        Gradio Blocks interface
-    """
     with gr.Blocks(css='.gradio-container { max-width: 95% !important; }') as interface:
       with gr.Column():
-        # Create slider grid
         slider_inputs = self.slider_grid.create()
 
-        # Create chart
-        plot_output = gr.Plot()
+        # Set initial values for sliders
+        for slider, value in zip(slider_inputs, initial_values):
+          slider.value = value
 
-        # Initial chart update
-        initial_values = self.slider_service.load_values()
-        self.slider_grid.set_values(initial_values)
-        plot_output.value = self.chart.create_figure(initial_values)
+        # Create plot with initial render function
+        plot_output = gr.Plot(
+          value=lambda: self.chart.create_figure(initial_values),
+          every=1,  # Update every second initially
+        )
 
-        # Wire up events
+        # Wire up slider events
         for slider in slider_inputs:
-          print("slider", slider)
-          slider.change(fn=self.tst, inputs=slider_inputs, outputs=plot_output)
+          slider.change(fn=self.update_chart, inputs=slider_inputs, outputs=plot_output)
           slider.release(fn=self.slider_service.save_values, inputs=slider_inputs)
 
-        # Add consumption labels
         with gr.Row():
           gr.Label(
-            value=self.get_current_consumption,
+            value=lambda: self.get_current_consumption(),
             label='Current Consumption',
             every=self.update_interval,
           )
           gr.Label(
-            value=self.get_current_allowed_consumption,
+            value=lambda: self.get_current_allowed_consumption(),
             label='Allowed Consumption',
             every=self.update_interval,
           )
 
     return interface
 
-  def tst(self, tst: any):
-    print("!!! tst print", tst)
+  def _run_server(self):
+    try:
+      self.interface.launch(
+        server_name='0.0.0.0',
+        server_port=7862,
+        show_api=False,
+        share=False,
+        prevent_thread_lock=True,
+        quiet=True,
+      )
+    except Exception as e:
+      self.logger.error(f'Error in Gradio server thread: {e}')
+      self.queue.put(e)
+
+  def run(self) -> None:
+    try:
+      self.logger.info('Starting Threaded Energy Control Panel...')
+      self._thread = threading.Thread(target=self._run_server)
+      self._thread.daemon = True
+      self._thread.start()
+
+      while not self._stop_event.is_set():
+        try:
+          error = self.queue.get_nowait()
+          if isinstance(error, Exception):
+            raise error
+        except queue.Empty:
+          pass
+        self._stop_event.wait(1)
+
+    except Exception as e:
+      self.logger.error(f'Failed to start: {e}')
+      raise
+
+  def stop(self) -> None:
+    try:
+      self._stop_event.set()
+      if self._thread and self._thread.is_alive():
+        self._thread.join(timeout=5)
+      self.logger.info('Threaded Energy Control Panel stopped')
+    except Exception as e:
+      self.logger.error(f'Error stopping Threaded Energy Control Panel: {e}')
+      raise

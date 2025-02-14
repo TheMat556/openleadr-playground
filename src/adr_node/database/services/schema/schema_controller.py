@@ -22,12 +22,15 @@ class SchemaController:
     'consumption': TableSchema(
       name='consumption',
       columns={
-        'timestamp': 'INTEGER PRIMARY KEY',
+        'id': 'INTEGER PRIMARY KEY AUTOINCREMENT',
+        'timestamp': 'INTEGER NOT NULL',
         'ven_id': 'TEXT NOT NULL',
         'resource_id': 'TEXT NOT NULL',
         'value': 'FLOAT NOT NULL',
         'created_at': 'INTEGER NOT NULL',
         'updated_at': 'INTEGER',
+        'report_type': 'TEXT NOT NULL',
+        'reading_type': 'TEXT NOT NULL',
       },
       indexes={
         'idx_consumption_ven': 'CREATE INDEX IF NOT EXISTS idx_consumption_ven ON consumption(ven_id)',
@@ -52,7 +55,6 @@ class SchemaController:
     self.connection_manager = connection_manager
 
   def initialize_schema(self):
-    print('!!!!SCHEMAS', self.SCHEMAS)
     with self.connection_manager.get_connection() as (conn, cursor):
       for schema in self.SCHEMAS.values():
         self._create_table(cursor, schema)

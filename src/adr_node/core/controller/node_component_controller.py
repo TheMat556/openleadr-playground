@@ -1,17 +1,16 @@
+from typing import List
+
 from src.adr_node.communication.rest.exceptions.rest_service_exception import (
   RestServiceException,
 )
-from src.adr_node.communication.rest.interfaces.irest_service import IRestService
-from src.adr_node.core.services.adr.interfaces.iadr_service import IAdrService
+from src.adr_node.core.interfaces.irunable import IRunnable
 from src.adr_node.core.controller.thread_controller import ThreadController
 from src.adr_node.core.interfaces.inode_controller import IComponentController
 from src.openadr_node.adr_logger.logger import logger
 
 
 class NodeComponentController(IComponentController):
-  def __init__(
-    self, rest_service: IRestService, adr_service: IAdrService
-  ):  # Changed to match container
+  def __init__(self, runnable_services=List[IRunnable]):
     """
     Initialize the NodeController.
 
@@ -19,19 +18,15 @@ class NodeComponentController(IComponentController):
         rest_service: The REST service instance
     """
     self._thread_controller = ThreadController()
-
-    self.rest_service = rest_service
-    self.adr_service = adr_service
-
-    self.adr_service.create_node_tasks()
+    self._runnable_services = runnable_services
     self._running = False
-
-    logger.info('NodeController instance created with REST service.')
 
   def start(self) -> None:
     try:
-      self._thread_controller.start_thread(self.adr_service.run, 'ADR Service')
-      self._thread_controller.start_thread(self.rest_service.run, 'REST Service')
+      for runnable_service in self._runnable_services:
+        self._thread_controller.start_thread(
+          runnable_service.run, runnable_service.__class__.__name__
+        )
 
       self._running = True
       logger.info('NodeController started successfully.')
@@ -42,7 +37,6 @@ class NodeComponentController(IComponentController):
   def stop(self) -> None:
     if self._running:
       try:
-        self.rest_service.stop()
         self._running = False
         logger.info('NodeController stopped successfully.')
       except RestServiceException as e:

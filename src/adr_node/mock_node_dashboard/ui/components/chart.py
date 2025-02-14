@@ -1,5 +1,7 @@
 # src/ui/components/chart.py
 from typing import List
+
+import logging
 import plotly.graph_objects as go
 
 from src.adr_node.mock_node_dashboard.utils.time_utils import TimeUtils
@@ -21,51 +23,52 @@ class ChartComponent:
   def create_figure(self, values: List[int], times: List[str] = None) -> go.Figure:
     """
     Create a Plotly figure for the slider values.
-
-    Args:
-        values: List of slider values
-        times: Optional list of time labels for x-axis
-
-    Returns:
-        Plotly Figure object
     """
-    if times is None:
-      times = TimeUtils.generate_hour_labels(len(values))
+    try:
+      if not values:
+        values = [0] * 24  # Default to 24 zeros
 
-    fig = go.Figure(
-      data=[
-        go.Scatter(
-          x=times,
-          y=values,
-          mode='lines+markers',
-          line=dict(color=self.line_color),
-          marker=dict(size=8, color=self.marker_color),
-        )
-      ]
-    )
+      if times is None:
+        times = TimeUtils.generate_hour_labels(len(values))
 
-    fig.update_layout(
-      title={'text': self.title, 'font': {'color': 'white'}},
-      xaxis_title='Time',
-      yaxis_title='Load (kWh)',
-      xaxis=dict(
-        title_font_color='white',
-        tickfont_color='white',
-        gridcolor='rgba(255,255,255,0.2)',
-      ),
-      yaxis=dict(
-        title_font_color='white',
-        tickfont_color='white',
-        gridcolor='rgba(255,255,255,0.2)',
-      ),
-      height=self.height,
-      plot_bgcolor='rgba(0,0,0,0)',
-      paper_bgcolor='rgba(0,0,0,0)',
-      font_color='white',
-      template='plotly_dark',
-    )
+      fig = go.Figure(
+        data=[
+          go.Scatter(
+            x=times,
+            y=values,
+            mode='lines+markers',
+            line=dict(color=self.line_color),
+            marker=dict(size=8, color=self.marker_color),
+          )
+        ]
+      )
 
-    return fig
+      fig.update_layout(
+        title={'text': self.title, 'font': {'color': 'white'}},
+        xaxis_title='Time',
+        yaxis_title='Load (kWh)',
+        xaxis=dict(
+          title_font_color='white',
+          tickfont_color='white',
+          gridcolor='rgba(255,255,255,0.2)',
+        ),
+        yaxis=dict(
+          title_font_color='white',
+          tickfont_color='white',
+          gridcolor='rgba(255,255,255,0.2)',
+        ),
+        height=self.height,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color='white',
+        template='plotly_dark',
+      )
+
+      return fig
+    except Exception as e:
+      logging.error(f'Error creating figure: {e}')
+      # Return a basic empty figure
+      return go.Figure()
 
   def update_figure(
     self, fig: go.Figure, values: List[int], times: List[str] = None

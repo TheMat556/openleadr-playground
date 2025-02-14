@@ -7,3 +7,4 @@ class SignalType(Enum):
   SYSTEM_READY = auto()
   LOAD_PROFILE_UPDATED = auto()
   ERROR_OCCURRED = auto()
+  LOAD_DISTRIBUTION_UPDATED = auto()

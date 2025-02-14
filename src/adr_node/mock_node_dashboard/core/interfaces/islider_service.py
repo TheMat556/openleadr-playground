@@ -1,6 +1,6 @@
 # src/core/interfaces/slider_service.py
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Any
 import pandas as pd
 from datetime import datetime
 
@@ -12,7 +12,7 @@ class ISliderService(ABC):
     pass
 
   @abstractmethod
-  def save_values(self, values: List[int]) -> None:
+  def save_values(self, values: Any) -> None:
     """Save slider values to storage"""
     pass
 

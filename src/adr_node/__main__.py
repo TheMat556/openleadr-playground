@@ -1,6 +1,6 @@
 import signal
 import sys
-import time  # New import for time.sleep
+import time
 from datetime import datetime, timezone
 
 from dependency_injector import containers, providers

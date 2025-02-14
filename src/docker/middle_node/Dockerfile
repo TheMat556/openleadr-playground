@@ -25,4 +25,4 @@ USER appuser
 
 RUN pipenv install --deploy --ignore-pipfile
 
-CMD ["pipenv", "run", "start-middle-node"]
+CMD ["pipenv", "run", "start-intermediate-node"]

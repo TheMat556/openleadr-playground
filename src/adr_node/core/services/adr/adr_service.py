@@ -1,14 +1,15 @@
 import asyncio
+import time
 from typing import Optional, Callable, Dict, List
 
 from src.adr_node.config.adr_config import AdrConfig
+from src.adr_node.core.nodes.implementation.virtual_end_node import VirtualEndNode
+from src.adr_node.core.nodes.implementation.virtual_top_node import VirtualTopNode
 from src.adr_node.core.nodes.interfaces.ivirtual_end_node import IVirtualEndNode
 from src.adr_node.core.nodes.interfaces.ivirtual_top_node import IVirtualTopNode
 from src.adr_node.core.services.adr.interfaces.iadr_service import IAdrService
 from src.openadr_node import logger
 from src.openadr_node.models import ReportConfiguration
-from src.adr_node.core.nodes.virtual_end_node import VirtualEndNode
-from src.adr_node.core.nodes.virtual_top_node import VirtualTopNode
 
 
 class AdrService(IAdrService):
@@ -32,11 +33,14 @@ class AdrService(IAdrService):
     self._subscribers: Dict[str, List[Callable]] = {}
     self._report_queue = asyncio.Queue()
     self._tasks = []
+
     try:
       self._loop = asyncio.get_running_loop()
     except RuntimeError:
       self._loop = asyncio.new_event_loop()
       asyncio.set_event_loop(self._loop)
+
+    self.create_node_tasks()
 
   @property
   def vtn(self) -> Optional[VirtualTopNode]:
@@ -52,9 +56,10 @@ class AdrService(IAdrService):
         self._vtn.run(),
       )
       self._tasks.append(task)
-      self._loop.run_forever()
 
     if self._ven:
+      print('Register BASE REPORT')
+      time.sleep(5)
       self._register_base_report()
       task = self._loop.create_task(
         self._ven.run(),
@@ -74,8 +79,8 @@ class AdrService(IAdrService):
 
   def _register_base_report(self) -> None:
     try:
-      if not (self._vtn_name and self._ven_name):
-        logger.warning('Cannot register base report: VTN or VEN name missing')
+      if not self._ven:
+        logger.warning('Cannot register base report: VEN is not defined')
         return
       logger.info('Registering base report')
       self._ven.register_base_report()
@@ -86,7 +91,6 @@ class AdrService(IAdrService):
   def add_reports(
     self, list_of_reports: Optional[List[ReportConfiguration]] = None
   ) -> None:
-    print('list_of_reports', list_of_reports)
     try:
       if self._ven:
         self._ven.add_reports(list_of_reports)

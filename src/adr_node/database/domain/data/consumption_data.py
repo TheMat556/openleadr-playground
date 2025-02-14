@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from openleadr import enums
+
 
 @dataclass
 class ConsumptionData:
@@ -10,3 +12,5 @@ class ConsumptionData:
   value: float
   created_at: Optional[int]
   updated_at: Optional[int]
+  report_type: Optional[enums.REPORT_TYPE] = None
+  reading_type: Optional[enums.READING_TYPE] = None

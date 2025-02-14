@@ -15,6 +15,12 @@ class LoadProfileService(ILoadProfileService):
   def __init__(self, repository: ILoadProfileRepository):
     self.repository = repository
 
+  def save_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not data:
+      logger.warning('No data provided for saving load profile')
+      return {'success': 0, 'failed': 0, 'errors': []}
+    return self.repository.save_load_profile(data)
+
   def process_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Process and save load profile data."""
     if not data:

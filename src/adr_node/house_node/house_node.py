@@ -9,12 +9,13 @@ class HouseNode:
   def __init__(self, config: HouseNodeConfig):
     self.config = config
     self.reports: List[ReportConfig] = []
-    self._component_controller = self._setup_node()
+    self._container, self._component_controller = self._setup_node()
 
   def _setup_node(self):
-    print(self.config.to_application_config())
-    container = Container.create(self.config.to_application_config())
-    return container.node_component_controller()
+    return Container.create(self.config.to_application_config())
+
+  def get_adr_service(self):
+    return self._container.adr_service()
 
   def add_report(self, report: ReportConfig) -> None:
     self.reports.append(report)
@@ -23,9 +24,8 @@ class HouseNode:
     self.reports.extend(reports)
 
   def run(self) -> None:
-    # self._component_controller.start()
     if self.reports:
-      self._component_controller.adr_service.add_reports(self.reports)
+      self.get_adr_service().add_reports(self.reports)
     try:
       self._component_controller.start()
     except Exception as _:

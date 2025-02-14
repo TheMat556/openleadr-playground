@@ -33,10 +33,24 @@ required_mqtt_vars = [
 
 
 class PortRegistry:
+  """Manages port allocation to prevent conflicts."""
+
   def __init__(self):
     self.used_ports = set()
 
   def allocate_port(self, base_port: int) -> int:
+    """
+    Allocate a unique port number.
+
+    Args:
+        base_port: Starting port number to try
+
+    Returns:
+        Allocated port number
+
+    Raises:
+        ValueError: If no valid ports are available
+    """
     if not 0 <= base_port <= 65535:
       raise ValueError(f'Invalid port number: {base_port}')
     port = base_port
@@ -49,6 +63,8 @@ class PortRegistry:
 
 
 class IPAllocator:
+  """Manages IP address allocation within a subnet."""
+
   def __init__(self, base_ip: str = '172.18.0'):
     try:
       octets = base_ip.split('.')
@@ -65,6 +81,15 @@ class IPAllocator:
     self.available_count = 253
 
   def allocate_ip(self) -> str:
+    """
+    Allocate a unique IP address.
+
+    Returns:
+        Allocated IP address
+
+    Raises:
+        ValueError: If IP pool is exhausted
+    """
     if self.available_count <= 0:
       raise ValueError('IP address pool exhausted')
     for i in range(2, 255):
@@ -91,6 +116,7 @@ def generate_node(
   parent_ip: Optional[str] = None,
   last_layer_children: int = 2,
 ) -> Optional[Dict[str, Any]]:
+  """Generate node configuration with updated environment variables."""
   global MQTT_CONFIG_WRITTEN
 
   if layer >= max_layers:
@@ -102,22 +128,26 @@ def generate_node(
   ip_address = ip_allocator.allocate_ip()
 
   path_prefix = '/' + '/'.join(index.split('_')) + '/'
+
+  # Updated environment variables with new naming scheme
   environment = {
-    'NODE_ID': index,
-    'VTN_NAME': f'vtn_{index}',
-    'VTN_URL': f'http://localhost:{port}{path_prefix}OpenADR2/Simple/2.0b',
-    'VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
-    'VEN_NAME': f'ven_{index}',
-    'GRADIO_PORT': str(gradio_port),
-    'GRADIO_SERVER_NAME': '0.0.0.0',
-    'REST_API_PORT': str(rest_api_port),
-    'VTN_PORT': str(port),
-    'VTN_SELF_HOST': f'http://{ip_address}',
-    'LAYER': str(layer),
+    'OPENADR_NODE_ID': index,
+    'OPENADR_VTN_IDENTIFIER': f'vtn_{index}',
+    'OPENADR_VTN_ENDPOINT_URL': f'http://localhost:{port}{path_prefix}OpenADR2/Simple/2.0b',
+    'OPENADR_VTN_PATH_PREFIX': f'{path_prefix}OpenADR2/Simple/2.0b',
+    'OPENADR_VEN_IDENTIFIER': f'ven_{index}',
+    'UI_GRADIO_PORT': str(gradio_port),
+    'UI_GRADIO_HOST': '0.0.0.0',
+    'API_REST_PORT': str(rest_api_port),
+    'API_REST_HOST': '0.0.0.0',
+    'OPENADR_VTN_PORT': str(port),
+    'OPENADR_VTN_HOST': '0.0.0.0',
+    'OPENADR_LAYER_ID': str(layer),
   }
+
   if parent_path_prefix and parent_service_name and parent_ip:
     parent_port = parent_ports[0].split(':')[0]
-    environment['CONNECT_VTN_URL'] = (
+    environment['OPENADR_VTN_CONNECT_URL'] = (
       f'http://{parent_ip}:{parent_port}{parent_path_prefix}OpenADR2/Simple/2.0b'
     )
 

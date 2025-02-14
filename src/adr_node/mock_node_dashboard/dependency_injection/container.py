@@ -3,7 +3,7 @@ from dependency_injector import containers, providers
 import logging.config
 
 from src.adr_node.mock_node_dashboard.core.services.consumption_service import (
-    ConsumptionService,
+  ConsumptionService,
 )
 from src.adr_node.mock_node_dashboard.core.services.slider_service import (
   SliderService,
@@ -11,7 +11,7 @@ from src.adr_node.mock_node_dashboard.core.services.slider_service import (
 from src.adr_node.mock_node_dashboard.persistence.repository.file_slider_repository import (
   FileSliderRepository,
 )
-from src.adr_node.mock_node_dashboard.ui.app import AsyncGradioApp
+from src.adr_node.mock_node_dashboard.ui.app import ADRNodeControllerInterface
 
 
 class Container(containers.DeclarativeContainer):
@@ -69,7 +69,7 @@ class Container(containers.DeclarativeContainer):
 
   # UI Components
   gradio_app = providers.Singleton(
-    AsyncGradioApp,
+    ADRNodeControllerInterface,
     consumption_service=consumption_service,
     slider_service=slider_service,
     num_sliders=config.num_sliders,

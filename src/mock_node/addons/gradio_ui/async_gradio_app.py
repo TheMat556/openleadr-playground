@@ -78,7 +78,7 @@ class AsyncGradioApp(AdrBaseConfig):
     :rtype: list[int]
     """
     try:
-      base_path = Path(__file__).parent.parent.parent
+      base_path = Path(__file__)
       filepath = (base_path / filename).resolve()
       with filepath.open('r') as file:
         values = [int(line.strip()) for line in file.readlines()]
@@ -301,7 +301,9 @@ class AsyncGradioApp(AdrBaseConfig):
     slider_rows = create_slider_rows()
     initial_plot = self.update_chart()
 
-    with gr.Blocks(css='.gradio-container { max-width: 95% !important; }') as interface:
+    with gr.Blocks(
+      css='.gradio-container { max-width: 95% !important; }', queue=True
+    ) as interface:
       with gr.Column():
         for row in slider_rows:
           with gr.Row():

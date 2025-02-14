@@ -10,6 +10,24 @@ from src.adr_node.communication.rest.domain.api_response import ApiResponse
 def api_route(
   endpoint: str, methods: list[str] = ['GET'], response_model: Optional[Type] = None
 ):
+  """
+  Decorator to define an API route.
+
+  Parameters
+  ----------
+  endpoint : str
+      The endpoint for the API route.
+  methods : list[str], optional
+      The HTTP methods allowed for the route, default is ['GET'].
+  response_model : Optional[Type], optional
+      The model to use for the response, default is None.
+
+  Returns
+  -------
+  Callable
+      The decorated function.
+  """
+
   def decorator(f: Callable):
     @wraps(f)
     def wrapped(*args, **kwargs):

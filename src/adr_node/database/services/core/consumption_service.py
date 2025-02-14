@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import List, Optional
 
@@ -153,11 +154,9 @@ class ConsumptionService(IConsumptionService):
     self, target_timestamp: int, time_window_ms: int = 15 * 60 * 1000
   ) -> ConsumptionServiceResult:
     try:
-      print('target_timestamp', target_timestamp)
       points = self.repository.find_closest_consumption_points(
         target_timestamp, time_window_ms
       )
-      print('!!!!')
 
       if not points:
         return ConsumptionServiceResult(
@@ -168,7 +167,7 @@ class ConsumptionService(IConsumptionService):
 
       total_value = sum(point.value for point in points)
 
-      return ConsumptionServiceResult(
+      tst = ConsumptionServiceResult(
         success=True,
         data={
           'timestamp': target_timestamp,
@@ -179,6 +178,8 @@ class ConsumptionService(IConsumptionService):
         },
         timestamp=datetime.utcnow(),
       )
+
+      return tst
 
     except Exception as e:
       logger.error(f'Failed to get closest consumption points: {str(e)}')
@@ -226,6 +227,109 @@ class ConsumptionService(IConsumptionService):
 
     except Exception as e:
       logger.error(f'Failed to get closest consumption point: {str(e)}')
+      return ConsumptionServiceResult(
+        success=False, error=str(e), timestamp=datetime.utcnow()
+      )
+
+  def get_current_consumption(self) -> ConsumptionServiceResult:
+    """
+    Get the current consumption by aggregating values from the last 15 minutes.
+    Uses get_closest_consumption_points internally with a 15-minute window.
+
+    Returns:
+        ConsumptionServiceResult: Contains the aggregated consumption data with:
+            - total_consumption: sum of all consumption values
+            - average_consumption: average consumption per point
+            - point_count: number of consumption points
+            - timestamp_range: start and end timestamps of the window
+            - unit: measurement unit (kWh)
+    """
+    try:
+      current_timestamp = int(datetime.utcnow().timestamp())
+      window_ms = 15 * 60 * 1000  # 15 minutes in milliseconds
+
+      result = self.get_closest_consumption_points(
+        target_timestamp=current_timestamp, time_window_ms=window_ms
+      )
+
+      if not result.success:
+        return ConsumptionServiceResult(
+          success=False,
+          error=f'Failed to get current consumption: {result.error}',
+          timestamp=datetime.utcnow(),
+        )
+
+      points = result.data.get('consumption_points', [])
+
+      if not points:
+        return ConsumptionServiceResult(
+          success=False,
+          error='No consumption points found in the last 15 minutes',
+          timestamp=datetime.utcnow(),
+        )
+
+      total_consumption = result.data['overall_value']
+      point_count = len(points)
+      average_consumption = total_consumption / point_count if point_count > 0 else 0
+
+      timestamps = [point.timestamp for point in points]
+      start_timestamp = min(timestamps)
+      end_timestamp = max(timestamps)
+
+      return ConsumptionServiceResult(
+        success=True,
+        data={
+          'total_consumption': total_consumption,
+          'average_consumption': average_consumption,
+          'point_count': point_count,
+          'timestamp_range': {
+            'start': start_timestamp,
+            'end': end_timestamp,
+            'window_ms': window_ms,
+          },
+          'unit': 'kWh',
+        },
+        timestamp=datetime.utcnow(),
+      )
+
+    except Exception as e:
+      logger.error(f'Failed to calculate current consumption: {str(e)}')
+      return ConsumptionServiceResult(
+        success=False, error=str(e), timestamp=datetime.utcnow()
+      )
+
+  def get_vens_active_last_hour(self) -> ConsumptionServiceResult:
+    """
+    Retrieves all unique VEN IDs that have published data in the last hour.
+
+    Returns:
+        ConsumptionServiceResult: Contains a list of VEN IDs active within the last hour.
+    """
+    try:
+      current_timestamp = int(time.time())
+      print('current_timestamp', current_timestamp)
+      one_hour_ago = current_timestamp - 3600
+      print('one_hour_ago', one_hour_ago)
+
+      # Retrieve consumption records from the last hour
+      records = self.repository.find_by_timestamp_range(one_hour_ago, current_timestamp)
+
+      if not records:
+        return ConsumptionServiceResult(
+          success=False,
+          error='No records found in the last hour',
+          timestamp=datetime.utcnow(),
+        )
+
+      unique_vens = {record.ven_id for record in records}
+      return ConsumptionServiceResult(
+        success=True,
+        data={'active_vens': list(unique_vens)},
+        timestamp=datetime.utcnow(),
+      )
+
+    except Exception as e:
+      logger.error(f'Failed to get VENs active in last hour: {str(e)}')
       return ConsumptionServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )

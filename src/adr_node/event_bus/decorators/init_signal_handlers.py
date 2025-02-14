@@ -1,4 +1,4 @@
-from src.openadr_node import logger
+import logging
 
 
 def init_signal_handlers(instance) -> None:
@@ -7,7 +7,7 @@ def init_signal_handlers(instance) -> None:
   Call this after event_bus is set.
   """
   if not hasattr(instance, 'event_bus'):
-    logger.warning(f'{instance.__class__.__name__} has no event_bus attribute')
+    logging.warning(f'{instance.__class__.__name__} has no event_bus attribute')
     return
 
   # Find all methods decorated with @handle_signal
@@ -17,8 +17,8 @@ def init_signal_handlers(instance) -> None:
       try:
         signal_type = attr._signal_type
         instance.event_bus.subscribe(signal_type, attr)
-        logger.debug(
+        logging.debug(
           f'Subscribed {instance.__class__.__name__}.{attr_name} to {signal_type.name}'
         )
       except Exception as e:
-        logger.error(f'Failed to set up signal handler {attr_name}: {e}')
+        logging.error(f'Failed to set up signal handler {attr_name}: {e}')

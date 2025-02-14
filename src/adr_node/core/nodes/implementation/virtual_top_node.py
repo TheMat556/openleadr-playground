@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict, List, Any, Tuple
 
+import numpy as np
+from openleadr import enums
 from openleadr.utils import generate_id
 
 from src.adr_node.core.nodes.configs.virtual_top_node_config import VirtualTopNodeConfig
@@ -15,14 +18,15 @@ from src.adr_node.database.interfaces.services.iconsumption_service import (
 from src.adr_node.database.domain.results.consumption_service_result import (
   ConsumptionServiceResult,
 )
+from src.adr_node.database.interfaces.services.iloadprofile_service import (
+  ILoadProfileService,
+)
+from src.adr_node.database.interfaces.services.iz_value_service import IZValueService
 from src.adr_node.event_bus.constants.signal_types import SignalType
-from src.adr_node.event_bus.decorators.emits_signal import emits_signal
 from src.adr_node.event_bus.decorators.handle_signal import handle_signal
 from src.adr_node.event_bus.decorators.init_signal_handlers import init_signal_handlers
 
 from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
-from src.openadr_node import logger
-from src.openadr_node.models.event import Interval
 
 
 class VirtualTopNode(IVirtualTopNode):
@@ -30,6 +34,8 @@ class VirtualTopNode(IVirtualTopNode):
     self,
     config: VirtualTopNodeConfig,
     sqlite_consumption_service: IConsumptionService,
+    load_profile_service: ILoadProfileService,
+    z_value_service: IZValueService,
     event_bus: IEventBus,
   ):
     super().__init__()
@@ -38,6 +44,8 @@ class VirtualTopNode(IVirtualTopNode):
     self.http_port = config.http_port
     self.path_prefix = config.path_prefix
     self.sqlite_consumption_service = sqlite_consumption_service
+    self._load_profile_service = load_profile_service
+    self._z_value_service = z_value_service
     self._open_adr_server = config.server_factory(
       vtn_id=config.vtn_id,
       http_host=config.http_host,
@@ -62,7 +70,7 @@ class VirtualTopNode(IVirtualTopNode):
     ven_id = generate_id('ven_id')
     registration_id = generate_id()
     self._registration_info[ven_id] = registration_id
-    logger.info(
+    logging.info(
       f'Registered new VEN: {ven_name} with ID: {ven_id} and Registration ID: {registration_id}'
     )
     return ven_id, registration_id
@@ -85,7 +93,7 @@ class VirtualTopNode(IVirtualTopNode):
     )
 
     sampling_interval = min_sampling_interval
-    logger.info(
+    logging.info(
       f'Report registered for VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
     self._send_register_report(ven_id)
@@ -95,25 +103,20 @@ class VirtualTopNode(IVirtualTopNode):
   def _send_register_report(self, ven_id: str):
     return ven_id
 
-  @emits_signal(SignalType.LOAD_PROFILE_UPDATED)
   def _on_update_report(
     self, data: List[Any], ven_id: str, resource_id: str, measurement: str
   ) -> None:
-    logger.info(
+    logging.info(
       f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
     )
 
-    if measurement == 'energy':
+    if resource_id == 'base' and measurement == 'power':
+      print('INRESOURCE', data)
       self.create_consumption_record(ven_id, resource_id, data[0])
-
-  @handle_signal(SignalType.LOAD_PROFILE_UPDATED)
-  def _tst(self, sender):  # Only accept sender parameter
-    print(f'!!HANDLE_SIGNAL!! from {sender}')
-    print('LOAD_PROFILE_UPDATED')
 
   def create_consumption_record(
     self, ven_id: str, resource_id: str, data: Tuple[datetime, float]
-  ) -> ConsumptionServiceResult:
+  ) -> ConsumptionServiceResult | None:
     timestamp, value = data
     consumption_data = ConsumptionData(
       timestamp=int(timestamp.timestamp()),
@@ -122,6 +125,8 @@ class VirtualTopNode(IVirtualTopNode):
       value=value,
       created_at=int(datetime.now(timezone.utc).timestamp()),
       updated_at=None,
+      report_type=enums.REPORT_TYPE.USAGE,
+      reading_type=enums.READING_TYPE.SUMMED,
     )
     consumption_service_result = (
       self.sqlite_consumption_service.create_consumption_record(consumption_data)
@@ -129,93 +134,136 @@ class VirtualTopNode(IVirtualTopNode):
     return consumption_service_result
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
-    logger.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
+    logging.info(f'The VEN {ven_id} decided to {opt_type} for Event ID: {event_id}')
     await self.handle_device_status(ven_id, opt_type)
 
   async def handle_device_status(self, ven_id: str, opt_type: str) -> None:
-    logger.info(
+    logging.info(
       f'Handling device status change for VEN ID: {ven_id}, Opt type: {opt_type}'
     )
     await asyncio.sleep(1)
-    logger.info(f'Device status updated for VEN ID: {ven_id}, Opt type: {opt_type}')
+    logging.info(f'Device status updated for VEN ID: {ven_id}, Opt type: {opt_type}')
 
-  def _on_update_load_profile(
-    self, signal: str, sender: str, data: Dict[str, List[Interval]]
-  ) -> None:
-    if data:
-      for ven_id, intervals in data.items():
-        if not isinstance(intervals, list):
-          logger.error(
-            f'Invalid intervals data for VEN {ven_id}: expected list, got {type(intervals)}'
-          )
-          continue
+  @handle_signal(SignalType.LOAD_DISTRIBUTION_UPDATED)
+  def _on_update_load_profile(self, sender: str) -> None:
+    """
+    Update the load profile in response to LOAD_DISTRIBUTION_UPDATED signal.
+    Retrieves latest z-values and sends them to VENs.
 
-        # Check if the data is already formatted
-        if not all(
-          'dstart' in interval
-          and 'duration' in interval
-          and 'signal_payload' in interval
-          for interval in intervals
-        ):
-          missing_fields = [
-            field
-            for field in ['dstart', 'duration', 'signal_payload']
-            if not all(field in interval for interval in intervals)
-          ]
-          logger.error(
-            f'Missing required fields for VEN {ven_id}: {", ".join(missing_fields)}'
-          )
-          intervals = (
-            None  # NodeResourceController.process_load_profile_data(intervals)
-          )
+    Args:
+        sender: Signal sender identifier.
+    """
+    print(f'!!!Received LOAD_DISTRIBUTION_UPDATED signal from {sender}')
+    try:
+      # Get VENs active in the last hour
+      vens_result = self.sqlite_consumption_service.get_vens_active_last_hour()
+      if not vens_result.success or not vens_result.data.get('active_vens'):
+        logging.warning('No active VENs found in the last hour.')
+        return
 
-        transformed_intervals = [
-          {
-            'dtstart': datetime.fromtimestamp(
-              interval['dstart'] / 1000, tz=timezone.utc
-            ),
-            'duration': timedelta(milliseconds=interval['duration']),
-            'signal_payload': interval['signal_payload'],
-          }
-          for interval in intervals
-          if all(key in interval for key in ['dstart', 'duration', 'signal_payload'])
-          and isinstance(interval['dstart'], (int, float))
-          and isinstance(interval['duration'], (int, float))
-          and interval['dstart'] > 0
-          and interval['duration'] > 0
-        ]
-        if len(transformed_intervals) != len(intervals):
-          logger.error(
-            f'Failed to transform some intervals for VEN {ven_id} due to invalid timestamp data'
-          )
+      active_vens = vens_result.data['active_vens']
+      logging.info(f'Active VENs in the last hour: {active_vens}')
 
-        try:
+      # Get latest z-values for active VENs
+      z_values_result = self._z_value_service.get_latest_z_values()
+
+      if not z_values_result.success:
+        logging.error('Failed to get z-values')
+        return
+
+      # Create a mapping of VEN IDs to their z-values
+      ven_z_values = {
+        z_value.ven_id: z_value.z_value for z_value in z_values_result.data['z_values']
+      }
+
+      # Create a single interval for the current time
+      current_time = datetime.now(timezone.utc)
+      interval = {
+        'dtstart': current_time,
+        'duration': timedelta(minutes=15),  # or whatever duration you prefer
+        'signal_payload': 0,  # will be replaced with z-value
+      }
+
+      # Schedule an event for each active VEN
+      for ven_id in active_vens:
+        z_value = ven_z_values.get(ven_id)
+        if z_value is not None:
+          interval_with_z = interval.copy()
+          interval_with_z['signal_payload'] = z_value
+
           self._open_adr_server.add_event(
             ven_id=ven_id,
             signal_type='level',
             signal_name='simple',
-            intervals=transformed_intervals,
+            intervals=[interval_with_z],
             callback=self._event_callback,
           )
-          if not transformed_intervals:
-            logger.error(f'No valid intervals to process for VEN {ven_id}')
-            return
-          logger.info(
-            f'[{datetime.now(timezone.utc).isoformat()}] Event added successfully for VEN: {ven_id} with {len(transformed_intervals)} intervals'
-            f' from {transformed_intervals[0]["dtstart"]} to {transformed_intervals[-1]["dtstart"]}'
-          )
-        except ValueError as e:
-          logger.error(f'Invalid data in event for VEN {ven_id}: {e}')
-        except ConnectionError as e:
-          logger.error(f'Failed to connect to OpenADR server for VEN {ven_id}: {e}')
-        except Exception as e:
-          logger.error(f'Failed to add event for VEN {ven_id}: {e}')
-          logger.debug(
-            f'Event processing failed for VEN {ven_id} with {len(transformed_intervals)} '
-            f'intervals spanning {transformed_intervals[0]["dtstart"]} to '
-            f'{transformed_intervals[-1]["dtstart"]}',
-            exc_info=True,
-          )
+          logging.info(f'Event added for VEN {ven_id} with z-value: {z_value}')
+        else:
+          logging.warning(f'No z-value found for VEN {ven_id}')
+
+    except Exception as e:
+      logging.error(f'Failed to process load profile update: {e}')
+      logging.debug('Load profile update failed', exc_info=True)
+
+  def _convert_arrays_to_intervals(
+    self,
+    dtstart_array: np.ndarray,
+    duration_array: np.ndarray,
+    signal_payload_array: np.ndarray,
+  ) -> List[Dict[str, Any]]:
+    """
+    Convert separate numpy arrays for each field into a list of intervals.
+
+    Args:
+        dtstart_array: Array of start timestamps
+        duration_array: Array of durations
+        signal_payload_array: Array of signal values
+
+    Returns:
+        List of intervals with dtstart, duration, and signal_payload.
+    """
+    intervals = []
+
+    try:
+      # Convert arrays to Python scalars and create intervals
+      for i in range(len(dtstart_array)):
+        interval = {
+          'dtstart': int(dtstart_array[i].item() * 1000),  # Convert to milliseconds
+          'duration': int(duration_array[i].item() * 1000),
+          'signal_payload': float(signal_payload_array[i].item()),
+        }
+        intervals.append(interval)
+
+    except (IndexError, ValueError, AttributeError) as e:
+      logging.error(f'Error converting arrays to intervals: {e}')
+
+    return intervals
+
+  def _validate_interval(self, interval: Dict[str, Any]) -> bool:
+    """
+    Validate interval data.
+
+    Args:
+        interval: Interval data to validate.
+
+    Returns:
+        bool: True if interval is valid, False otherwise.
+    """
+    required_fields = ['dtstart', 'duration', 'signal_payload']
+
+    if not all(field in interval for field in required_fields):
+      return False
+
+    try:
+      return (
+        isinstance(interval['dtstart'], (int, float))
+        and isinstance(interval['duration'], (int, float))
+        and interval['dtstart'] > 0
+        and interval['duration'] > 0
+      )
+    except (TypeError, KeyError):
+      return False
 
   def run(self):
     return self._open_adr_server.run()
@@ -233,3 +281,6 @@ class VirtualTopNode(IVirtualTopNode):
     :param opt_type: Opt type.
     :type opt_type: str
     """
+    logging.info(
+      f'[event_response_callback] VEN={ven_id}, event_id={event_id}, opt_type={opt_type}'
+    )

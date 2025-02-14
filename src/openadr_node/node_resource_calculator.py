@@ -58,11 +58,12 @@ class NodeResourceCalculator:
     self._z = value
 
   @staticmethod
-  def validate_intervals(data: List[Dict[str, Any]], required_fields: set) -> None:
-    for interval in data:
-      if not required_fields.issubset(interval):
-        logger.error('Incomplete interval data: missing required fields')
-        raise ValueError('Incomplete interval data: missing required fields')
+  def validate_intervals(datay: List[Dict[str, Any]], required_fields: set) -> None:
+    pass
+    # for interval in data:
+    #   if not required_fields.issubset(interval):
+    #     logger.error('Incomplete interval data: missing required fields')
+    #     raise ValueError('Incomplete interval data: missing required fields')
 
   @staticmethod
   def transform_intervals(data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -21,13 +21,15 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
     results = {'success': 0, 'failed': 0, 'errors': []}
     batch_values = []
 
+    print('save_load_profile', data)
     for interval in data:
+      print('interval', interval)
       try:
-        if not all(k in interval for k in ['dstart', 'duration', 'signal_payload']):
+        if not all(k in interval for k in ['dtstart', 'duration', 'signal_payload']):
           raise ValueError(f'Missing required fields in record: {interval}')
 
         batch_values.append(
-          [interval['dstart'], interval['duration'], interval['signal_payload']]
+          [interval['dtstart'], interval['duration'], interval['signal_payload']]
         )
       except (ValueError, KeyError) as e:
         results['failed'] += 1
@@ -40,12 +42,14 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
                     INSERT OR REPLACE INTO load_profiles (dstart, duration, signal_payload)
                     VALUES (?, ?, ?)
                 """
+
         self.db_service.execute_batch(query, batch_values)
         results['success'] = len(batch_values)
       except DatabaseError as e:
         results['failed'] += len(batch_values)
         results['errors'].append({'error': str(e)})
 
+    print('results', results)
     return results
 
   def get_load_profile(
