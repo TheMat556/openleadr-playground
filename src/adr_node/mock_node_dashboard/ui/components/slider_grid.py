@@ -1,10 +1,26 @@
-# src/ui/components/slider_grid.py
 import gradio as gr
 from typing import List
 import math
 
 
 class SliderGrid:
+  """
+  Class to create and manage a grid of sliders.
+
+  :param num_sliders: Number of sliders to create.
+  :type num_sliders: int
+  :param columns: Number of columns in the grid.
+  :type columns: int
+  :param min_value: Minimum value for sliders.
+  :type min_value: int
+  :param max_value: Maximum value for sliders.
+  :type max_value: int
+  :param default_value: Default value for sliders.
+  :type default_value: int
+  :param step: Step size for sliders.
+  :type step: int
+  """
+
   def __init__(
     self,
     num_sliders: int = 24,
@@ -26,11 +42,10 @@ class SliderGrid:
     """
     Create a single slider component.
 
-    Args:
-        hour: Hour of the day (0-23)
-
-    Returns:
-        Gradio Slider component
+    :param hour: Hour of the day (0-23).
+    :type hour: int
+    :return: Gradio Slider component.
+    :rtype: gr.Slider
     """
     return gr.Slider(
       minimum=self.min_value,
@@ -45,8 +60,8 @@ class SliderGrid:
     """
     Create the complete grid of sliders.
 
-    Returns:
-        List of all created sliders
+    :return: List of all created sliders.
+    :rtype: List[gr.Slider]
     """
     rows = math.ceil(self.num_sliders / self.columns)
     self._sliders = []
@@ -67,8 +82,8 @@ class SliderGrid:
     """
     Get current values from all sliders.
 
-    Returns:
-        List of current slider values
+    :return: List of current slider values.
+    :rtype: List[int]
     """
     return [slider.value for slider in self._sliders]
 
@@ -76,8 +91,8 @@ class SliderGrid:
     """
     Set values for all sliders.
 
-    Args:
-        values: List of values to set
+    :param values: List of values to set.
+    :type values: List[int]
     """
     for slider, value in zip(self._sliders, values):
       slider.value = value

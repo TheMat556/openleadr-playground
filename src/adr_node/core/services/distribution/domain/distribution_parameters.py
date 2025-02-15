@@ -1,24 +1,27 @@
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass
 class DistributionParameters:
-  """Immutable configuration parameters for load distribution calculations."""
+  """
+  Data class for distribution parameters in the OpenADR system.
 
-  correction_factor_a: float = field(default=5.0)
-  correction_factor_b: float = field(default=1.5)
-  correction_factor_c: float = field(default=1.085)
-  max_g_value: float = field(default=0.8)
-  interval_duration_ms: int = field(default=900000)  # 15 minutes
-  time_window_ms: Optional[int] = field(default=None)
+  Attributes
+  ----------
+  time_window_ms : int
+      The time window in milliseconds (default is 15 minutes).
+  max_g_value : float
+      The maximum G value (default is 0.8).
+  correction_factor_a : float
+      Correction factor A (default is 5.0).
+  correction_factor_b : float
+      Correction factor B (default is 1.5).
+  correction_factor_c : float
+      Correction factor C (default is 1.085).
+  """
 
-  def __post_init__(self):
-    object.__setattr__(self, 'correction_factor_a', self.correction_factor_a or 5.0)
-    object.__setattr__(self, 'correction_factor_b', self.correction_factor_b or 1.5)
-    object.__setattr__(self, 'correction_factor_c', self.correction_factor_c or 1.085)
-    object.__setattr__(self, 'max_g_value', self.max_g_value or 0.8)
-    object.__setattr__(
-      self, 'interval_duration_ms', self.interval_duration_ms or 900000
-    )
-    object.__setattr__(self, 'time_window_ms', self.time_window_ms)
+  time_window_ms: int = 900000  # 15 minutes
+  max_g_value: float = 0.8
+  correction_factor_a: float = 5.0
+  correction_factor_b: float = 1.5
+  correction_factor_c: float = 1.085

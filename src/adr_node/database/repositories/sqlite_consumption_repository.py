@@ -8,10 +8,14 @@ from src.adr_node.database.interfaces.repositories.iconsumption_repository impor
   IConsumptionRepository,
 )
 from src.adr_node.database.interfaces.services.idatabase_service import IDatabaseService
-from src.openadr_node import logger
+import logging
 
 
 class SQLiteConsumptionRepository(IConsumptionRepository):
+  """
+  SQLite implementation of the IConsumptionRepository interface.
+  """
+
   def __init__(self, db_service: IDatabaseService):
     self.db_service = db_service
 
@@ -30,10 +34,10 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
   # Base Repository Methods (CRUD)
   def create(self, entity: ConsumptionData) -> ConsumptionData:
     query = """
-                INSERT INTO consumption
-                (timestamp, ven_id, resource_id, value, created_at, report_type, reading_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
+            INSERT INTO consumption
+            (timestamp, ven_id, resource_id, value, created_at, report_type, reading_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
     try:
       values = [
         entity.timestamp,
@@ -47,7 +51,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_query(query, values)
       return entity
     except DatabaseError as e:
-      logger.error(f'Failed to create consumption record: {e}')
+      logging.error(f'Failed to create consumption record: {e}')
       raise
 
   def create_batch(self, entities: List[ConsumptionData]) -> List[ConsumptionData]:
@@ -55,10 +59,10 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       return []
 
     query = """
-                INSERT INTO consumption
-                (timestamp, ven_id, resource_id, value, created_at, report_type, reading_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """
+            INSERT INTO consumption
+            (timestamp, ven_id, resource_id, value, created_at, report_type, reading_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
     try:
       batch_values = [
         [
@@ -75,7 +79,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_batch(query, batch_values)
       return entities
     except DatabaseError as e:
-      logger.error(f'Failed to create consumption batch: {e}')
+      logging.error(f'Failed to create consumption batch: {e}')
       raise
 
   def read(self, id: Any) -> Optional[ConsumptionData]:
@@ -84,7 +88,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       result = self.db_service.execute_query(query, [id])
       return self._map_to_domain(result[0]) if result else None
     except DatabaseError as e:
-      logger.error(f'Failed to read consumption record: {e}')
+      logging.error(f'Failed to read consumption record: {e}')
       raise
 
   def read_all(self, query: Optional[ConsumptionQuery] = None) -> List[ConsumptionData]:
@@ -117,15 +121,15 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       results = self.db_service.execute_query(base_query, params)
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to read consumption records: {e}')
+      logging.error(f'Failed to read consumption records: {e}')
       raise
 
   def update(self, entity: ConsumptionData) -> ConsumptionData:
     query = """
-                UPDATE consumption
-                SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?, updated_at = ?, report_type = ?, reading_type = ?
-                WHERE id = ?
-            """
+            UPDATE consumption
+            SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?, updated_at = ?, report_type = ?, reading_type = ?
+            WHERE id = ?
+        """
     try:
       values = [
         entity.timestamp,
@@ -140,15 +144,15 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_query(query, values)
       return entity
     except DatabaseError as e:
-      logger.error(f'Failed to update consumption record: {e}')
+      logging.error(f'Failed to update consumption record: {e}')
       raise
 
   def update_batch(self, entities: List[ConsumptionData]) -> List[ConsumptionData]:
     query = """
-                UPDATE consumption
-                SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?, updated_at = ?, report_type = ?, reading_type = ?
-                WHERE id = ?
-            """
+            UPDATE consumption
+            SET timestamp = ?, ven_id = ?, resource_id = ?, value = ?, updated_at = ?, report_type = ?, reading_type = ?
+            WHERE id = ?
+        """
     try:
       current_time = datetime.utcnow().isoformat()
       batch_values = [
@@ -167,7 +171,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_batch(query, batch_values)
       return entities
     except DatabaseError as e:
-      logger.error(f'Failed to update consumption batch: {e}')
+      logging.error(f'Failed to update consumption batch: {e}')
       raise
 
   def delete(self, id: Any) -> bool:
@@ -176,7 +180,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_query(query, [id])
       return True
     except DatabaseError as e:
-      logger.error(f'Failed to delete consumption record: {e}')
+      logging.error(f'Failed to delete consumption record: {e}')
       raise
 
   def delete_batch(self, ids: List[Any]) -> bool:
@@ -189,7 +193,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       self.db_service.execute_query(query, ids)
       return True
     except DatabaseError as e:
-      logger.error(f'Failed to delete consumption batch: {e}')
+      logging.error(f'Failed to delete consumption batch: {e}')
       raise
 
   # Consumption-specific methods
@@ -197,58 +201,58 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
     self, start_timestamp: int, end_timestamp: int
   ) -> List[ConsumptionData]:
     query = """
-                SELECT * FROM consumption
-                WHERE timestamp BETWEEN ? AND ?
-                ORDER BY timestamp ASC
-            """
+            SELECT * FROM consumption
+            WHERE timestamp BETWEEN ? AND ?
+            ORDER BY timestamp ASC
+        """
     try:
       results = self.db_service.execute_query(query, [start_timestamp, end_timestamp])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to find consumption by timestamp range: {e}')
+      logging.error(f'Failed to find consumption by timestamp range: {e}')
       raise
 
   def find_by_ven(self, ven_id: str, limit: int = 100) -> List[ConsumptionData]:
     query = """
-                SELECT * FROM consumption
-                WHERE ven_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """
+            SELECT * FROM consumption
+            WHERE ven_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
     try:
       results = self.db_service.execute_query(query, [ven_id, limit])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to find consumption by VEN: {e}')
+      logging.error(f'Failed to find consumption by VEN: {e}')
       raise
 
   def find_by_resource(
     self, resource_id: str, limit: int = 100
   ) -> List[ConsumptionData]:
     query = """
-                SELECT * FROM consumption
-                WHERE resource_id = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """
+            SELECT * FROM consumption
+            WHERE resource_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
     try:
       results = self.db_service.execute_query(query, [resource_id, limit])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to find consumption by resource: {e}')
+      logging.error(f'Failed to find consumption by resource: {e}')
       raise
 
   def find_nearest_to_timestamp(
     self, timestamp: int, max_distance: Optional[int] = None
   ) -> Optional[ConsumptionData]:
     query = """
-                SELECT *, ABS(timestamp - ?) as distance
-                FROM consumption
-                WHERE 1=1
-                {max_distance_clause}
-                ORDER BY distance ASC
-                LIMIT 1
-            """
+            SELECT *, ABS(timestamp - ?) as distance
+            FROM consumption
+            WHERE 1=1
+            {max_distance_clause}
+            ORDER BY distance ASC
+            LIMIT 1
+        """
     params = [timestamp]
 
     max_distance_clause = ''
@@ -261,7 +265,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       results = self.db_service.execute_query(query, params)
       return self._map_to_domain(results[0]) if results else None
     except DatabaseError as e:
-      logger.error(f'Failed to find nearest consumption: {e}')
+      logging.error(f'Failed to find nearest consumption: {e}')
       raise
 
   def count_unique_vens(self) -> int:
@@ -270,20 +274,20 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       result = self.db_service.execute_query(query)
       return result[0]['count'] if result else 0
     except DatabaseError as e:
-      logger.error(f'Failed to count unique VENs: {e}')
+      logging.error(f'Failed to count unique VENs: {e}')
       raise
 
   def get_latest_readings(self, limit: int = 10) -> List[ConsumptionData]:
     query = """
-                SELECT * FROM consumption
-                ORDER BY timestamp DESC
-                LIMIT ?
-            """
+            SELECT * FROM consumption
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
     try:
       results = self.db_service.execute_query(query, [limit])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to get latest readings: {e}')
+      logging.error(f'Failed to get latest readings: {e}')
       raise
 
   def find_closest_consumption_points(
@@ -303,23 +307,23 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       # First, check if we have any data at all
       check_query = 'SELECT COUNT(*) as count FROM consumption'
       total_count = self.db_service.execute_query(check_query, [])[0]['count']
-      logger.info(f'Total records in consumption table: {total_count}')
+      logging.info(f'Total records in consumption table: {total_count}')
 
       # Build the main query
       base_query = """
-              SELECT t1.*
-              FROM consumption t1
-              INNER JOIN (
-                  SELECT ven_id,
-                         MAX(timestamp) AS latest_timestamp
-                  FROM consumption
-                  {where_clause}
-                  GROUP BY ven_id
-              ) t2
-              ON t1.ven_id = t2.ven_id
-              AND t1.timestamp = t2.latest_timestamp
-              ORDER BY t1.ven_id
-          """
+                SELECT t1.*
+                FROM consumption t1
+                INNER JOIN (
+                    SELECT ven_id,
+                           MAX(timestamp) AS latest_timestamp
+                    FROM consumption
+                    {where_clause}
+                    GROUP BY ven_id
+                ) t2
+                ON t1.ven_id = t2.ven_id
+                AND t1.timestamp = t2.latest_timestamp
+                ORDER BY t1.ven_id
+            """
 
       params = []
       where_clause = ''
@@ -329,12 +333,12 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         window_end = target_timestamp + time_window_ms
 
         where_clause = """
-                  WHERE timestamp >= ? AND timestamp <= ?
-              """
+                    WHERE timestamp >= ? AND timestamp <= ?
+                """
         params.extend([window_start, window_end])
 
         # Log the time window details
-        logger.info(
+        logging.info(
           f'Searching in window: '
           f'start={datetime.fromtimestamp(window_start).strftime("%Y-%m-%d %H:%M:%S")} '
           f'end={datetime.fromtimestamp(window_end).strftime("%Y-%m-%d %H:%M:%S")} '
@@ -343,22 +347,22 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
 
         # Check how many records are in the time window
         window_check_query = """
-                  SELECT COUNT(*) as count
-                  FROM consumption
-                  WHERE timestamp >= ? AND timestamp <= ?
-              """
+                    SELECT COUNT(*) as count
+                    FROM consumption
+                    WHERE timestamp >= ? AND timestamp <= ?
+                """
         window_count = self.db_service.execute_query(
           window_check_query, [window_start, window_end]
         )[0]['count']
-        logger.info(f'Records in time window: {window_count}')
+        logging.info(f'Records in time window: {window_count}')
 
       query = base_query.format(where_clause=where_clause)
-      logger.debug(f'Executing query: {query} with params: {params}')
+      logging.debug(f'Executing query: {query} with params: {params}')
 
       results = self.db_service.execute_query(query, params)
 
       if not results:
-        logger.warning(
+        logging.warning(
           f'No consumption points found. '
           f'Target timestamp: {datetime.fromtimestamp(target_timestamp).strftime("%Y-%m-%d %H:%M:%S")}, '
           f'Window size: {time_window_ms / 1000 if time_window_ms else "None"} seconds'
@@ -366,11 +370,11 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         return []
 
       consumption_points = [self._map_to_domain(row) for row in results]
-      logger.info(f'Found {len(consumption_points)} consumption points')
+      logging.info(f'Found {len(consumption_points)} consumption points')
 
       # Log the timestamps of found points
       for point in consumption_points:
-        logger.debug(
+        logging.debug(
           f'Point found - VEN: {point.ven_id}, '
           f'Timestamp: {datetime.fromtimestamp(point.timestamp).strftime("%Y-%m-%d %H:%M:%S")}, '
           f'Value: {point.value}'
@@ -379,13 +383,13 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
       return consumption_points
 
     except DatabaseError as e:
-      logger.error(
+      logging.error(
         f'Database error while finding consumption points: {str(e)}\n'
         f'Target timestamp: {datetime.fromtimestamp(target_timestamp).strftime("%Y-%m-%d %H:%M:%S")}'
       )
       raise
     except Exception as e:
-      logger.error(
+      logging.error(
         f'Unexpected error while finding consumption points: {str(e)}\n'
         f'Target timestamp: {datetime.fromtimestamp(target_timestamp).strftime("%Y-%m-%d %H:%M:%S")}'
       )
@@ -406,23 +410,23 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         Optional[ConsumptionData]: The nearest consumption point or None if not found
     """
     base_query = """
-                SELECT *,
-                       ABS(timestamp - ?) as distance
-                FROM consumption
-                WHERE ven_id = ?
-                {time_window_clause}
-                ORDER BY distance ASC
-                LIMIT 1
-            """
+            SELECT *,
+                   ABS(timestamp - ?) as distance
+            FROM consumption
+            WHERE ven_id = ?
+            {time_window_clause}
+            ORDER BY distance ASC
+            LIMIT 1
+        """
 
     params = [target_timestamp, ven_id]
     time_window_clause = ''
 
     if time_window_ms is not None:
       time_window_clause = """
-                    AND timestamp >= ? - ?
-                    AND timestamp <= ? + ?
-                """
+                AND timestamp >= ? - ?
+                AND timestamp <= ? + ?
+            """
       params.extend(
         [target_timestamp, time_window_ms, target_timestamp, time_window_ms]
       )
@@ -436,7 +440,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
 
       return self._map_to_domain(results[0])
     except DatabaseError as e:
-      logger.error(
+      logging.error(
         f'Failed to find closest consumption for VEN {ven_id} at timestamp {target_timestamp}: {e}'
       )
       raise

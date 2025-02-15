@@ -11,19 +11,19 @@ from src.adr_node.core.services.adr.adr_service import AdrService
 from src.adr_node.core.controller.node_component_controller import (
   NodeComponentController,
 )
-from src.adr_node.core.services.distribution_v2.calculators.resource_calculator import (
+from src.adr_node.core.services.distribution.calculators.resource_calculator import (
   ResourceCalculator,
 )
-from src.adr_node.core.services.distribution_v2.domain.distribution_parameters import (
+from src.adr_node.core.services.distribution.domain.distribution_parameters import (
   DistributionParameters,
 )
-from src.adr_node.core.services.distribution_v2.generators.profile_generator import (
+from src.adr_node.core.services.distribution.generators.profile_generator import (
   ProfileGenerator,
 )
-from src.adr_node.core.services.distribution_v2.generators.time_interval import (
+from src.adr_node.core.services.distribution.generators.time_interval import (
   TimeIntervalGenerator,
 )
-from src.adr_node.core.services.distribution_v2.services.distribution_service import (
+from src.adr_node.core.services.distribution.services.distribution_service import (
   DistributionService,
 )
 from src.adr_node.database.repositories.sqlite_consumption_repository import (

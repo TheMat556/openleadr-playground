@@ -18,7 +18,7 @@ from src.adr_node.communication.rest.routes.handlers.load_profile_handler import
 from src.adr_node.communication.rest.routes.handlers.status_handler import StatusHandler
 from src.adr_node.database.services.core.consumption_service import ConsumptionService
 from src.adr_node.database.services.core.load_profile_service import LoadProfileService
-from src.openadr_node import logger
+import logging
 
 
 class RestService(IRestService):
@@ -84,16 +84,15 @@ class RestService(IRestService):
     This method starts the Flask application in a separate thread.
     """
     try:
-      print('!!!!!!', self._host, self._port)
       self._server = threading.Thread(
         target=self._app.run, kwargs={'host': '0.0.0.0', 'port': self._port}
       )
       self._server.daemon = True
       self._server.start()
-      logger.info(f'REST service started on {self._host}:{self._port}')
+      logging.info(f'REST service started on {self._host}:{self._port}')
     except Exception as e:
       error_msg = f'Failed to start REST service: {str(e)}'
-      logger.error(error_msg)
+      logging.error(error_msg)
       raise ServiceStartupError(error_msg)
 
   def stop(self) -> None:

@@ -11,12 +11,12 @@ from dotenv import load_dotenv
 from src.adr_node.config.adr_config import AdrConfig
 from src.adr_node.config.report_config import ReportConfig
 from src.adr_node.config.rest_api_config import RestApiConfig
-from src.adr_node.house_node.config.house_node_config import HouseNodeConfig
-from src.adr_node.house_node.house_node import HouseNode
 from src.adr_node.mock_node_dashboard.config.app_config import EnergyControlPanelConfig
-from src.adr_node.top_node.config.top_node_config import TopNodeConfig
-from src.adr_node.top_node.top_node import TopNode
-from src.node_dashboard.dashboard import GradioNodeDashboard
+from src.network_dashboard.dashboard import NetworkDashboard
+from src.tier_nodes.bottom_node.bottom_node import BottomNode
+from src.tier_nodes.bottom_node.config.bottom_node_config import BottomNodeConfig
+from src.tier_nodes.top_node.config.top_node_config import TopNodeConfig
+from src.tier_nodes.top_node.top_node import TopNode
 
 logging.basicConfig(
   level=os.getenv('LOG_LEVEL', 'INFO'),
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 def device_callback() -> float:
   """Simulate a device callback."""
-  print('Device callback called')
   return random.random() * 10
 
 
@@ -50,10 +49,10 @@ def create_report_configurations() -> List[ReportConfig]:
   return reports
 
 
-def run_house_node(house_node_config: HouseNodeConfig):
-  house_node = HouseNode(house_node_config)
-  house_node.add_reports(create_report_configurations())
-  house_node.run()
+def run_bottom_node(bottom_node_config: BottomNodeConfig):
+  bottom_node = BottomNode(bottom_node_config)
+  bottom_node.add_reports(create_report_configurations())
+  bottom_node.run()
   while True:
     time.sleep(1)
 
@@ -67,7 +66,7 @@ def run_mock_node(mock_node_config: TopNodeConfig):
 
 def run_network_dashboard():
   """Run node dashboard asynchronously"""
-  dashboard = GradioNodeDashboard(file_path='./development/env/env_variables.json')
+  dashboard = NetworkDashboard(file_path='./development/env/env_variables.json')
   interface = dashboard.create_interface()
   # interface.queue()
   interface.launch(
@@ -78,8 +77,8 @@ def run_network_dashboard():
 
 def main():
   # Load environment variables
-  load_dotenv(dotenv_path='./development/simple/.env')
-  load_dotenv(dotenv_path='./development/simple/.env.mqtt')
+  load_dotenv(dotenv_path='./development/env/.env')
+  load_dotenv(dotenv_path='./development/env/.env.mqtt')
 
   # Setup mock node
   mock_adr_config = AdrConfig(
@@ -115,7 +114,7 @@ def main():
     port=5001,
   )
 
-  house_node_config = HouseNodeConfig(
+  bottom_node_config = BottomNodeConfig(
     adr_config=house_adr_config,
     mqtt_config=None,
     rest_config=house_rest_config,
@@ -131,22 +130,24 @@ def main():
     port=5002,
   )
 
-  house2_node_config = HouseNodeConfig(
+  house2_node_config = BottomNodeConfig(
     adr_config=house2_adr_config,
     mqtt_config=None,
     rest_config=house2_rest_config,
   )
 
   # Create and start the threads for house nodes and mock node
-  house_node_thread = threading.Thread(target=run_house_node, args=(house_node_config,))
+  bottom_node_thread = threading.Thread(
+    target=run_bottom_node, args=(bottom_node_config,)
+  )
   house2_node_thread = threading.Thread(
-    target=run_house_node, args=(house2_node_config,)
+    target=run_bottom_node, args=(house2_node_config,)
   )
   mock_node_thread = threading.Thread(target=run_mock_node, args=(mock_node_config,))
 
   mock_node_thread.start()
   time.sleep(1)
-  house_node_thread.start()
+  bottom_node_thread.start()
   time.sleep(1)
   house2_node_thread.start()
 

@@ -9,6 +9,17 @@ from src.adr_node.database.interfaces.repositories.ibase_repository import (
 
 
 class IConsumptionRepository(IBaseRepository[ConsumptionData, ConsumptionQuery]):
+  """
+  Interface for consumption repository operations.
+
+  Attributes
+  ----------
+  T : TypeVar
+      The type of the entity.
+  Q : TypeVar
+      The type of the query criteria.
+  """
+
   @abstractmethod
   def find_by_timestamp_range(
     self, start_timestamp: int, end_timestamp: int

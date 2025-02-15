@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 
+import logging
 import numpy as np
 
 from src.adr_node.database.interfaces.repositories.iload_profile_repository import (
@@ -8,23 +9,32 @@ from src.adr_node.database.interfaces.repositories.iload_profile_repository impo
 from src.adr_node.database.interfaces.services.iloadprofile_service import (
   ILoadProfileService,
 )
-from src.openadr_node import logger
 
 
 class LoadProfileService(ILoadProfileService):
+  """
+  Service for managing load profile data.
+
+  Attributes
+  ----------
+  repository : ILoadProfileRepository
+      The repository used for data access.
+  """
+
   def __init__(self, repository: ILoadProfileRepository):
     self.repository = repository
 
   def save_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Save load profile data."""
     if not data:
-      logger.warning('No data provided for saving load profile')
+      logging.warning('No data provided for saving load profile')
       return {'success': 0, 'failed': 0, 'errors': []}
     return self.repository.save_load_profile(data)
 
   def process_load_profile(self, data: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Process and save load profile data."""
     if not data:
-      logger.warning('No data provided for processing')
+      logging.warning('No data provided for processing')
       return {'success': 0, 'failed': 0, 'errors': []}
 
     return self.repository.save_load_profile(data)

@@ -7,6 +7,17 @@ Q = TypeVar('Q')
 
 # Base Repository Interface
 class IBaseRepository(ABC, Generic[T, Q]):
+  """
+  Base repository interface for CRUD operations.
+
+  Attributes
+  ----------
+  T : TypeVar
+      The type of the entity.
+  Q : TypeVar
+      The type of the query criteria.
+  """
+
   @abstractmethod
   def create(self, entity: T) -> T:
     """Create a single entity."""

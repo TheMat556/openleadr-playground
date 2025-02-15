@@ -1,0 +1,34 @@
+.gradio-container {
+    max-width: 100% !important;
+    padding: 0 !important;
+    min-height: 100vh;
+
+  main {
+    padding: 0 !important;
+  }
+}
+
+#dashboard-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+#sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    height: 100vh;
+    background-color: #1a1a1a;
+    padding: 1rem;
+    border-right: 1px solid #333;
+    overflow-y: auto;
+}
+
+#main-content {
+    margin-left: 316px;
+    width: 100%;
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+}

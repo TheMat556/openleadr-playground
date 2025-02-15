@@ -1,4 +1,3 @@
-# src/adr_node/event_bus/decorators/event_decorators.py
 from functools import wraps
 from typing import Callable
 import logging

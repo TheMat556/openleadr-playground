@@ -6,7 +6,7 @@ from src.adr_node.communication.rest.exceptions.rest_service_exception import (
 from src.adr_node.core.interfaces.irunable import IRunnable
 from src.adr_node.core.controller.thread_controller import ThreadController
 from src.adr_node.core.interfaces.inode_controller import IComponentController
-from src.openadr_node.adr_logger.logger import logger
+import logging
 
 
 class NodeComponentController(IComponentController):
@@ -39,9 +39,9 @@ class NodeComponentController(IComponentController):
         self._thread_controller.start_thread(service.run, service.__class__.__name__)
 
       self._is_running = True
-      logger.info('NodeComponentController started successfully.')
+      logging.info('NodeComponentController started successfully.')
     except RestServiceException as e:
-      logger.error(f'Failed to start NodeComponentController: {str(e)}')
+      logging.error(f'Failed to start NodeComponentController: {str(e)}')
       raise
 
   def stop(self) -> None:
@@ -53,13 +53,13 @@ class NodeComponentController(IComponentController):
     if self._is_running:
       try:
         self._is_running = False
-        logger.info('NodeComponentController stopped successfully.')
+        logging.info('NodeComponentController stopped successfully.')
       except RestServiceException as e:
-        logger.error(f'Failed to stop NodeComponentController: {str(e)}')
+        logging.error(f'Failed to stop NodeComponentController: {str(e)}')
         raise
 
   def __del__(self):
     """
     Cleanup method called when the instance is being destroyed.
     """
-    logger.info('NodeComponentController instance has been cleaned up.')
+    logging.info('NodeComponentController instance has been cleaned up.')

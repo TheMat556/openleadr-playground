@@ -3,12 +3,12 @@ import sys
 import time
 from datetime import datetime, timezone
 
+import logging
 from dependency_injector import containers, providers
 from src.adr_node.communication.rest.services.rest_service import RestService
 from src.adr_node.core.controller.node_component_controller import (
   NodeComponentController,
 )
-from src.openadr_node.adr_logger.logger import logger
 
 
 class Container(containers.DeclarativeContainer):
@@ -28,7 +28,7 @@ class Container(containers.DeclarativeContainer):
 
 
 def signal_handler(sig, frame):
-  logger.info('Received shutdown signal. Initiating graceful shutdown...')
+  logging.info('Received shutdown signal. Initiating graceful shutdown...')
   controller.stop()
   sys.exit(0)
 
@@ -36,7 +36,7 @@ def signal_handler(sig, frame):
 if __name__ == '__main__':
   try:
     startup_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-    logger.info(f'Application starting at (UTC): {startup_time}')
+    logging.info(f'Application starting at (UTC): {startup_time}')
 
     container = Container()
 
@@ -46,10 +46,10 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, signal_handler)
 
     controller.start()
-    logger.info('Node controller started successfully')
+    logging.info('Node controller started successfully')
 
     while True:
       time.sleep(1)
   except Exception as e:
-    logger.error(f'Failed to start application: {str(e)}')
+    logging.error(f'Failed to start application: {str(e)}')
     sys.exit(1)

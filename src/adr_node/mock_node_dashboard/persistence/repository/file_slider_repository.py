@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime, timezone
-from typing import List, Optional, Union, Any, Dict
+from typing import List, Optional, Union, Any, Dict, Tuple
 import logging
 from pathlib import Path
 import threading
@@ -42,10 +42,6 @@ class FileSliderRepository(ISliderRepository):
     except Exception as e:
       self.logger.error(f'Failed to save values to file: {e}')
       raise IOError(f'Failed to save values to file: {e}')
-
-  import numpy as np
-  from datetime import datetime, timezone, timedelta
-  from typing import Tuple
 
   def _create_time_points(self) -> Tuple[np.ndarray, np.ndarray, datetime]:
     """Create time points for interpolation."""

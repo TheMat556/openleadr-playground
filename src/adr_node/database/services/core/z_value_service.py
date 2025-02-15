@@ -13,7 +13,7 @@ from src.adr_node.database.interfaces.repositories.iz_value_repository import (
   IZValueRepository,
 )
 from src.adr_node.database.interfaces.services.iz_value_service import IZValueService
-from src.openadr_node import logger
+import logging
 
 
 class ZValueService(IZValueService):
@@ -26,7 +26,7 @@ class ZValueService(IZValueService):
       result = self.repository.create(data)
       return ZValueServiceResult(success=True, data=result, timestamp=datetime.utcnow())
     except Exception as e:
-      logger.error(f'Failed to create z-value record: {str(e)}')
+      logging.error(f'Failed to create z-value record: {str(e)}')
       return ZValueServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -93,7 +93,7 @@ class ZValueService(IZValueService):
         timestamp=datetime.utcnow(),
       )
     except Exception as e:
-      logger.error(f'Failed to find z-values by criteria: {str(e)}')
+      logging.error(f'Failed to find z-values by criteria: {str(e)}')
       return ZValueServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -114,7 +114,7 @@ class ZValueService(IZValueService):
         timestamp=datetime.utcnow(),
       )
     except Exception as e:
-      logger.error(f'Failed to get latest z-values: {str(e)}')
+      logging.error(f'Failed to get latest z-values: {str(e)}')
       return ZValueServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -149,7 +149,7 @@ class ZValueService(IZValueService):
         timestamp=datetime.utcnow(),
       )
     except Exception as e:
-      logger.error(f'Failed to save z-values: {str(e)}')
+      logging.error(f'Failed to save z-values: {str(e)}')
       return ZValueServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )

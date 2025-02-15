@@ -1,4 +1,3 @@
-# src/adr_node/event_bus/implementation/pydispatch_event_bus.py
 from typing import Callable, Dict, Set
 from pydispatch import dispatcher
 import logging
@@ -13,10 +12,21 @@ class PyDispatchEventBus(IEventBus):
   """PyDispatch implementation of the event bus."""
 
   def __init__(self):
+    """
+    Initialize the PyDispatchEventBus.
+    """
     self._handlers: Dict[SignalType, Set[Callable]] = {}
     self._logger = logging.getLogger(__name__)
 
   def subscribe(self, signal: SignalType, handler: Callable) -> None:
+    """
+    Subscribe a handler to a signal.
+
+    :param signal: The signal type to subscribe to.
+    :type signal: SignalType
+    :param handler: The handler function to be called when the signal is emitted.
+    :type handler: Callable
+    """
     try:
       dispatcher.connect(handler, signal=signal.name, sender=dispatcher.Any)
       if signal not in self._handlers:
@@ -28,6 +38,14 @@ class PyDispatchEventBus(IEventBus):
       raise
 
   def unsubscribe(self, signal: SignalType, handler: Callable) -> None:
+    """
+    Unsubscribe a handler from a signal.
+
+    :param signal: The signal type to unsubscribe from.
+    :type signal: SignalType
+    :param handler: The handler function to be removed.
+    :type handler: Callable
+    """
     try:
       dispatcher.disconnect(handler, signal=signal.name, sender=dispatcher.Any)
       if signal in self._handlers:
@@ -38,6 +56,12 @@ class PyDispatchEventBus(IEventBus):
       raise
 
   def emit(self, signal: SignalType) -> None:
+    """
+    Emit a signal to all subscribed handlers.
+
+    :param signal: The signal type to emit.
+    :type signal: SignalType
+    """
     try:
       self._logger.info(f'Emitting signal: {signal.name}')
       dispatcher.send(signal=signal.name, sender=self)

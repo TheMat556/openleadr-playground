@@ -1,7 +1,7 @@
 from threading import Thread, Lock
 from typing import Callable, List
 
-from src.openadr_node import logger
+import logging
 
 
 class ThreadController:
@@ -39,9 +39,9 @@ class ThreadController:
       thread.start()
       with self._lock:
         self._threads.append(thread)
-      logger.info(f'Thread {name} started successfully.')
+      logging.info(f'Thread {name} started successfully.')
     except Exception as e:
-      logger.error(f'Failed to start thread {name}: {e}')
+      logging.error(f'Failed to start thread {name}: {e}')
 
   def join_threads(self, timeout: float = 5.0) -> None:
     """
@@ -57,7 +57,7 @@ class ThreadController:
         try:
           thread.join(timeout)
           if thread.is_alive():
-            logger.warning(f'Thread {thread.name} did not finish within the timeout.')
+            logging.warning(f'Thread {thread.name} did not finish within the timeout.')
         except Exception as e:
-          logger.error(f'Error joining thread {thread.name}: {e}')
+          logging.error(f'Error joining thread {thread.name}: {e}')
       self._threads.clear()

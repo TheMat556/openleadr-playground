@@ -1,4 +1,3 @@
-# src/adr_node/event_bus/base/event_subscriber.py
 from typing import Dict, Set
 from ..interfaces.ievent_bus import IEventBus
 from ..constants.signal_types import SignalType
@@ -10,7 +9,7 @@ logger = logging.getLogger(__name__)
 class EventSubscriber:
   """
   Base class for classes that need to subscribe to events.
-  Automatically registers methods decorated with @subscribes_to
+  Automatically registers methods decorated with @subscribes_to.
   """
 
   def __init__(self, event_bus: IEventBus):

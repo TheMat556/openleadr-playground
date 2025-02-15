@@ -1,3 +1,4 @@
+import logging
 from flask import Response
 import numpy as np
 
@@ -5,7 +6,6 @@ from src.adr_node.communication.rest.routes.decorators.route_decorator import ap
 from src.adr_node.database.interfaces.services.iloadprofile_service import (
   ILoadProfileService,
 )
-from src.openadr_node import logger
 
 
 class NumpyJSONEncoder:
@@ -71,5 +71,5 @@ class LoadProfileHandler:
       return processed_data
 
     except Exception as e:
-      logger.error(f'Error processing load profile data: {str(e)}')
+      logging.error(f'Error processing load profile data: {str(e)}')
       raise

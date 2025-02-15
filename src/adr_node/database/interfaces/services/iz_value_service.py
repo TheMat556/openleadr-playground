@@ -12,6 +12,10 @@ from src.adr_node.database.domain.results.z_value_batch_result import ZValueBatc
 
 
 class IZValueService(ABC):
+  """
+  Interface for z-value service operations.
+  """
+
   @abstractmethod
   def create_z_value_record(self, data: ZValueData) -> ZValueServiceResult:
     """Create a single z-value record."""

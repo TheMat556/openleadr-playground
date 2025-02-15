@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "openleadr-node"
+version = "0.1.0"
+description = "A simple flexibile multi-layer architecture for openleadr (openadr)."
+authors = ["TheMat556 <79401695+TheMat556@users.noreply.github.com>"]
+license = "MIT license"
+readme = "README.md"
+packages = [
+    { include = "src" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+openleadr = "*"
+asyncio = "*"
+sphinx = "*"
+python-dotenv = "*"
+dependency-injector = "*"
+pyopenssl = "24.2.1"
+pydispatcher = "*"
+gradio = "*"
+nest-asyncio = "*"
+flask = "*"
+"ruamel.yaml" = "*"
+igraph = "*"
+jsonschema = "*"
+cachetools = "*"
+"paho-mqtt" = "*"
+tenacity = "*"
+plotly = "^6.0.0"
+
+[tool.poetry.group.dev.dependencies]
+yappi = "*"
+ruff = "*"
+pre-commit = "*"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+dev = "src.util.runner.start_dev_setup:main"
+start-bottom-node = "src.util.runner.start_bottom_node:main"
+start-intermediate-node = "src.util.runner.start_intermediate_node:main"
+start-top-node = "src.util.runner.start_top_node:main"
+start-network-dashboard = "src.util.runner.start_network_dashboard:main"
+create-docker-compose = "src.util.helper.create_docker_compose:main"
+
+[tool.ruff]
+exclude = [
+    ".idea/",
+    "src/**/__pycache__/"
+]
+line-length = 88
+indent-width = 2
+target-version = "py312"
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+line-ending = "auto"

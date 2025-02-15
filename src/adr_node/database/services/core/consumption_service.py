@@ -2,6 +2,8 @@ import time
 from datetime import datetime
 from typing import List, Optional
 
+import logging
+
 from src.adr_node.database.domain.results.consumption_batch_result import (
   ConsumptionBatchResult,
 )
@@ -16,10 +18,18 @@ from src.adr_node.database.interfaces.services.iconsumption_service import (
 from src.adr_node.database.domain.results.consumption_service_result import (
   ConsumptionServiceResult,
 )
-from src.openadr_node import logger
 
 
 class ConsumptionService(IConsumptionService):
+  """
+  Service for managing consumption data.
+
+  Attributes
+  ----------
+  repository : IConsumptionRepository
+      The repository used for data access.
+  """
+
   def __init__(self, repository: IConsumptionRepository):
     self.repository = repository
 
@@ -31,7 +41,7 @@ class ConsumptionService(IConsumptionService):
       result = self.repository.create(data)
       return ConsumptionServiceResult(success=True, data=result)
     except Exception as e:
-      logger.error(f'Failed to create consumption record: {str(e)}')
+      logging.error(f'Failed to create consumption record: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def create_consumption_batch(
@@ -73,7 +83,7 @@ class ConsumptionService(IConsumptionService):
       result = self.repository.read(consumption_id)
       return ConsumptionServiceResult(success=bool(result), data=result)
     except Exception as e:
-      logger.error(f'Failed to find consumption by ID: {str(e)}')
+      logging.error(f'Failed to find consumption by ID: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def find_active_consumption(self, timestamp: int) -> ConsumptionServiceResult:
@@ -99,7 +109,7 @@ class ConsumptionService(IConsumptionService):
         },
       )
     except Exception as e:
-      logger.error(f'Failed to find active consumption: {str(e)}')
+      logging.error(f'Failed to find active consumption: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def find_consumption_by_criteria(
@@ -109,7 +119,7 @@ class ConsumptionService(IConsumptionService):
       result = self.repository.read_all(query)
       return ConsumptionServiceResult(success=True, data=result)
     except Exception as e:
-      logger.error(f'Failed to find consumption by criteria: {str(e)}')
+      logging.error(f'Failed to find consumption by criteria: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def find_nearest_consumption(
@@ -119,7 +129,7 @@ class ConsumptionService(IConsumptionService):
       result = self.repository.find_nearest_to_timestamp(timestamp, max_distance)
       return ConsumptionServiceResult(success=bool(result), data=result)
     except Exception as e:
-      logger.error(f'Failed to find nearest consumption: {str(e)}')
+      logging.error(f'Failed to find nearest consumption: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def get_ven_statistics(self) -> ConsumptionServiceResult:
@@ -136,7 +146,7 @@ class ConsumptionService(IConsumptionService):
         },
       )
     except Exception as e:
-      logger.error(f'Failed to get VEN statistics: {str(e)}')
+      logging.error(f'Failed to get VEN statistics: {str(e)}')
       return ConsumptionServiceResult(success=False, error=str(e))
 
   def _validate_consumption_data(self, data: ConsumptionData) -> None:
@@ -182,7 +192,7 @@ class ConsumptionService(IConsumptionService):
       return tst
 
     except Exception as e:
-      logger.error(f'Failed to get closest consumption points: {str(e)}')
+      logging.error(f'Failed to get closest consumption points: {str(e)}')
       return ConsumptionServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -226,7 +236,7 @@ class ConsumptionService(IConsumptionService):
       )
 
     except Exception as e:
-      logger.error(f'Failed to get closest consumption point: {str(e)}')
+      logging.error(f'Failed to get closest consumption point: {str(e)}')
       return ConsumptionServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -293,7 +303,7 @@ class ConsumptionService(IConsumptionService):
       )
 
     except Exception as e:
-      logger.error(f'Failed to calculate current consumption: {str(e)}')
+      logging.error(f'Failed to calculate current consumption: {str(e)}')
       return ConsumptionServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )
@@ -307,9 +317,7 @@ class ConsumptionService(IConsumptionService):
     """
     try:
       current_timestamp = int(time.time())
-      print('current_timestamp', current_timestamp)
       one_hour_ago = current_timestamp - 3600
-      print('one_hour_ago', one_hour_ago)
 
       # Retrieve consumption records from the last hour
       records = self.repository.find_by_timestamp_range(one_hour_ago, current_timestamp)
@@ -329,7 +337,7 @@ class ConsumptionService(IConsumptionService):
       )
 
     except Exception as e:
-      logger.error(f'Failed to get VENs active in last hour: {str(e)}')
+      logging.error(f'Failed to get VENs active in last hour: {str(e)}')
       return ConsumptionServiceResult(
         success=False, error=str(e), timestamp=datetime.utcnow()
       )

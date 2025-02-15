@@ -9,11 +9,18 @@ from src.adr_node.database.interfaces.repositories.iz_value_repository import (
   IZValueRepository,
 )
 from src.adr_node.database.interfaces.services.idatabase_service import IDatabaseService
-from src.openadr_node import logger
+import logging
 
 
 class SQLiteZValueRepository(IZValueRepository):
-  """Repository for managing z-values in SQLite database."""
+  """
+  Repository for managing z-values in SQLite database.
+
+  Attributes
+  ----------
+  db_service : IDatabaseService
+      The database service used for executing queries.
+  """
 
   def __init__(self, db_service: IDatabaseService):
     self.db_service = db_service
@@ -29,7 +36,7 @@ class SQLiteZValueRepository(IZValueRepository):
       self.db_service.execute_query(query, values)
       return entity
     except DatabaseError as e:
-      logger.error(f'Failed to create z-value record: {e}')
+      logging.error(f'Failed to create z-value record: {e}')
       raise
 
   def create_batch(self, entities: List[ZValueData]) -> List[ZValueData]:
@@ -48,7 +55,7 @@ class SQLiteZValueRepository(IZValueRepository):
       self.db_service.execute_batch(query, batch_values)
       return entities
     except DatabaseError as e:
-      logger.error(f'Failed to create z-value batch: {e}')
+      logging.error(f'Failed to create z-value batch: {e}')
       raise
 
   def find_by_timestamp_range(
@@ -65,7 +72,7 @@ class SQLiteZValueRepository(IZValueRepository):
       results = self.db_service.execute_query(query, [start_timestamp, end_timestamp])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to find z-values by timestamp range: {e}')
+      logging.error(f'Failed to find z-values by timestamp range: {e}')
       raise
 
   def find_by_ven(self, ven_id: str, limit: int = 100) -> List[ZValueData]:
@@ -81,7 +88,7 @@ class SQLiteZValueRepository(IZValueRepository):
       results = self.db_service.execute_query(query, [ven_id, limit])
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to find z-values by VEN: {e}')
+      logging.error(f'Failed to find z-values by VEN: {e}')
       raise
 
   def get_latest_z_values(
@@ -113,7 +120,7 @@ class SQLiteZValueRepository(IZValueRepository):
       results = self.db_service.execute_query(query, params)
       return [self._map_to_domain(row) for row in results]
     except DatabaseError as e:
-      logger.error(f'Failed to get latest z-values: {e}')
+      logging.error(f'Failed to get latest z-values: {e}')
       raise
 
   def save_z_values(
@@ -143,7 +150,7 @@ class SQLiteZValueRepository(IZValueRepository):
     except Exception as e:
       results['failed'] = len(ven_ids)
       results['errors'].append(str(e))
-      logger.error(f'Failed to save z-values: {e}')
+      logging.error(f'Failed to save z-values: {e}')
 
     return results
 

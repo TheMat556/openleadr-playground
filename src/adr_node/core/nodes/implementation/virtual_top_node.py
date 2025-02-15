@@ -180,7 +180,6 @@ class VirtualTopNode(IVirtualTopNode):
     )
 
     if resource_id == 'base' and measurement == 'power':
-      print('INRESOURCE', data)
       self.create_consumption_record(ven_id, resource_id, data[0])
 
   def create_consumption_record(
@@ -248,7 +247,6 @@ class VirtualTopNode(IVirtualTopNode):
     Args:
         sender: Signal sender identifier.
     """
-    print(f'!!!Received LOAD_DISTRIBUTION_UPDATED signal from {sender}')
     try:
       # Get VENs active in the last hour
       vens_result = self.sqlite_consumption_service.get_vens_active_last_hour()

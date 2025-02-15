@@ -81,7 +81,6 @@ class VirtualEndNode(IVirtualEndNode):
     Returns:
         str: The response to the event.
     """
-    print('GOT EVENT', event)
     logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {
       'event_descriptor',
@@ -137,7 +136,6 @@ class VirtualEndNode(IVirtualEndNode):
   ) -> Callable[..., float]:
     @wraps(callback)
     def wrapper(*args, **kwargs):
-      print('!!!!wrapper!!!!', report_config.resource_id)
       if callable(callback):
         timestamp = datetime.now(timezone.utc)
         result = callback(*args, **kwargs)
@@ -193,7 +191,6 @@ class VirtualEndNode(IVirtualEndNode):
 
       return 0.0
 
-    print(wrapper)
     return wrapper
 
   def _get_current_consumption(self) -> float:
@@ -204,7 +201,6 @@ class VirtualEndNode(IVirtualEndNode):
         float: The total current consumption value in kWh. Returns 0.0 if no data is available.
     """
     consumption_result = self._consumption_service.get_current_consumption()
-    print('!!!!get_current_consumption!!!!', consumption_result)
 
     if consumption_result.success:
       # Get total consumption from the updated response structure
@@ -232,11 +228,6 @@ class VirtualEndNode(IVirtualEndNode):
     else:
       logging.error(f'Failed to get current consumption: {consumption_result.error}')
       return 0.0
-
-  @staticmethod
-  def tst1():
-    print('!!!!tst!!!!')
-    return 10
 
   def register_base_report(self) -> None:
     """
@@ -333,7 +324,6 @@ class VirtualEndNode(IVirtualEndNode):
     Returns:
         str: The response to the event.
     """
-    print('!!!Processing OpenADR event!!!')
     logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {
       'event_descriptor',

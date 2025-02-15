@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
+import logging
+
 from src.adr_node.communication.rest.routes.decorators.route_decorator import api_route
-from src.openadr_node import logger
 
 
 class ConsumptionHandler:
@@ -89,7 +90,7 @@ class ConsumptionHandler:
       return response
 
     except Exception as e:
-      logger.error(f'Failed to get current consumption: {str(e)}')
+      logging.error(f'Failed to get current consumption: {str(e)}')
       raise ValueError(f'Failed to retrieve consumption data: {str(e)}')
 
   @api_route('/api/consumption/ven/<ven_id>', methods=['GET'])
@@ -123,7 +124,7 @@ class ConsumptionHandler:
       }
 
     except Exception as e:
-      logger.error(f'Failed to get VEN consumption: {str(e)}')
+      logging.error(f'Failed to get VEN consumption: {str(e)}')
       raise ValueError(f'Failed to get VEN consumption data: {str(e)}')
 
   @api_route('/api/consumption/summary', methods=['GET'])
@@ -181,5 +182,5 @@ class ConsumptionHandler:
       }
 
     except Exception as e:
-      logger.error(f'Failed to get consumption summary: {str(e)}')
+      logging.error(f'Failed to get consumption summary: {str(e)}')
       raise ValueError(f'Failed to get consumption summary: {str(e)}')

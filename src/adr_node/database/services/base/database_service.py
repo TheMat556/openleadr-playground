@@ -2,16 +2,27 @@ import sqlite3
 from contextlib import contextmanager
 from typing import Optional, List, Any, Dict
 
+from src.adr_node.database.exceptions.database_error import DatabaseError
 from src.adr_node.database.interfaces.services.idatabase_service import IDatabaseService
 from src.adr_node.database.services.schema.schema_controller import SchemaController
 from src.adr_node.database.services.base.sqlite_connection_controller import (
   SQLiteConnectionController,
 )
-from src.openadr_node import logger
-from src.openadr_node.database.database_manager import DatabaseError
+import logging
 
 
 class SQLiteDatabaseService(IDatabaseService):
+  """
+  SQLite implementation of the IDatabaseService interface.
+
+  Attributes
+  ----------
+  connection_manager : SQLiteConnectionController
+      Manages the SQLite database connection.
+  schema_manager : SchemaController
+      Manages the database schema.
+  """
+
   def __init__(self, db_path: str):
     if not db_path:
       raise ValueError('Database path must be provided')
@@ -45,7 +56,7 @@ class SQLiteDatabaseService(IDatabaseService):
           return [dict(row) for row in cursor.fetchall()]
         return []
       except sqlite3.Error as e:
-        logger.error(f'Query execution failed: {str(e)}')
+        logging.error(f'Query execution failed: {str(e)}')
         raise DatabaseError(f'Query execution failed: {str(e)}')
 
   def execute_batch(self, query: str, batch_values: List[List[Any]]) -> None:
@@ -53,5 +64,5 @@ class SQLiteDatabaseService(IDatabaseService):
       try:
         cursor.executemany(query, batch_values)
       except sqlite3.Error as e:
-        logger.error(f'Batch operation failed: {str(e)}')
+        logging.error(f'Batch operation failed: {str(e)}')
         raise DatabaseError(f'Batch operation failed: {str(e)}')

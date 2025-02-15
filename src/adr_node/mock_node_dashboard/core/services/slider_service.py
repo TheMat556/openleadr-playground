@@ -11,6 +11,23 @@ from src.adr_node.mock_node_dashboard.core.interfaces.islider_service import (
 
 
 class SliderService(ISliderService):
+  """
+  Service for managing slider values and their interpolations.
+
+  :param slider_repository: Repository for storing slider values.
+  :type slider_repository: Any
+  :param event_bus: Event bus for emitting signals.
+  :type event_bus: IEventBus
+  :param num_sliders: Number of sliders.
+  :type num_sliders: int
+  :param timezone_offset: Timezone offset from UTC.
+  :type timezone_offset: int
+  :param minutes_interval: Interval in minutes for interpolation.
+  :type minutes_interval: int
+  :param default_value: Default value for sliders.
+  :type default_value: int
+  """
+
   def __init__(
     self,
     slider_repository,
@@ -30,6 +47,12 @@ class SliderService(ISliderService):
     self._current_values = self.load_values()
 
   def load_values(self) -> List[int]:
+    """
+    Load slider values from the repository.
+
+    :return: A list of slider values.
+    :rtype: List[int]
+    """
     try:
       values = self.repository.load()
       if not values:
@@ -42,6 +65,12 @@ class SliderService(ISliderService):
       return [self.default_value] * self.num_sliders
 
   def save_values(self, *values: Any) -> None:
+    """
+    Save slider values to the repository.
+
+    :param values: The slider values to save.
+    :type values: Any
+    """
     try:
       self._current_values = values[: self.num_sliders]
       self.repository.save(self._current_values)
@@ -50,12 +79,17 @@ class SliderService(ISliderService):
       self.logger.error(f'Error saving slider values: {e}')
 
   def interpolate_values(self, values: List[int]) -> Dict[str, np.ndarray]:
-    """Interpolate hourly values to 15-minute intervals"""
-    # Using the provided UTC time: 2025-02-08 22:59:19
+    """
+    Interpolate hourly values to 15-minute intervals.
+
+    :param values: A list of slider values.
+    :type values: List[int]
+    :return: A dictionary with interpolated values.
+    :rtype: Dict[str, np.ndarray]
+    """
     now = datetime.now(timezone.utc).astimezone(self.timezone)
     start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    # Create hourly timestamps (24 points)
     hourly_timestamps = np.array(
       [
         int((start_of_day + timedelta(hours=i)).timestamp())
@@ -63,7 +97,6 @@ class SliderService(ISliderService):
       ]
     )
 
-    # Create 15-minute timestamps (96 points)
     minute_timestamps = np.array(
       [
         int((start_of_day + timedelta(minutes=i * self.minutes_interval)).timestamp())
@@ -71,13 +104,9 @@ class SliderService(ISliderService):
       ]
     )
 
-    # Convert values to numpy array
     values_array = np.array(values, dtype=float)
-
-    # Interpolate values
     interpolated_values = np.interp(minute_timestamps, hourly_timestamps, values_array)
 
-    # Generate display times
     display_times = np.array(
       [
         (start_of_day + timedelta(minutes=i * self.minutes_interval)).strftime('%H:%M')
@@ -92,17 +121,20 @@ class SliderService(ISliderService):
     }
 
   def get_current_allowed_consumption(self) -> float:
-    # Using the provided UTC time: 2025-02-08 22:59:19
+    """
+    Get current allowed consumption based on slider values.
+
+    :return: The current allowed consumption.
+    :rtype: float
+    """
     now = datetime.now(timezone.utc).astimezone(self.timezone)
     interpolated_data = self.interpolate_values(self._current_values)
 
-    # Round current time to nearest 15-minute interval
     minutes = now.minute
     rounded_minutes = (minutes // self.minutes_interval) * self.minutes_interval
     current_time = now.replace(minute=rounded_minutes, second=0, microsecond=0)
     current_timestamp = int(current_time.timestamp())
 
-    # Find the closest timestamp index
     idx = np.abs(interpolated_data['timestamps'] - current_timestamp).argmin()
 
     try:
@@ -112,9 +144,14 @@ class SliderService(ISliderService):
       return float(self.default_value)
 
   def get_time_series_data(self) -> Dict[datetime, float]:
+    """
+    Get complete time series data for the current day.
+
+    :return: A dictionary with time series data.
+    :rtype: Dict[datetime, float]
+    """
     interpolated_data = self.interpolate_values(self._current_values)
 
-    # Create datetime objects from timestamps
     times = [
       datetime.fromtimestamp(ts, tz=self.timezone)
       for ts in interpolated_data['timestamps']

@@ -8,7 +8,7 @@ The hierarchical structure ensures efficient communication and control across di
 
 ## 🚀 Installation Guide
 
-This guide will help you set up and run the server, client, and node using Scoop and Pipenv.
+This guide will help you set up and run the server, client, and node using Scoop and Poetry.
 
 ## ✨ Prerequisites
 
@@ -31,10 +31,10 @@ This guide will specifically cover the installation of Python 3.12 using [Scoop]
     scoop install versions/python312
     ```
 
-3. **Install Pipenv:**
+3. **Install Poetry:**
 
     ```bash
-    pip install pipenv
+    (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
     ```
 
 ### 📦 Project Installation
@@ -45,16 +45,16 @@ This guide will specifically cover the installation of Python 3.12 using [Scoop]
     cd ./openleadr-playground
     ```
 
-2. **Install project dependencies using Pipenv:**
+2. **Install project dependencies using Poetry:**
 
     ```bash
-    pipenv install
+    poetry install
     ```
 
-3. **Activate the Pipenv shell:**
+3. **Activate the Poetry shell:**
 
     ```bash
-    pipenv shell
+    poetry shell
     ```
 
 ### 🔌 Start nodes
@@ -66,13 +66,13 @@ Which will be used to demonstrate the hierarchical network infrastructure.
 1. **Start the house node:** 🏠
 
     ```bash
-    pipenv run start-house-node
+    poetry run start-house-node
     ```
 
 2. **Start the mock node:** 🤖
 
     ```bash
-    pipenv run start-mock-node
+    poetry run start-mock-node
     ```
 
 An environment has been set up for local development,
@@ -81,7 +81,7 @@ This environment also allows you to use the corresponding gradio UIs.
 
 1. **Start the development environment** 🚀
     ```bash
-    pipenv run start-dev
+    poetry run start-dev
     ```
 
 ### 💻 Development Environment
@@ -95,7 +95,7 @@ To facilitate local development and testing without repeated Docker deployments,
 
 1. **Launch Development Mode** ⚡
     ```bash
-    pipenv run dev
+    poetry run dev
     ```
 ![Development CLI](public/cli.png)
 

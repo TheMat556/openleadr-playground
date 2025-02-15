@@ -7,10 +7,14 @@ from src.adr_node.database.interfaces.repositories.iload_profile_repository impo
   ILoadProfileRepository,
 )
 from src.adr_node.database.interfaces.services.idatabase_service import IDatabaseService
-from src.openadr_node import logger
+import logging
 
 
 class SQLiteLoadProfileRepository(ILoadProfileRepository):
+  """
+  SQLite implementation of the ILoadProfileRepository interface.
+  """
+
   def __init__(self, db_service: IDatabaseService):
     self.db_service = db_service
 
@@ -21,9 +25,7 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
     results = {'success': 0, 'failed': 0, 'errors': []}
     batch_values = []
 
-    print('save_load_profile', data)
     for interval in data:
-      print('interval', interval)
       try:
         if not all(k in interval for k in ['dtstart', 'duration', 'signal_payload']):
           raise ValueError(f'Missing required fields in record: {interval}')
@@ -49,7 +51,6 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
         results['failed'] += len(batch_values)
         results['errors'].append({'error': str(e)})
 
-    print('results', results)
     return results
 
   def get_load_profile(
@@ -87,7 +88,7 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
         ),
       }
     except DatabaseError as e:
-      logger.error(f'Failed to retrieve load profile data: {str(e)}')
+      logging.error(f'Failed to retrieve load profile data: {str(e)}')
       raise
 
   def get_closest_point(self, target_timestamp: int) -> Optional[Dict[str, Any]]:
@@ -101,5 +102,5 @@ class SQLiteLoadProfileRepository(ILoadProfileRepository):
       results = self.db_service.execute_query(query, [target_timestamp])
       return results[0] if results else None
     except DatabaseError as e:
-      logger.error(f'Failed to get closest point: {str(e)}')
+      logging.error(f'Failed to get closest point: {str(e)}')
       raise
