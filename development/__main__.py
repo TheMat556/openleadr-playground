@@ -9,8 +9,10 @@ from typing import List
 from dotenv import load_dotenv
 
 from src.adr_node.config.adr_config import AdrConfig
+from src.adr_node.config.mqtt_config import MQTTConfig
 from src.adr_node.config.report_config import ReportConfig
 from src.adr_node.config.rest_api_config import RestApiConfig
+from src.adr_node.config.topic_config import TopicConfig, TopicType
 from src.adr_node.mock_node_dashboard.config.app_config import EnergyControlPanelConfig
 from src.network_dashboard.dashboard import NetworkDashboard
 from src.tier_nodes.bottom_node.bottom_node import BottomNode
@@ -130,9 +132,26 @@ def main():
     port=5002,
   )
 
+  house_2_mqtt_config = MQTTConfig(
+    broker=os.getenv('MQTT_BROKER_URL', None),
+    port=int(os.getenv('MQTT_PORT', None)),
+    username=os.getenv('MQTT_USERNAME', None),
+    password=os.getenv('MQTT_PASSWORD', None),
+    topics=[
+      TopicConfig(
+        topic='load-profile',
+        topic_type=TopicType.PUBLISH,
+      ),
+      TopicConfig(
+        topic='consumption',
+        topic_type=TopicType.SUBSCRIBE,
+      ),
+    ],
+  )
+
   house2_node_config = BottomNodeConfig(
     adr_config=house2_adr_config,
-    mqtt_config=None,
+    mqtt_config=house_2_mqtt_config,
     rest_config=house2_rest_config,
   )
 

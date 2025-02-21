@@ -1,6 +1,23 @@
 from dependency_injector import containers, providers
 from openleadr import OpenADRClient, OpenADRServer
 
+from src.adr_node.communication.mqtt.config.mqtt_connection_config import (
+  MQTTConnectionConfig,
+)
+from src.adr_node.communication.mqtt.config.mqtt_subscribe_service_config import \
+  MQTTSubscribeServiceConfig
+from src.adr_node.communication.mqtt.services.mqtt_connection_service import (
+  MQTTConnectionService,
+)
+from src.adr_node.communication.mqtt.services.mqtt_publish_service import (
+  MQTTPublishService,
+)
+from src.adr_node.communication.mqtt.services.mqtt_service import (
+  MQTTService,
+)
+from src.adr_node.communication.mqtt.services.mqtt_subscribe_service import (
+  MQTTSubscribeService,
+)
 from src.adr_node.communication.rest.services.rest_service import RestService
 from src.adr_node.config.application_config import ApplicationConfig
 from src.adr_node.core.nodes.configs.virtual_end_node_config import VirtualEndNodeConfig
@@ -188,7 +205,6 @@ class Container(containers.DeclarativeContainer):
     update_interval=config.energy_control_panel_config.update_interval,
   )
 
-  # Distribution service
   distribution_service = providers.Singleton(
     DistributionService,
     resource_calculator=resource_calculator,
@@ -199,6 +215,51 @@ class Container(containers.DeclarativeContainer):
     z_value_service=z_value_service,
     parameters=distribution_params,
     event_bus=event_bus,
+  )
+
+  mqtt_connection_config = providers.Factory(
+    MQTTConnectionConfig,
+    broker=config.mqtt_config.broker,
+    port=config.mqtt_config.port,
+    username=config.mqtt_config.username,
+    password=config.mqtt_config.password,
+    use_tls=config.mqtt_config.use_tls,
+    ca_certs=config.mqtt_config.ca_certs,
+  )
+
+  mqtt_connection_handler = providers.Singleton(
+    MQTTConnectionService,
+    config=mqtt_connection_config,
+  )
+
+
+  mqtt_publish_handler = providers.Singleton(
+    MQTTPublishService,
+    connection_handler=mqtt_connection_handler,
+    load_profile_service=load_profile_service,
+    event_bus=event_bus,
+    publish_interval=60,
+  )
+
+  mqtt_subscribe_service_config = providers.Factory(
+    MQTTSubscribeServiceConfig,
+    ven_id=config.adr_config.ven_name,
+  )
+
+  mqtt_subscribe_handler = providers.Singleton(
+    MQTTSubscribeService,
+    config=mqtt_subscribe_service_config,
+    connection_handler=mqtt_connection_handler,
+    consumption_service=consumption_service,
+    event_bus=event_bus,
+  )
+
+  mqtt_service = providers.Singleton(
+    MQTTService,
+    topic_configs=config.mqtt_config.topics,
+    connection_handler=mqtt_connection_handler,
+    publish_handler=mqtt_publish_handler,
+    subscribe_handler=mqtt_subscribe_handler,
   )
 
   @classmethod
@@ -214,10 +275,8 @@ class Container(containers.DeclarativeContainer):
         application_config.energy_control_panel_config.__dict__
       )
 
-    # Initialize resources (logging, etc.)
-    # container.init_resources()
+    container.init_resources()
 
-    # Create the list of runnable services
     runnable_services = [
       container.adr_service(),
       container.rest_service(),
@@ -225,6 +284,14 @@ class Container(containers.DeclarativeContainer):
 
     if application_config.adr_config.vtn_name:
       runnable_services.append(container.distribution_service())
+
+    if (
+      application_config.mqtt_config
+      and application_config.mqtt_config.is_valid()
+      and container.mqtt_service
+      and container.mqtt_service()
+    ):
+      runnable_services.append(container.mqtt_service())
 
     if (
       application_config.energy_control_panel_config is not None

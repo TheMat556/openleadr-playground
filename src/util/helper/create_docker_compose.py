@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env.mqtt file
-load_dotenv('.env.mqtt')
+load_dotenv('./development/env/.env.mqtt')
 
 # Create YAML instance with specific string handling
 yaml = ruamel.yaml.YAML()
@@ -24,10 +24,10 @@ MQTT_CONFIG_WRITTEN = False
 
 # Validate MQTT environment variables
 required_mqtt_vars = [
-  'PRIVATE_MQTT_BROKER_URL',
-  'PRIVATE_MQTT_USERNAME',
-  'PRIVATE_MQTT_PASSWORD',
-  'PRIVATE_MQTT_PORT',
+  'MQTT_BROKER_URL',
+  'MQTT_USERNAME',
+  'MQTT_PASSWORD',
+  'MQTT_PORT',
 ]
 
 
