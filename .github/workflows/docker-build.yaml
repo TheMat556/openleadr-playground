@@ -13,21 +13,38 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install pipenv
+      - name: Install poetry
         run: |
           python -m pip install --upgrade pip
-          pip install pipenv
+          curl -sSL https://install.python-poetry.org | python3 -
 
       - name: Install dependencies
         run: |
-          pipenv install
+          poetry install
 
-      - name: Generate Docker Compose
-        run: pipenv run generate-docker-compose -c 3 -l 3
-
+      # Build Docker images for each node type
       - name: Build Docker images
         run: |
-          docker build -f src/docker/top_node/Dockerfile .
-          docker build -f src/docker/middle_node/Dockerfile .
-          docker build -f src/docker/bottom_node/Dockerfile .
-          docker build -f src/docker/node_dashboard/Dockerfile .
+          # Top node
+          docker build \
+            --build-arg NODE_TYPE=top_node \
+            --build-arg OPENADR_LAYER_ID=0 \
+            -f deployment/nodes/Dockerfile .
+
+          # Intermediate node
+          docker build \
+            --build-arg NODE_TYPE=intermediate_node \
+            --build-arg OPENADR_LAYER_ID=1 \
+            -f deployment/nodes/Dockerfile .
+
+          # Bottom node
+          docker build \
+            --build-arg NODE_TYPE=bottom_node \
+            --build-arg OPENADR_LAYER_ID=2 \
+            -f deployment/nodes/Dockerfile .
+
+          # Network Dashboard
+          docker build \
+            --build-arg NODE_TYPE=network_dashboard \
+            --build-arg OPENADR_LAYER_ID=-1 \
+            -f deployment/nodes/Dockerfile .
