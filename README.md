@@ -51,12 +51,6 @@ This guide will specifically cover the installation of Python 3.12 using [Scoop]
     poetry install
     ```
 
-3. **Activate the Poetry shell:**
-
-    ```bash
-    poetry shell
-    ```
-
 ### 🔌 Start nodes
 
 The basic implementation of the OpenADR node provides a simple base node that can be easily extended.
@@ -66,13 +60,13 @@ Which will be used to demonstrate the hierarchical network infrastructure.
 1. **Start the house node:** 🏠
 
     ```bash
-    poetry run start-house-node
+    poetry run start-bottom-node
     ```
 
 2. **Start the mock node:** 🤖
 
     ```bash
-    poetry run start-mock-node
+    poetry run start-top-node
     ```
 
 An environment has been set up for local development,
@@ -81,7 +75,7 @@ This environment also allows you to use the corresponding gradio UIs.
 
 1. **Start the development environment** 🚀
     ```bash
-    poetry run start-dev
+    poetry run dev
     ```
 
 ### 💻 Development Environment
@@ -109,17 +103,15 @@ For MQTT service integration, create an `.env.mqtt` file with these variables:
 
 ```env
 # WARNING: Never commit this file with real credentials!
-PRIVATE_MQTT_BROKER_URL=your_broker_url
-PRIVATE_MQTT_USERNAME=your_username
-PRIVATE_MQTT_PASSWORD=your_password
-PRIVATE_MQTT_PORT=your_port
-PRIVATE_MQTT_TOPIC_LOAD_PROFILE=your_load_profile_topic
-PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION=your_consumption_topic
+MQTT_BROKER_URL=your_broker_url
+MQTT_USERNAME=your_username
+MQTT_PASSWORD=your_password
+MQTT_PORT=your_port
 ```
 
 📁 **File Locations:**
-- **Production:** Create `.env.mqtt` in the project root directory
-- **Development:** Create `.env.mqtt` in `development/simple` directory
+- **Production:** Create `.env.mqtt` in `development/env` directory
+- **Development:** Create `.env.mqtt` in `development/env` directory
 
 ✨ **Features:**
 - 🔄 Automatic service initialization - Services start automatically without manual configuration
@@ -138,7 +130,7 @@ Note: The installation steps have to be followed before running the docker compo
 1. **Create the docker compose file:** 📝
 
     ```bash
-    pipenv run generate-docker-compose -l <layers> -c <children>
+    pipenv run create-docker-compose -l <layers> -c <children>
     ```
 
     - `-l` or `--layers`: Specifies the number of layers to generate.
