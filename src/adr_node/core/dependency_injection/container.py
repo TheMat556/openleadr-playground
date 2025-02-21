@@ -4,8 +4,9 @@ from openleadr import OpenADRClient, OpenADRServer
 from src.adr_node.communication.mqtt.config.mqtt_connection_config import (
   MQTTConnectionConfig,
 )
-from src.adr_node.communication.mqtt.config.mqtt_subscribe_service_config import \
-  MQTTSubscribeServiceConfig
+from src.adr_node.communication.mqtt.config.mqtt_subscribe_service_config import (
+  MQTTSubscribeServiceConfig,
+)
 from src.adr_node.communication.mqtt.services.mqtt_connection_service import (
   MQTTConnectionService,
 )
@@ -231,7 +232,6 @@ class Container(containers.DeclarativeContainer):
     MQTTConnectionService,
     config=mqtt_connection_config,
   )
-
 
   mqtt_publish_handler = providers.Singleton(
     MQTTPublishService,

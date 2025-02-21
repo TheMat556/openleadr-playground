@@ -2,11 +2,11 @@ import time
 from typing import Any
 import logging
 
-from hatch.cli.self import update
 from openleadr import enums
 
-from src.adr_node.communication.mqtt.config.mqtt_subscribe_service_config import \
-  MQTTSubscribeServiceConfig
+from src.adr_node.communication.mqtt.config.mqtt_subscribe_service_config import (
+  MQTTSubscribeServiceConfig,
+)
 from src.adr_node.communication.mqtt.interfaces.imqtt_subscribe_service import (
   IMQTTSubscribeService,
 )
@@ -101,10 +101,10 @@ class MQTTSubscribeService(IMQTTSubscribeService):
           report_type=enums.REPORT_TYPE.USAGE,
           reading_type=enums.READING_TYPE.DIRECT_READ,
         )
-        print("Consumption data received", consumption_data)
+        print('Consumption data received', consumption_data)
 
         result = self.consumption_service.create_consumption_record(consumption_data)
-        print("Consumption data inserted", result)
+        print('Consumption data inserted', result)
         logging.info('Consumption data recorded successfully')
     except Exception as e:
       logging.error(f'Error processing message on topic {topic}: {e}')
