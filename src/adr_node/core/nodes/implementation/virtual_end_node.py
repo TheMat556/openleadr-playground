@@ -15,6 +15,7 @@ from src.adr_node.database.interfaces.services.iconsumption_service import (
 from src.adr_node.database.interfaces.services.iloadprofile_service import (
   ILoadProfileService,
 )
+from src.adr_node.event_bus.constants.signal_types import SignalType
 from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
 
 BASE_RESOURCE_ID = 'base'
@@ -129,6 +130,7 @@ class VirtualEndNode(IVirtualEndNode):
       )
 
     self._load_profile_service.save_load_profile(flattened_intervals)
+    self._event_bus.emit(SignalType.LOAD_PROFILE_UPDATED)
     return 'optIn'
 
   def _wrap_callback(
