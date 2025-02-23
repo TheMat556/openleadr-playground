@@ -34,6 +34,15 @@ class IVirtualEndNode(ABC, IRunnable):
     pass
 
   @abstractmethod
+  def register_h_load_report(self) -> None:
+    """
+    Register the h load profile report for the Virtual End Node (VEN).
+
+    This method should contain the logic to register the base report.
+    """
+    pass
+
+  @abstractmethod
   def add_reports(self, reports: Optional[List[ReportConfiguration]] = None) -> None:
     """
     Add reports to the Virtual End Node (VEN).

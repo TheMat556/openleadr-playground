@@ -12,12 +12,17 @@ from src.adr_node.database.domain.data.consumption_data import ConsumptionData
 from src.adr_node.database.interfaces.services.iconsumption_service import (
   IConsumptionService,
 )
+from src.adr_node.database.interfaces.services.ih_load_profile_service import (
+  IHLoadProfileService,
+)
 from src.adr_node.database.interfaces.services.iloadprofile_service import (
   ILoadProfileService,
 )
+from src.adr_node.event_bus.constants.signal_types import SignalType
 from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
 
 BASE_RESOURCE_ID = 'base'
+H_LOAD_RESOURCE_ID = 'h_load'
 
 
 class VirtualEndNode(IVirtualEndNode):
@@ -49,17 +54,22 @@ class VirtualEndNode(IVirtualEndNode):
     config: VirtualEndNodeConfig,
     load_profile_service: ILoadProfileService,
     consumption_service: IConsumptionService,
+    h_load_profile_service: IHLoadProfileService,
     event_bus: IEventBus,
   ):
     super().__init__()
     self._ven_name = config.ven_name
     self._vtn_url = config.vtn_url
-    self._open_adr_client = config.client_factory(self._ven_name, self._vtn_url)
+    self._open_adr_client = config.client_factory(
+      ven_name=self._ven_name, vtn_url=self._vtn_url
+    )
     self._event_bus = event_bus
     self._load_profile_service = load_profile_service
+    self._h_load_profile_service = h_load_profile_service
     self._consumption_service = consumption_service
     self._init_default_handler()
     self._base_event_registered = False
+    self._h_load_event_registered = False
     self._base_consumption = 0.0
 
   def run(self):
@@ -69,9 +79,9 @@ class VirtualEndNode(IVirtualEndNode):
     """
     Initialize the default event handler for the OpenADR client.
     """
-    self._open_adr_client.add_handler('on_event', self.tst)
+    self._open_adr_client.add_handler('on_event', self.on_event)
 
-  async def tst(self, event):
+  async def on_event(self, event: Dict[str, Any]) -> str:
     """
     Handle an OpenADR event.
 
@@ -81,7 +91,6 @@ class VirtualEndNode(IVirtualEndNode):
     Returns:
         str: The response to the event.
     """
-    logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
     required_keys = {
       'event_descriptor',
       'active_period',
@@ -101,10 +110,14 @@ class VirtualEndNode(IVirtualEndNode):
     ):
       raise ValueError('Invalid event_signals format')
 
-    current_time = datetime.now(timezone.utc)
-    flattened_intervals = [
+    # Process each interval from the event_signals.
+    # Here we assume that each interval dict contains:
+    # - 'dtstart': a Unix timestamp (in seconds)
+    # - 'duration': a timedelta object
+    # - 'signal_payload': a numeric value
+    flattened_intervals: List[Dict[str, Any]] = [
       {
-        'dtstart': int(current_time.timestamp()),
+        'dtstart': int(interval['dtstart'].timestamp()),
         'duration': int(interval['duration'].total_seconds()),
         'signal_payload': interval['signal_payload'],
       }
@@ -114,21 +127,19 @@ class VirtualEndNode(IVirtualEndNode):
       and 'duration' in interval
       and 'signal_payload' in interval
     ]
-
+    #
     if not flattened_intervals:
       raise ValueError('No valid intervals found in event_signals')
 
-    logging.info(
-      f'Created intervals with current time {current_time.strftime("%Y-%m-%d %H:%M:%S")}'
-    )
     for interval in flattened_intervals:
       logging.info(
-        f'Interval - Start: {interval["dtstart"]}, '
-        f'Duration: {interval["duration"]}, '
+        f'Interval - Start (Unix Timestamp): {interval["dtstart"]}, '
+        f'Duration (seconds): {interval["duration"]}, '
         f'Payload: {interval["signal_payload"]}'
       )
 
     self._load_profile_service.save_load_profile(flattened_intervals)
+    self._event_bus.emit(SignalType.LOAD_PROFILE_UPDATED)
     return 'optIn'
 
   def _wrap_callback(
@@ -139,6 +150,9 @@ class VirtualEndNode(IVirtualEndNode):
       if callable(callback):
         timestamp = datetime.now(timezone.utc)
         result = callback(*args, **kwargs)
+
+        if report_config.resource_id == H_LOAD_RESOURCE_ID:
+          return result
 
         if result is None:
           logging.warning(
@@ -186,7 +200,6 @@ class VirtualEndNode(IVirtualEndNode):
             logging.error(
               f'Failed to create consumption record: {service_result.error}'
             )
-
         return result
 
       return 0.0
@@ -272,6 +285,77 @@ class VirtualEndNode(IVirtualEndNode):
       raise
     except Exception as e:
       logging.error(f'Failed to register base report: {e}')
+      raise
+
+  def _get_current_h_load_profile(self) -> List[tuple[datetime, float]]:
+    """
+    Get the current H-load profile values.
+
+    Returns:
+        List[tuple[datetime, float]]: List of tuples containing (datetime, value) pairs.
+        Returns empty list if no data is available.
+    """
+    try:
+      current_profile = self._h_load_profile_service.get_h_load_profile()
+      if current_profile and len(current_profile['timestamp']) > 0:
+        # Create list of tuples (datetime, value)
+        profile_data = [
+          (datetime.fromtimestamp(ts, tz=timezone.utc), float(val))
+          for ts, val in zip(current_profile['timestamp'], current_profile['value'])
+        ]
+
+        logging.info(f'Retrieved {len(profile_data)} H-load profile values')
+        return profile_data
+      else:
+        logging.warning('No H-load profile data available')
+        return []
+    except Exception as e:
+      logging.error(f'Failed to get H-load profile: {str(e)}')
+      return []
+
+  def register_h_load_report(self) -> None:
+    """
+    Register the H-load profile report for the Virtual End Node (VEN).
+
+    :raises Exception: If an error occurs during the registration process.
+    """
+    try:
+      if not self._open_adr_client:
+        raise ValueError('OpenADR client not initialized')
+
+      if not self._h_load_event_registered:
+        logging.info('Registering H-load profile report')
+        report: List[ReportConfig] = [
+          ReportConfig(
+            report_type=enums.REPORT_TYPE.AVG_DEMAND,
+            reading_type=enums.READING_TYPE.DERIVED,
+            resource_id=H_LOAD_RESOURCE_ID,
+            measurement='power',
+            sampling_rate=timedelta(seconds=10),
+            callback=self._get_current_h_load_profile,
+          )
+        ]
+        self.add_reports(report)
+        self._h_load_event_registered = True
+        logging.info('H-load profile report registered successfully')
+    except ValueError as e:
+      logging.error(f'OpenADR client initialization failed: {str(e)}')
+      self._h_load_event_registered = False
+      raise
+    except TypeError as e:
+      logging.error(
+        f'Invalid H-load report configuration - Check measurement type and sampling rate: {str(e)}'
+      )
+      self._h_load_event_registered = False
+      raise
+    except (ConnectionError, TimeoutError) as e:
+      logging.error(
+        f'Network error while registering H-load report - Check VTN connectivity: {str(e)}'
+      )
+      self._h_load_event_registered = False
+      raise
+    except Exception as e:
+      logging.error(f'Failed to register H-load report: {e}')
       raise
 
   def get_data(self) -> float:

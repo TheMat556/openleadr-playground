@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple, List, Union
 
 import logging
@@ -45,6 +46,57 @@ class ResourceCalculator(IResourceCalculator):
         The Z value or array of Z values.
     """
     self._z = value
+
+  def process_z_values_list(
+    self, z_values_list: List[Dict[str, Any]], current_ven_ids: NDArray[np.str_]
+  ) -> Optional[float]:
+    """
+    Process z-values from the z_values_list to get the last calculated z-value.
+    Last updated: 2025-02-21 17:43:33 UTC by TheMat556
+
+    Parameters
+    ----------
+    z_values_list : List[Dict[str, Any]]
+        List of dictionaries containing z-values with their timestamps
+    current_ven_ids : NDArray[np.str_]
+        Array of current VEN IDs to process
+
+    Returns
+    -------
+    Optional[float]
+        The last calculated z-value if available, None otherwise
+    """
+    try:
+      if not z_values_list:
+        return None
+
+      # Get the most recent z-value entry for each VEN ID
+      latest_z_values = {}
+      for entry in z_values_list:
+        ven_id = entry['ven_id']
+        if (
+          ven_id not in latest_z_values
+          or entry['timestamp'] > latest_z_values[ven_id]['timestamp']
+        ):
+          latest_z_values[ven_id] = entry
+
+      # Get z-values for current VEN IDs
+      matched_z_values = []
+      for ven_id in current_ven_ids:
+        if ven_id in latest_z_values:
+          matched_z_values.append(latest_z_values[ven_id]['z_value'])
+
+      # If we found any matching z-values, use their mean
+      if matched_z_values:
+        return float(np.mean(matched_z_values))
+
+      return None
+
+    except Exception as e:
+      logging.error(
+        f'Failed to process z-values list at {datetime.now(timezone.utc).isoformat()}: {str(e)}'
+      )
+      return None
 
   def process_latest_z_values(
     self, latest_z_values: List[Dict[str, Any]], ven_ids: NDArray[np.str_]

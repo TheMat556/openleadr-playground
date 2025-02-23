@@ -106,3 +106,9 @@ class IResourceCalculator(ABC):
         Processed Z values.
     """
     pass
+
+  @abstractmethod
+  def process_z_values_list(
+    self, z_values_list: List[Dict[str, Any]], current_ven_ids: NDArray[np.str_]
+  ) -> Optional[float]:
+    pass

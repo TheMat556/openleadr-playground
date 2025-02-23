@@ -113,7 +113,7 @@ class AdrService(IAdrService):
 
     if self._ven:
       time.sleep(5)
-      self._register_base_report()
+      self._register_base_reports()
       task = self._loop.create_task(
         self._ven.run(),
       )
@@ -136,7 +136,7 @@ class AdrService(IAdrService):
     self._loop.run_until_complete(asyncio.gather(*self._tasks, return_exceptions=True))
     logging.info('OpenADR controller shutdown completed')
 
-  def _register_base_report(self) -> None:
+  def _register_base_reports(self) -> None:
     """
     Register the base report for the VEN.
     """
@@ -146,6 +146,7 @@ class AdrService(IAdrService):
         return
       logging.info('Registering base report')
       self._ven.register_base_report()
+      self._ven.register_h_load_report()
     except Exception as e:
       logging.error(f'Failed to register base report: {e}')
       raise

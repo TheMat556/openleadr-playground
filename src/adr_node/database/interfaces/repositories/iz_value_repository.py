@@ -69,3 +69,23 @@ class IZValueRepository(ABC):
   ) -> Dict[str, Any]:
     """Save z-values for multiple VENs."""
     pass
+
+  @abstractmethod
+  def get_last_inserted_z_values(
+    self,
+    ven_ids: NDArray[np.str_],
+  ) -> List[ZValueData]:
+    """
+    Get the last inserted z-values for specified VEN IDs that are before the reference timestamp.
+    Last updated: 2025-02-21 17:27:55 UTC by TheMat556
+
+    Parameters
+    ----------
+    ven_ids : NDArray[np.str_]
+        Array of VEN IDs to get z-values for
+    Returns
+    -------
+    List[ZValueData]
+        List of last inserted z-values for each VEN
+    """
+    pass

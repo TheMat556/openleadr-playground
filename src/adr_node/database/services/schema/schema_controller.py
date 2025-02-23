@@ -49,6 +49,19 @@ class SchemaController:
         'idx_z_values_timestamp': 'CREATE INDEX IF NOT EXISTS idx_z_values_timestamp ON z_values(timestamp)'
       },
     ),
+    'h_load_profiles': TableSchema(
+      name='h_load_profiles',
+      columns={
+        'timestamp': 'INTEGER NOT NULL',
+        'ven_id': 'TEXT',  # Optional, can be NULL
+        'value': 'FLOAT NOT NULL',
+        'PRIMARY KEY': '(timestamp, ven_id)',  # Composite primary key
+      },
+      indexes={
+        'idx_h_load_profiles_timestamp': 'CREATE INDEX IF NOT EXISTS idx_h_load_profiles_timestamp ON h_load_profiles(timestamp)',
+        'idx_h_load_profiles_ven': 'CREATE INDEX IF NOT EXISTS idx_h_load_profiles_ven ON h_load_profiles(ven_id)',
+      },
+    ),
   }
 
   def __init__(self, connection_manager: SQLiteConnectionController):

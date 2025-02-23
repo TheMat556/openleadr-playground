@@ -1,34 +1,25 @@
+import logging
+import time
 from threading import Event, Lock
 from typing import List
-import time
 
-import logging
 import numpy as np
+from numpy.typing import NDArray
 
 from src.adr_node.core.interfaces.irunable import IRunnable
 from src.adr_node.core.services.distribution.domain.distribution_parameters import (
   DistributionParameters,
 )
-from src.adr_node.core.services.distribution.domain.distribution_result import (
-  DistributionResult,
-)
-from src.adr_node.core.services.distribution.interfaces.iprofile_generator import (
-  IProfileGenerator,
-)
 from src.adr_node.core.services.distribution.interfaces.iresource_calculator import (
   IResourceCalculator,
-)
-from src.adr_node.core.services.distribution.interfaces.itime_interval_generator import (
-  ITimeIntervalGenerator,
-)
-from src.adr_node.database.domain.data.consumption_data import ConsumptionData
-from src.adr_node.database.interfaces.services.iconsumption_service import (
-  IConsumptionService,
 )
 from src.adr_node.database.interfaces.services.iloadprofile_service import (
   ILoadProfileService,
 )
 from src.adr_node.database.interfaces.services.iz_value_service import IZValueService
+from src.adr_node.database.interfaces.services.ih_load_profile_service import (
+  IHLoadProfileService,
+)
 from src.adr_node.event_bus.constants.signal_types import SignalType
 from src.adr_node.event_bus.decorators.handle_signal import handle_signal
 from src.adr_node.event_bus.decorators.init_signal_handlers import init_signal_handlers
@@ -39,79 +30,68 @@ class DistributionService(IRunnable):
   """
   Distribution Service for the OpenADR system.
 
-  This class manages the distribution of load among VEN nodes based on consumption data and load profiles.
+  This class manages the distribution of load among VEN nodes based on load profile points.
+  The allowed consumption is derived from a load profile record while the actual consumption data
+  is obtained from the H-load profiles. Historical z-values are attempted to be used if available.
 
-  Attributes
-  ----------
-  _calculator : IResourceCalculator
-      Resource calculator instance.
-  _interval_generator : ITimeIntervalGenerator
-      Time interval generator instance.
-  _profile_generator : IProfileGenerator
-      Profile generator instance.
-  _consumption_service : IConsumptionService
-      Consumption service instance.
-  _load_profile_service : ILoadProfileService
-      Load profile service instance.
-  _z_value_service : IZValueService
-      Z value service instance.
-  _params : DistributionParameters
-      Distribution parameters.
-  event_bus : IEventBus
-      Event bus instance.
-  _stop_event : Event
-      Event to stop the service.
-  _is_running : bool
-      Flag to indicate if the service is running.
-  _lock : Lock
-      Lock for thread safety.
-  _force_recalculate : bool
-      Flag to force recalculation.
+  New logic:
+    • The consumption data is obtained from the complete H-load profiles.
+    • Each VEN’s consumption point is the first interval value of its H-load profile.
+    • The allowed consumption (signal_payload) is retrieved from the load profile service.
+    • If historical z-values exist, they are used for the initial distribution;
+      otherwise, a new z-value is calculated using split mechanics.
+    • A new method, berechne_neue_leistung, calculates updated distribution based on allowed consumption V,
+      measured consumption B, and previous Z values.
+    • The calculated results are then converted into separate numpy arrays for ven_ids, z_values, and timestamps,
+      and then inserted into the database (db1) via the z_value service.
+
+  Note: The h_load_profile service is retained and used to derive the consumption points.
   """
 
   def __init__(
     self,
     resource_calculator: IResourceCalculator,
-    time_interval_generator: ITimeIntervalGenerator,
-    profile_generator: IProfileGenerator,
-    consumption_service: IConsumptionService,
     load_profile_service: ILoadProfileService,
     z_value_service: IZValueService,
+    h_load_profile_service: IHLoadProfileService,
     parameters: DistributionParameters,
     event_bus: IEventBus,
   ):
     self._calculator = resource_calculator
-    self._interval_generator = time_interval_generator
-    self._profile_generator = profile_generator
-    self._consumption_service = consumption_service
     self._load_profile_service = load_profile_service
     self._z_value_service = z_value_service
+    self._h_load_profile_service = (
+      h_load_profile_service  # KEEP h_load_profile service!
+    )
     self._params = parameters
     self.event_bus = event_bus
+
     self._stop_event = Event()
     self._is_running = False
     self._lock = Lock()
     self._force_recalculate = False
+
+    # Trigger an initial update.
     self.handle_load_profile_update('')
     init_signal_handlers(self)
 
   @handle_signal(SignalType.LOAD_PROFILE_UPDATED)
   def handle_load_profile_update(self, sender: str) -> None:
     """
-    Handle load profile update signal.
-
-    Parameters
-    ----------
-    sender : str
-        Sender of the signal.
+    Handle load profile update signal; force recalculation.
     """
     with self._lock:
       self._force_recalculate = True
       self._calculator.set_z_value(None)
+      print('Force update triggered.')
 
   def run(self) -> None:
     """
-    Run the distribution service.
+    Run the distribution service loop.
+    Periodically retrieves consumption data from the H-load profiles (using the first interval per VEN),
+    obtains the allowed consumption from the load profile service, calculates the new distribution,
+    reshapes the results into separate numpy arrays, and inserts them into the database (db1)
+    via the z_value service.
     """
     try:
       with self._lock:
@@ -122,189 +102,133 @@ class DistributionService(IRunnable):
 
       while not self._stop_event.is_set():
         try:
-          force_update = False
           with self._lock:
-            if self._force_recalculate:
-              force_update = True
-              self._force_recalculate = False
+            force_update = self._force_recalculate
+            self._force_recalculate = False
 
-          current_time = int(time.time() * 1000)
-          consumption_result = self._consumption_service.get_closest_consumption_points(
-            current_time, self._params.time_window_ms
-          )
+          # Update distribution calculations (returns a list of records)
+          distribution_results = self.update_load_distribution(force_update)
 
-          if consumption_result.success and consumption_result.data:
-            self.update_load_distribution(
-              consumption_result.data.get('consumption_points', []),
-              current_time,
-              force_update,
+          # Convert the distribution_results into separate numpy arrays.
+          if distribution_results:
+            ven_ids_arr: NDArray[np.str_] = np.array(
+              [record['ven_id'] for record in distribution_results],
+              dtype=str,
             )
+            z_values_arr: NDArray[np.float64] = np.array(
+              [record['value'] for record in distribution_results],
+              dtype=np.float64,
+            )
+            timestamps_arr: NDArray[np.int64] = np.array(
+              [int(record['timestamp']) for record in distribution_results],
+              dtype=np.int64,
+            )
+          else:
+            ven_ids_arr = np.array([], dtype=str)
+            z_values_arr = np.array([], dtype=np.float64)
+            timestamps_arr = np.array([], dtype=np.int64)
+
+          # Insert the results into the database using the z_value service.
+          self._z_value_service.save_z_values(ven_ids_arr, z_values_arr, timestamps_arr)
+
+          # Emit update signal.
+          self.event_bus.emit(SignalType.LOAD_DISTRIBUTION_UPDATED)
 
           time.sleep(30)
-
         except Exception as e:
           logging.error(f'Error in distribution service loop: {str(e)}')
           time.sleep(5)
-
     finally:
       with self._lock:
         self._is_running = False
 
-  def update_load_distribution(
-    self,
-    consumption_points: List[ConsumptionData],
-    timestamp: int,
-    force_update: bool = False,
-  ) -> DistributionResult:
+  def berechne_neue_leistung(self, V, B, prev_Z=None):
     """
-    Update load distribution for VEN nodes.
+    Calculate new power distribution (Z_new) based on allowed consumption V,
+    measured consumption (B) and optional previous Z values.
 
-    Parameters
-    ----------
-    consumption_points : List[ConsumptionData]
-        List of consumption data points.
-    timestamp : int
-        Current timestamp in milliseconds.
-    force_update : bool, optional
-        Flag to force recalculation (default is False).
-
-    Returns
-    -------
-    DistributionResult
-        Distribution result containing the calculation results.
+    If no previous Z values exist, an equal initial distribution is applied.
+    Returns a numpy array of new Z values.
     """
-    try:
-      if not consumption_points:
-        return DistributionResult(
-          success=False, timestamp=timestamp, error='No consumption points provided'
-        )
+    n = len(B)
+    if prev_Z is None or all(element is None for element in prev_Z):
+      Z = np.full(n, V / n)  # Initial equal distribution
+    else:
+      Z = np.array(prev_Z)  # Use previous Z values
 
-      load_profile = self._load_profile_service.get_closest_load_point(timestamp)
+    # Calculate supply ratios G_i
+    G = Z / B
+    # Calculate correction factors K_i
+    K = (5 * G**2) / 1.5 - (5 * G) / 1.5 + 1.085
+    # Calculate weights W_i
+    W = (1 - G) * B * K
+    W_total = np.sum(W)
+    # Compute new distribution Z_new
+    Z_new = (W / W_total) * V
 
-      if not load_profile:
-        return DistributionResult(
-          success=False, timestamp=timestamp, error='No load profile data available'
-        )
+    # Redistribute surplus power if any VEN exceeds its measured consumption
+    for i in range(n):
+      if Z_new[i] > B[i]:
+        surplus = Z_new[i] - B[i]
+        Z_new[i] = B[i]
+        under_limit = Z_new < B
+        remaining_weight = np.sum(W[under_limit])
+        if remaining_weight > 0:
+          Z_new[under_limit] += (W[under_limit] / remaining_weight) * surplus
+    return Z_new
 
-      if force_update:
-        self._calculator.set_z_value(None)
+  def update_load_distribution(self, force_update: bool = False) -> List[dict]:
+    """
+    Update load distribution for VEN nodes by iterating over timestamps from the H-load profile.
 
-      # Process consumption data
-      ven_data = [(point.ven_id, point.value) for point in consumption_points]
-      ven_ids = np.array([x[0] for x in ven_data], dtype=str)
-      consumption_values = np.array([x[1] for x in ven_data], dtype=np.float64)
+    For each timestamp (t) present in the H-load profile:
+      - Retrieve the allowed consumption V from the load profile data (using key 'signal_payload')
+        for that timestamp.
+      - For each VEN, get its measured consumption B for that timestamp.
+      - Compute new distribution values Z_new using berechne_neue_leistung.
+      - Update previous Z and store each record in a list.
 
-      # Initial z-value calculation
-      if self._calculator._z is None:
-        z_result = self._z_value_service.get_latest_z_values(
-          time_window_ms=self._params.time_window_ms
-        )
+    Returns:
+      A list of dictionaries, each with keys: "timestamp", "ven_id", "value".
+    """
+    load_profile = self._load_profile_service.get_load_profile_data()
+    h_profile = self._h_load_profile_service.get_h_load_profile()
 
-        # Try to use historical z-values first
-        if z_result.success and z_result.data.get('z_values'):
-          processed_z_values = self._calculator.process_latest_z_values(
-            z_result.data['z_values'], ven_ids
-          )
-          if processed_z_values is not None:
-            self._calculator.set_z_value(processed_z_values)
+    # Expect h_profile to contain keys: "timestamp", "ven_ids", "value"
+    timestamps = np.unique(h_profile['timestamp'])
+    ven_ids = np.unique(h_profile['ven_ids'])
 
-        # Calculate new z-value if no history available
+    distribution_results = []
+    prev_Z_dict = {ven: None for ven in ven_ids}
+
+    for t in timestamps:
+      if t not in load_profile['dstart']:
+        continue
+
+      indices = np.where(load_profile['dstart'] == t)[0]
+      if len(indices) == 0:
+        logging.warning(f'No allowed consumption found for timestamp {t}')
+        continue
+      V = load_profile['signal_payload'][indices[0]]
+
+      B = []
+      for ven in ven_ids:
+        idx = np.where((h_profile['timestamp'] == t) & (h_profile['ven_ids'] == ven))[0]
+        if len(idx) == 0:
+          logging.warning(f'No consumption value for VEN {ven} at timestamp {t}')
+          B.append(0.0)
         else:
-          active_vens = len(ven_ids)
-          pending_vens = 0
-          z_value = self._calculator.calculate_z_value(
-            load_profile, active_vens, pending_vens
-          )
+          B.append(float(h_profile['value'][idx[0]]))
+      B = np.array(B, dtype=np.float64)
 
-          # Set and use initial z-value
-          self._calculator.set_z_value(z_value)
-          z_values = np.full_like(consumption_values, z_value)
+      prev_Z = [prev_Z_dict[ven] for ven in ven_ids]
+      Z_new = self.berechne_neue_leistung(V, B, prev_Z)
 
-          # Generate initial profiles
-          intervals = self._interval_generator.generate_intervals()
-          profiles = self._profile_generator.create_ven_profiles(
-            ven_ids, z_values, intervals
-          )
+      for i, ven in enumerate(ven_ids):
+        prev_Z_dict[ven] = Z_new[i]
+        distribution_results.append({'timestamp': t, 'ven_id': ven, 'value': Z_new[i]})
 
-          # Save initial z-values
-          save_result = self._z_value_service.save_z_values(
-            ven_ids=ven_ids, z_values=z_values, timestamp=timestamp
-          )
-
-          # Notify about initial update
-          self.event_bus.emit(SignalType.LOAD_DISTRIBUTION_UPDATED)
-
-          # Return initial distribution result
-          return DistributionResult(
-            success=True,
-            timestamp=timestamp,
-            ven_ids=ven_ids,
-            z_values=z_values,
-            total_allowed=load_profile['signal_payload'],
-            profiles=profiles,
-            intervals=intervals,
-            stats={
-              'active_vens': active_vens,
-              'total_consumption': float(consumption_values.sum()),
-              'average_consumption': float(consumption_values.mean()),
-              'z_value_history': {
-                'count': 0,
-                'window_ms': self._params.time_window_ms,
-                'save_success': save_result.success
-                if 'save_result' in locals()
-                else False,
-                'forced_update': force_update,
-              },
-            },
-          )
-
-      # Regular distribution calculation
-      total_allowed = load_profile['signal_payload']
-      ven_ids, z_values = self._calculator.calculate_load_distribution(
-        ven_ids, consumption_values, total_allowed
-      )
-
-      # Save calculated results
-      save_result = self._z_value_service.save_z_values(
-        ven_ids=ven_ids, z_values=z_values, timestamp=timestamp
-      )
-
-      # Generate profiles
-      intervals = self._interval_generator.generate_intervals()
-      profiles = self._profile_generator.create_ven_profiles(
-        ven_ids, z_values, intervals
-      )
-
-      # Notify about update
-      self.event_bus.emit(SignalType.LOAD_DISTRIBUTION_UPDATED)
-
-      # Return final distribution result
-      return DistributionResult(
-        success=True,
-        timestamp=timestamp,
-        ven_ids=ven_ids,
-        z_values=z_values,
-        total_allowed=total_allowed,
-        profiles=profiles,
-        intervals=intervals,
-        stats={
-          'active_vens': len(ven_ids),
-          'total_consumption': float(consumption_values.sum()),
-          'average_consumption': float(consumption_values.mean()),
-          'z_value_history': {
-            'count': z_result.data['count']
-            if 'z_result' in locals() and z_result.success
-            else 0,
-            'window_ms': self._params.time_window_ms,
-            'save_success': save_result.success if 'save_result' in locals() else False,
-            'forced_update': force_update,
-          },
-        },
-      )
-
-    except Exception as e:
-      logging.error(f'Failed to update load distribution: {str(e)}')
-      return DistributionResult(success=False, timestamp=timestamp, error=str(e))
+    return distribution_results
 
   def stop(self) -> None:
     """
@@ -315,11 +239,6 @@ class DistributionService(IRunnable):
   def is_running(self) -> bool:
     """
     Check if the distribution service is running.
-
-    Returns
-    -------
-    bool
-        True if the service is running, False otherwise.
     """
     with self._lock:
       return self._is_running

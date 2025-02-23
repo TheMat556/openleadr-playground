@@ -1,7 +1,9 @@
-from typing import Any, Dict
 import json
 import logging
 from datetime import datetime
+from typing import Any, Dict
+
+import numpy as np
 
 from src.adr_node.communication.mqtt.interfaces.imqtt_publish_service import (
   IMQTTPublishService,
@@ -10,10 +12,10 @@ from src.adr_node.communication.mqtt.services.mqtt_connection_service import (
   MQTTConnectionService,
 )
 from src.adr_node.database.services.core.load_profile_service import LoadProfileService
+from src.adr_node.event_bus.constants.signal_types import SignalType
+from src.adr_node.event_bus.decorators.handle_signal import handle_signal
 from src.adr_node.event_bus.decorators.init_signal_handlers import init_signal_handlers
 from src.adr_node.event_bus.interfaces.ievent_bus import IEventBus
-from src.adr_node.event_bus.decorators.handle_signal import handle_signal
-from src.adr_node.event_bus.constants.signal_types import SignalType
 
 
 class MQTTPublishService(IMQTTPublishService):
@@ -39,20 +41,27 @@ class MQTTPublishService(IMQTTPublishService):
     except Exception as e:
       logging.error(f'Failed to publish to {topic}: {e}')
 
-  def _get_load_profile_payload(self, current_time: datetime) -> Dict[str, Any] | None:
-    unix_timestamp = int(current_time.timestamp())
-    load_profile_point = self.load_profile_service.get_closest_load_point(
-      unix_timestamp
-    )
+  def _get_load_profile_payload(self) -> Dict[str, Any] | None:
+    load_profile_data = self.load_profile_service.get_load_profile_data()
 
-    if not load_profile_point or not all(
-      key in load_profile_point for key in ['dstart', 'duration', 'signal_payload']
+    if not load_profile_data or not all(
+      key in load_profile_data for key in ['dstart', 'duration', 'signal_payload']
     ):
       return None
 
+    # Convert dstart if it's a numpy ndarray.
+    dstart = load_profile_data['dstart']
+    if isinstance(dstart, np.ndarray):
+      dstart = dstart.tolist()
+
+    signal_payload = load_profile_data['signal_payload']
+    # Convert signal_payload from a numpy ndarray to list if necessary.
+    if isinstance(signal_payload, np.ndarray):
+      signal_payload = signal_payload.tolist()
+
     return {
-      'timestamp': load_profile_point['dstart'],
-      'load_profile': load_profile_point['signal_payload'],
+      'timestamp': dstart,
+      'load_profile': signal_payload,
     }
 
   def _should_publish(self, topic: str) -> bool:
@@ -68,7 +77,7 @@ class MQTTPublishService(IMQTTPublishService):
 
     try:
       current_time = datetime.now()
-      payload = self._get_load_profile_payload(current_time)
+      payload = self._get_load_profile_payload()
 
       if payload:
         self.publish(topic, payload)
@@ -80,12 +89,13 @@ class MQTTPublishService(IMQTTPublishService):
   @handle_signal(SignalType.LOAD_DISTRIBUTION_UPDATED)
   def on_load_distribution_updated(self, sender: str) -> None:
     try:
-      current_time = datetime.now()
-      payload = self._get_load_profile_payload(current_time)
+      logging.info('MQTT - on_load_distribution_updated')
+      payload = self._get_load_profile_payload()
+      logging.info(f'PAYLOAD {payload}')
 
       if payload:
+        # The payload is now JSON-serializable after converting numpy arrays to lists.
         self.publish('load-profile', payload)
-        self.last_publish['load-profile'] = current_time
 
     except Exception as e:
       logging.error(f'Error handling LOAD_DISTRIBUTION_UPDATED signal: {e}')

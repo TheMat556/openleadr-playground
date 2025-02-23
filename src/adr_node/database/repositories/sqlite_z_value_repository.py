@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlite3 import DatabaseError
 import numpy as np
@@ -40,14 +40,21 @@ class SQLiteZValueRepository(IZValueRepository):
       raise
 
   def create_batch(self, entities: List[ZValueData]) -> List[ZValueData]:
-    """Create multiple z-value records in a batch."""
+    """
+    Create or update multiple z-value records in a batch.
+    Last updated: 2025-02-21 17:01:38 UTC by TheMat556
+    """
     if not entities:
       return []
 
     query = """
-            INSERT INTO z_values (timestamp, ven_id, z_value)
-            VALUES (?, ?, ?)
-        """
+        INSERT OR REPLACE INTO z_values (
+            timestamp,
+            ven_id,
+            z_value
+        )
+        VALUES (?, ?, ?)
+    """
     try:
       batch_values = [
         [entity.timestamp, entity.ven_id, entity.z_value] for entity in entities
@@ -55,7 +62,9 @@ class SQLiteZValueRepository(IZValueRepository):
       self.db_service.execute_batch(query, batch_values)
       return entities
     except DatabaseError as e:
-      logging.error(f'Failed to create z-value batch: {e}')
+      logging.error(
+        f'Failed to create z-value batch at {datetime.now(timezone.utc).isoformat()}: {str(e)}'
+      )
       raise
 
   def find_by_timestamp_range(
@@ -94,28 +103,19 @@ class SQLiteZValueRepository(IZValueRepository):
   def get_latest_z_values(
     self, time_window_ms: Optional[int] = None
   ) -> List[ZValueData]:
-    """Get the latest z-values for each VEN within optional time window."""
-    base_query = """
-            SELECT t1.timestamp, t1.ven_id, t1.z_value
-            FROM z_values t1
-            INNER JOIN (
-                SELECT ven_id, MAX(timestamp) as max_timestamp
-                FROM z_values
-                {where_clause}
-                GROUP BY ven_id
-            ) t2 ON t1.ven_id = t2.ven_id AND t1.timestamp = t2.max_timestamp
-        """
-
+    """
+    Modified to return all z-value records in the optional time window.
+    """
+    query = """
+          SELECT timestamp, ven_id, z_value
+          FROM z_values
+      """
     params = []
-    where_clause = ''
-
     if time_window_ms is not None:
       current_time = int(datetime.utcnow().timestamp() * 1000)
-      where_clause = 'WHERE timestamp >= ?'
+      query += ' WHERE timestamp >= ?'
       params.append(current_time - time_window_ms)
-
-    query = base_query.format(where_clause=where_clause)
-
+    query += ' ORDER BY timestamp ASC'
     try:
       results = self.db_service.execute_query(query, params)
       return [self._map_to_domain(row) for row in results]
@@ -126,31 +126,110 @@ class SQLiteZValueRepository(IZValueRepository):
   def save_z_values(
     self, ven_ids: NDArray[np.str_], z_values: NDArray[np.float64], timestamp: int
   ) -> Dict[str, Any]:
-    """Save z-values for multiple VENs."""
+    """
+    Save or update z-values for multiple VENs.
+    Last updated: 2025-02-21 16:55:54 UTC by TheMat556
+
+    Parameters
+    ----------
+    ven_ids : NDArray[np.str_]
+        Array of VEN IDs
+    z_values : NDArray[np.float64]
+        Array of z-values corresponding to VEN IDs
+    timestamp : int
+        Timestamp for the z-values
+
+    Returns
+    -------
+    Dict[str, Any]
+        Results of the save operation containing:
+        - success: bool indicating if operation was successful
+        - count: number of records processed
+        - updated: number of records updated
+        - inserted: number of records inserted
+        - failed: number of failed operations
+        - errors: list of error messages if any
+    """
     if len(ven_ids) != len(z_values):
       raise ValueError('Length mismatch between ven_ids and z_values arrays')
 
-    results = {'success': False, 'failed': 0, 'errors': []}
+    results = {
+      'success': False,
+      'count': 0,
+      'updated': 0,
+      'inserted': 0,
+      'failed': 0,
+      'errors': [],
+    }
 
     try:
-      query = """
-                INSERT INTO z_values (timestamp, ven_id, z_value)
-                VALUES (?, ?, ?)
-            """
+      # First check which records exist
+      check_query = """
+              SELECT ven_id
+              FROM z_values
+              WHERE timestamp = ? AND ven_id IN ({})
+          """.format(','.join('?' * len(ven_ids)))
 
-      batch_values = [
-        [timestamp, str(ven_id), float(z_value)]
-        for ven_id, z_value in zip(ven_ids, z_values)
-      ]
+      check_params = [timestamp] + list(ven_ids)
+      existing_records = self.db_service.execute_query(check_query, check_params)
+      existing_ven_ids = {record['ven_id'] for record in existing_records}
 
-      self.db_service.execute_batch(query, batch_values)
+      # Prepare batches for update and insert
+      update_batch = []
+      insert_batch = []
+
+      for ven_id, z_value in zip(ven_ids, z_values):
+        if ven_id in existing_ven_ids:
+          update_batch.append(
+            [float(z_value), datetime.now(timezone.utc), timestamp, str(ven_id)]
+          )
+        else:
+          insert_batch.append(
+            [
+              timestamp,
+              str(ven_id),
+              float(z_value),
+              datetime.now(timezone.utc),
+              None,  # updated_at
+            ]
+          )
+
+      # Execute updates
+      if update_batch:
+        update_query = """
+                  UPDATE z_values
+                  SET z_value = ?,
+                      updated_at = ?
+                  WHERE timestamp = ?
+                  AND ven_id = ?
+              """
+        self.db_service.execute_batch(update_query, update_batch)
+        results['updated'] = len(update_batch)
+
+      # Execute inserts
+      if insert_batch:
+        insert_query = """
+                  INSERT INTO z_values (
+                      timestamp,
+                      ven_id,
+                      z_value,
+                      created_at,
+                      updated_at
+                  )
+                  VALUES (?, ?, ?, ?, ?)
+              """
+        self.db_service.execute_batch(insert_query, insert_batch)
+        results['inserted'] = len(insert_batch)
+
       results['success'] = True
-      results['count'] = len(batch_values)
+      results['count'] = results['updated'] + results['inserted']
 
     except Exception as e:
       results['failed'] = len(ven_ids)
       results['errors'].append(str(e))
-      logging.error(f'Failed to save z-values: {e}')
+      logging.error(
+        f'Failed to save z-values at {datetime.now(timezone.utc).isoformat()}: {str(e)}'
+      )
 
     return results
 
@@ -159,3 +238,39 @@ class SQLiteZValueRepository(IZValueRepository):
     return ZValueData(
       timestamp=row['timestamp'], ven_id=row['ven_id'], z_value=row['z_value']
     )
+
+  def get_last_inserted_z_values(self, ven_ids: NDArray[np.str_]) -> List[ZValueData]:
+    """
+    Get the most recently inserted z-values for specified VEN IDs.
+    Last updated: 2025-02-21 17:34:03 UTC by TheMat556
+    """
+    try:
+      if len(ven_ids) == 0:
+        return []
+
+      query = """
+              SELECT z1.timestamp, z1.ven_id, z1.z_value
+              FROM z_values z1
+              INNER JOIN (
+                  SELECT ven_id, MAX(timestamp) as max_timestamp
+                  FROM z_values
+                  WHERE ven_id IN ({})
+                  GROUP BY ven_id
+              ) z2 ON z1.ven_id = z2.ven_id AND z1.timestamp = z2.max_timestamp
+              ORDER BY z1.timestamp DESC
+          """.format(','.join('?' * len(ven_ids)))
+
+      results = self.db_service.execute_query(query, list(ven_ids))
+
+      return [
+        ZValueData(
+          timestamp=row['timestamp'], ven_id=row['ven_id'], z_value=row['z_value']
+        )
+        for row in results
+      ]
+
+    except DatabaseError as e:
+      logging.error(
+        f'Failed to get last inserted z-values at {datetime.now(timezone.utc).isoformat()}: {str(e)}'
+      )
+      raise

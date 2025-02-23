@@ -108,7 +108,7 @@ def main():
 
   house_adr_config = AdrConfig(
     node_id=os.getenv('NODE_ID', 'house'),
-    ven_name=os.getenv('VEN_NAME', 'default_ven'),
+    ven_name=os.getenv('VEN_NAME', 'default_ven1'),
     vtn_url=os.getenv('DEV_VTN_URL', 'http://127.0.0.1:8080/0/OpenADR2/Simple/2.0b'),
   )
 

@@ -44,6 +44,12 @@ from src.adr_node.core.services.distribution.generators.time_interval import (
 from src.adr_node.core.services.distribution.services.distribution_service import (
   DistributionService,
 )
+from src.adr_node.core.services.h_profile.generators.h_profile_generator import (
+  HProfileGenerator,
+)
+from src.adr_node.database.repositories.sqlite_h_load_profile_service import (
+  SQLiteHLoadProfileRepository,
+)
 from src.adr_node.database.repositories.sqlite_consumption_repository import (
   SQLiteConsumptionRepository,
 )
@@ -55,6 +61,9 @@ from src.adr_node.database.repositories.sqlite_z_value_repository import (
 )
 from src.adr_node.database.services.core.consumption_service import ConsumptionService
 from src.adr_node.database.services.base.database_service import SQLiteDatabaseService
+from src.adr_node.database.services.core.h_load_profile_service import (
+  HLoadProfileService,
+)
 from src.adr_node.database.services.core.load_profile_service import LoadProfileService
 from src.adr_node.database.services.core.z_value_service import ZValueService
 from src.adr_node.event_bus.implementation.pydispatch_event_bus import (
@@ -105,6 +114,10 @@ class Container(containers.DeclarativeContainer):
     SQLiteZValueRepository, db_service=database_service
   )
 
+  h_load_profile_repository = providers.Singleton(
+    SQLiteHLoadProfileRepository, db_service=database_service
+  )
+
   load_profile_service = providers.Singleton(
     LoadProfileService, repository=load_profile_repository
   )
@@ -114,6 +127,10 @@ class Container(containers.DeclarativeContainer):
   )
 
   z_value_service = providers.Singleton(ZValueService, repository=z_value_repository)
+
+  h_load_profile_service = providers.Singleton(
+    HLoadProfileService, repository=h_load_profile_repository
+  )
 
   event_bus = providers.Singleton(PyDispatchEventBus)
 
@@ -127,14 +144,23 @@ class Container(containers.DeclarativeContainer):
   )
 
   virtual_end_node = providers.Singleton(
-    lambda config, load_profile_service, consumption_service, event_bus: VirtualEndNode(
-      config, load_profile_service, consumption_service, event_bus
+    lambda config,
+    load_profile_service,
+    consumption_service,
+    h_load_profile_service,
+    event_bus: VirtualEndNode(
+      config,
+      load_profile_service,
+      consumption_service,
+      h_load_profile_service,
+      event_bus,
     )
     if config and config.ven_name and config.vtn_url
     else None,
     load_profile_service=load_profile_service,
     consumption_service=consumption_service,
     config=virtual_end_node_config.provided,
+    h_load_profile_service=h_load_profile_service,
     event_bus=event_bus,
   )
 
@@ -153,11 +179,13 @@ class Container(containers.DeclarativeContainer):
     sqlite_consumption_service,
     load_profile_service,
     z_value_service,
+    h_load_profile_service,
     event_bus: VirtualTopNode(
       config=config,
       sqlite_consumption_service=sqlite_consumption_service,
       load_profile_service=load_profile_service,
       z_value_service=z_value_service,
+      h_load_profile_service=h_load_profile_service,
       event_bus=event_bus,
     )
     if config and config.http_host and config.http_port and config.path_prefix
@@ -166,6 +194,7 @@ class Container(containers.DeclarativeContainer):
     sqlite_consumption_service=consumption_service,
     load_profile_service=load_profile_service,
     z_value_service=z_value_service,
+    h_load_profile_service=h_load_profile_service,
     event_bus=event_bus,
   )
 
@@ -182,6 +211,12 @@ class Container(containers.DeclarativeContainer):
     adr_config=config.adr_config,
     virtual_end_node=virtual_end_node,
     virtual_top_node=virtual_top_node,
+  )
+
+  h_profile_generator = providers.Singleton(
+    HProfileGenerator,
+    h_load_profile_service=h_load_profile_service,
+    event_bus=event_bus,
   )
 
   slider_repository = providers.Singleton(
@@ -209,9 +244,7 @@ class Container(containers.DeclarativeContainer):
   distribution_service = providers.Singleton(
     DistributionService,
     resource_calculator=resource_calculator,
-    time_interval_generator=time_interval_generator,
-    profile_generator=profile_generator,
-    consumption_service=consumption_service,
+    h_load_profile_service=h_load_profile_service,
     load_profile_service=load_profile_service,
     z_value_service=z_value_service,
     parameters=distribution_params,
@@ -292,6 +325,12 @@ class Container(containers.DeclarativeContainer):
       and container.mqtt_service()
     ):
       runnable_services.append(container.mqtt_service())
+
+    if (
+      application_config.adr_config.ven_name
+      and not application_config.adr_config.vtn_name
+    ):
+      runnable_services.append(container.h_profile_generator())
 
     if (
       application_config.energy_control_panel_config is not None
