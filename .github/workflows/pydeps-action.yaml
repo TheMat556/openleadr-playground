@@ -1,0 +1,42 @@
+name: Architecture Analysis
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  analyze-architecture:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pydeps import-linter networkx matplotlib python-igraph plotly
+
+    - name: Generate architecture diagram
+      run: |
+        mkdir -p reports
+        pydeps src -o reports/architecture.svg -T svg --cluster --noshow
+
+    - name: Run Import Linter
+      run: |
+        if [ -f .importlinter ]; then
+          lint-imports --report-format json --output-file reports/import_linter.json || echo "Import Linter checks failed, but continuing..."
+          lint-imports || echo "Import Linter checks failed, but continuing..."
+        else
+          echo "No .importlinter file found, skipping"
+        fi
+
+    - name: Upload architecture reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: architecture-reports
+        path: reports/
