@@ -33,6 +33,8 @@ plotly = "^6.0.0"
 yappi = "*"
 ruff = "*"
 pre-commit = "*"
+pyan3 = "*"
+pydeps = "*"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -45,6 +47,8 @@ start-intermediate-node = "src.util.runner.start_intermediate_node:main"
 start-top-node = "src.util.runner.start_top_node:main"
 start-network-dashboard = "src.util.runner.start_network_dashboard:main"
 create-docker-compose = "src.util.helper.create_docker_compose:main"
+check-module-pyan = "scripts.pyan_module_check:main"
+check-module-pydeps = "scripts.pydeps_module_check:main"
 
 [tool.ruff]
 exclude = [
