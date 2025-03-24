@@ -1,0 +1,29 @@
+name: Modularitäts-Check
+
+on: [push, pull_request]
+
+jobs:
+  modularity-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install tools
+        run: |
+          pip install radon pylint
+
+      - name: Run pylint modularity check
+        run: |
+          pylint your_project/ --exit-zero > pylint_report.txt
+          cat pylint_report.txt
+
+      - name: Run radon raw metrics
+        run: |
+          radon raw your_project/ > radon_raw.txt
+          cat radon_raw.txt
