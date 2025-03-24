@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
+# Add permissions needed for commenting
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   code-metrics:
     runs-on: ubuntu-latest
@@ -46,12 +52,11 @@ jobs:
           --cc-avg-file metrics_output/cc_avg.txt \
           --cc-total-file metrics_output/cc_total.txt \
           --output metrics_output/report.md \
-          --date "2025-03-24 14:47:45" \
-          --user "TheMat556"
+          --user "${{ github.actor }}"
 
     - name: Post metrics comment
-      uses: peter-evans/create-or-update-comment@v2
       if: github.event_name == 'pull_request'
+      uses: peter-evans/create-or-update-comment@v2
       with:
         issue-number: ${{ github.event.pull_request.number }}
         body-file: metrics_output/report.md
