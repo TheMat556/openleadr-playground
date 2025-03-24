@@ -25,7 +25,7 @@ jobs:
         pyan3 $(find . -name "*.py") --uses --no-defines --colored --grouped --annotated --dot > reports/module_dependencies.dot
         dot -Tpng reports/module_dependencies.dot -o reports/module_dependencies.png
     - name: Upload module graph
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: module-graph
         path: reports/module_dependencies.png
