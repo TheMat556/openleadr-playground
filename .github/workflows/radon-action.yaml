@@ -11,17 +11,236 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install radon
+
     - name: Analyze module maintainability
+      id: mi_analysis
       run: |
+        # Run radon and store the output
         radon mi . --json > module_metrics.json
+
+        # Process the JSON into a markdown table
+        echo "MI_TABLE<<EOF" >> $GITHUB_ENV
+        echo "| Module | MI Score | Rank |" >> $GITHUB_ENV
+        echo "|--------|----------|------|" >> $GITHUB_ENV
+
+        python -c '
+        import json
+        import os
+
+        def rank_to_emoji(rank):
+            ranks = {"A": "🟢", "B": "🟡", "C": "🟠", "D": "🔴", "F": "⚫"}
+            return ranks.get(rank, "⚪")
+
+        try:
+            with open("module_metrics.json", "r") as f:
+                data = json.load(f)
+
+            # Sort by MI score in descending order
+            sorted_modules = sorted(data.items(), key=lambda x: x[1]["mi"], reverse=True)
+
+            for module, metrics in sorted_modules[:10]:  # Show top 10 modules
+                if module.endswith((".py", ".js", ".ts", ".java", ".c", ".cpp")):
+                    mi_score = metrics["mi"]
+                    rank = metrics.get("rank", "N/A")
+                    print(f"| {module} | {mi_score:.1f} | {rank_to_emoji(rank)} {rank} |")
+        except Exception as e:
+            print(f"| Error processing metrics | {str(e)} | - |")
+        ' >> $GITHUB_ENV
+
+        echo "EOF" >> $GITHUB_ENV
+
     - name: Check module cohesion
+      id: cc_analysis
       run: |
-        radon cc . --average --total
+        # Run radon and store the output
+        radon cc . --json > complexity_metrics.json
+
+        # Process the JSON into a markdown table
+        echo "CC_TABLE<<EOF" >> $GITHUB_ENV
+        echo "| Module | Average CC | Highest CC | Risk |" >> $GITHUB_ENV
+        echo "|--------|------------|------------|------|" >> $GITHUB_ENV
+
+        python -c '
+        import json
+        import os
+        import statistics
+
+        def get_risk_level(cc):
+            if cc <= 5:
+                return "🟢 Low"
+            elif cc <= 10:
+                return "🟡 Moderate"
+            elif cc <= 20:
+                return "🟠 High"
+            else:
+                return "🔴 Very High"
+
+        try:
+            with open("complexity_metrics.json", "r") as f:
+                data = json.load(f)
+
+            # Calculate metrics for each module
+            module_metrics = {}
+            for module, functions in data.items():
+                if not functions:
+                    continue
+
+                complexity_values = [func["complexity"] for func in functions]
+                if complexity_values:
+                    avg_cc = statistics.mean(complexity_values)
+                    max_cc = max(complexity_values)
+                    module_metrics[module] = {
+                        "avg_cc": avg_cc,
+                        "max_cc": max_cc,
+                        "risk": get_risk_level(max_cc)
+                    }
+
+            # Sort by highest complexity
+            sorted_modules = sorted(module_metrics.items(), key=lambda x: x[1]["max_cc"], reverse=True)
+
+            for module, metrics in sorted_modules[:10]:  # Show top 10 modules
+                print(f"| {module} | {metrics['avg_cc']:.1f} | {metrics['max_cc']} | {metrics['risk']} |")
+        except Exception as e:
+            print(f"| Error processing complexity | {str(e)} | - | - |")
+        ' >> $GITHUB_ENV
+
+        echo "EOF" >> $GITHUB_ENV
+
+        # Calculate overall metrics
+        echo "OVERALL_AVG_CC<<EOF" >> $GITHUB_ENV
+        radon cc . --average | grep "Average complexity" | awk '{print $3}' >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+        echo "OVERALL_TOTAL_CC<<EOF" >> $GITHUB_ENV
+        radon cc . --total | grep "Total complexity" | awk '{print $3}' >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+
+    - name: Generate metrics report
+      id: generate_report
+      run: |
+        # Get PR number if this is a PR
+        PR_NUMBER=${{ github.event.pull_request.number }}
+        COMMENT_TYPE="PR"
+
+        if [ -z "$PR_NUMBER" ]; then
+          # This is a push event
+          PR_NUMBER=${{ github.sha }}
+          COMMENT_TYPE="Commit"
+        fi
+
+        cat > metrics_report.md << EOL
+        # 📊 Code Metrics Report
+
+        > Automated analysis powered by [Radon](https://radon.readthedocs.io/)
+
+        ## 🛠️ Metrics Overview
+
+        | Metric | Value | Status |
+        |--------|-------|--------|
+        | 📈 **Maintainability Index** | Analyzed modules | ✅ Completed |
+        | 🔄 **Cyclomatic Complexity** | Avg: ${{ env.OVERALL_AVG_CC }} / Total: ${{ env.OVERALL_TOTAL_CC }} | ✅ Completed |
+
+        ## 📋 Top Modules by Maintainability
+
+        ${{ env.MI_TABLE }}
+
+        ## 📋 Top Modules by Complexity
+
+        ${{ env.CC_TABLE }}
+
+        ## 📚 Interpretation Guide
+
+        - **Maintainability Index (MI)**
+          - 100-20: 🟢 Highly maintainable (A-B)
+          - 19-10: 🟠 Moderately maintainable (C)
+          - 9-0: 🔴 Difficult to maintain (D-F)
+
+        - **Cyclomatic Complexity (CC)**
+          - 1-5: 🟢 Simple, low risk
+          - 6-10: 🟡 Moderate complexity
+          - 11-20: 🟠 High complexity
+          - 21+: 🔴 Very high complexity, refactor recommended
+
+        ---
+        *Generated on: 2025-03-24 by GitHub Actions*
+        EOL
+
+        echo "report=$(cat metrics_report.md)" >> $GITHUB_OUTPUT
+
+    - name: Post metrics comment
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+
+          // Read the report from the file
+          const reportContent = fs.readFileSync('metrics_report.md', 'utf8');
+
+          async function upsertComment(owner, repo, issue_number, body) {
+            // Try to find existing comment by this action
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Code Metrics Report')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body
+              });
+            }
+          }
+
+          const context = github.context;
+          const repo = context.repo;
+
+          if (context.payload.pull_request) {
+            // This is a PR
+            await upsertComment(
+              repo.owner,
+              repo.repo,
+              context.payload.pull_request.number,
+              reportContent
+            );
+          } else {
+            // This is a push event - create a comment on the commit
+            const commit_sha = context.sha;
+
+            // For commit comments, we need to use a different API
+            await github.rest.repos.createCommitComment({
+              owner: repo.owner,
+              repo: repo.repo,
+              commit_sha,
+              body: reportContent
+            });
+          }
