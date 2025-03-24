@@ -52,7 +52,9 @@ jobs:
           --cc-avg-file metrics_output/cc_avg.txt \
           --cc-total-file metrics_output/cc_total.txt \
           --output metrics_output/report.md \
-          --user "${{ github.actor }}"
+          --date "2025-03-24 14:57:59" \
+          --user "TheMat556" \
+          --show-top 10
 
     - name: Post metrics comment
       if: github.event_name == 'pull_request'
