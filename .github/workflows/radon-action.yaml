@@ -1,9 +1,10 @@
-name: Modularitäts-Check
+# .github/workflows/modularity-check.yml
+name: Modularity Check
 
 on: [push, pull_request]
 
 jobs:
-  modularity-check:
+  check-modularity:
     runs-on: ubuntu-latest
 
     steps:
@@ -12,18 +13,16 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Install tools
+      - name: Install Poetry
         run: |
-          pip install radon pylint
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Run pylint modularity check
-        run: |
-          pylint your_project/ --exit-zero > pylint_report.txt
-          cat pylint_report.txt
+      - name: Install dependencies
+        run: poetry install --with dev
 
-      - name: Run radon raw metrics
+      - name: Run radon analysis
         run: |
-          radon raw your_project/ > radon_raw.txt
-          cat radon_raw.txt
+          poetry run radon raw src/ --summary
