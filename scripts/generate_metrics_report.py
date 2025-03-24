@@ -1,35 +1,3 @@
-name: Code Metrics
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  code-metrics:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install radon
-
-    - name: Ensure scripts directory exists
-      run: mkdir -p scripts metrics_output
-
-    - name: Create metrics report generator script
-      run: |
-        cat > scripts/generate_metrics_report.py << 'EOL'
 #!/usr/bin/env python3
 """
 Code Metrics Report Generator
@@ -44,17 +12,13 @@ import sys
 import argparse
 from datetime import datetime
 
+
 def format_mi_rank(rank):
     """Format maintainability index rank with emoji"""
-    rank_emoji = {
-        "A": "🟢",
-        "B": "🟢",
-        "C": "🟠",
-        "D": "🔴",
-        "F": "🔴"
-    }
+    rank_emoji = {"A": "🟢", "B": "🟢", "C": "🟠", "D": "🔴", "F": "🔴"}
     emoji = rank_emoji.get(rank, "⚪")
     return f"{emoji} {rank}"
+
 
 def get_risk_level(cc):
     """Get risk level based on cyclomatic complexity"""
@@ -67,6 +31,7 @@ def get_risk_level(cc):
     else:
         return "🔴 Very High"
 
+
 def process_maintainability_data(mi_file_path):
     """Process maintainability index data from Radon output"""
     mi_table = "| Module | MI Score | Rank |\n|--------|----------|------|\n"
@@ -76,11 +41,16 @@ def process_maintainability_data(mi_file_path):
 
         # Filter and sort modules
         sorted_modules = sorted(
-            [(module, data) for module, data in mi_data.items()
-             if module.endswith((".py", ".js", ".ts", ".java", ".c", ".cpp"))],
+            [
+                (module, data)
+                for module, data in mi_data.items()
+                if module.endswith((".py", ".js", ".ts", ".java", ".c", ".cpp"))
+            ],
             key=lambda x: x[1]["mi"],
-            reverse=True
-        )[:10]  # Top 10 modules
+            reverse=True,
+        )[
+            :10
+        ]  # Top 10 modules
 
         for module, data in sorted_modules:
             mi_score = data["mi"]
@@ -91,6 +61,7 @@ def process_maintainability_data(mi_file_path):
 
     return mi_table
 
+
 def process_complexity_data(cc_file_path):
     """Process cyclomatic complexity data from Radon output"""
     cc_table = "| Module | Average CC | Highest CC | Risk |\n|--------|------------|------------|------|\n"
@@ -100,7 +71,9 @@ def process_complexity_data(cc_file_path):
 
         module_metrics = {}
         for module, functions in cc_data.items():
-            if not functions or not module.endswith((".py", ".js", ".ts", ".java", ".c", ".cpp")):
+            if not functions or not module.endswith(
+                (".py", ".js", ".ts", ".java", ".c", ".cpp")
+            ):
                 continue
 
             cc_values = [func["complexity"] for func in functions]
@@ -110,10 +83,12 @@ def process_complexity_data(cc_file_path):
                 module_metrics[module] = {
                     "avg_cc": avg_cc,
                     "max_cc": max_cc,
-                    "risk": get_risk_level(max_cc)
+                    "risk": get_risk_level(max_cc),
                 }
 
-        sorted_modules = sorted(module_metrics.items(), key=lambda x: x[1]["max_cc"], reverse=True)[:10]
+        sorted_modules = sorted(
+            module_metrics.items(), key=lambda x: x[1]["max_cc"], reverse=True
+        )[:10]
 
         for module, metrics in sorted_modules:
             cc_table += f"| {module} | {metrics['avg_cc']:.1f} | {metrics['max_cc']} | {metrics['risk']} |\n"
@@ -121,6 +96,7 @@ def process_complexity_data(cc_file_path):
         cc_table += f"| Error processing complexity data | {str(e)} | - | - |\n"
 
     return cc_table
+
 
 def extract_metric_from_file(file_path, search_text):
     """Extract a metric from a text file"""
@@ -133,15 +109,26 @@ def extract_metric_from_file(file_path, search_text):
         pass
     return "N/A"
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Generate code metrics report')
-    parser.add_argument('--mi-file', required=True, help='Path to maintainability index JSON file')
-    parser.add_argument('--cc-file', required=True, help='Path to cyclomatic complexity JSON file')
-    parser.add_argument('--cc-avg-file', required=True, help='Path to average complexity file')
-    parser.add_argument('--cc-total-file', required=True, help='Path to total complexity file')
-    parser.add_argument('--output', required=True, help='Path to output report file')
-    parser.add_argument('--date', default=None, help='Report date (YYYY-MM-DD format)')
-    parser.add_argument('--user', default='GitHub Actions', help='User who generated the report')
+    parser = argparse.ArgumentParser(description="Generate code metrics report")
+    parser.add_argument(
+        "--mi-file", required=True, help="Path to maintainability index JSON file"
+    )
+    parser.add_argument(
+        "--cc-file", required=True, help="Path to cyclomatic complexity JSON file"
+    )
+    parser.add_argument(
+        "--cc-avg-file", required=True, help="Path to average complexity file"
+    )
+    parser.add_argument(
+        "--cc-total-file", required=True, help="Path to total complexity file"
+    )
+    parser.add_argument("--output", required=True, help="Path to output report file")
+    parser.add_argument("--date", default=None, help="Report date (YYYY-MM-DD format)")
+    parser.add_argument(
+        "--user", default="GitHub Actions", help="User who generated the report"
+    )
 
     args = parser.parse_args()
 
@@ -195,65 +182,12 @@ def main():
 """
 
     # Write the report to file
-    with open(args.output, 'w') as f:
+    with open(args.output, "w") as f:
         f.write(report)
 
     print(f"Report generated successfully: {args.output}")
     return 0
 
+
 if __name__ == "__main__":
     sys.exit(main())
-EOL
-        chmod +x scripts/generate_metrics_report.py
-
-    - name: Run code metrics analysis
-      run: |
-        # Create output directory
-        mkdir -p metrics_output
-
-        # Run radon maintainability index
-        radon mi . --json > metrics_output/mi.json
-
-        # Run radon cyclomatic complexity
-        radon cc . --json > metrics_output/cc.json
-
-        # Get summary stats
-        radon cc . --average > metrics_output/cc_avg.txt
-        radon cc . --total > metrics_output/cc_total.txt
-
-        # Generate the report
-        python scripts/generate_metrics_report.py \
-          --mi-file metrics_output/mi.json \
-          --cc-file metrics_output/cc.json \
-          --cc-avg-file metrics_output/cc_avg.txt \
-          --cc-total-file metrics_output/cc_total.txt \
-          --output metrics_output/report.md \
-          --date "2025-03-24 14:43:08" \
-          --user "${GITHUB_ACTOR:-GitHub Actions}"
-
-    - name: Post metrics comment
-      uses: peter-evans/create-or-update-comment@v2
-      if: github.event_name == 'pull_request'
-      with:
-        issue-number: ${{ github.event.pull_request.number }}
-        body-file: metrics_output/report.md
-        edit-mode: replace
-
-    - name: Post metrics as commit comment
-      if: github.event_name == 'push'
-      uses: actions/github-script@v6
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        script: |
-          const fs = require('fs');
-
-          // Read the report from the file
-          const reportContent = fs.readFileSync('metrics_output/report.md', 'utf8');
-
-          // For commit comments, we need to use a different API
-          await github.rest.repos.createCommitComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            commit_sha: context.sha,
-            body: reportContent
-          });
