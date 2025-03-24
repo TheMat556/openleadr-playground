@@ -18,11 +18,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyan graphviz networkx matplotlib
+        pip install pyan3 graphviz networkx matplotlib
     - name: Generate module graph with pyan
       run: |
         mkdir -p reports
-        find src -name "*.py" -type f | xargs pyan --uses --no-defines --colored --grouped --dot > reports/module_dependencies.dot
+        # Run pyan as a Python module to avoid PATH issues
+        find src -name "*.py" -type f > python_files.txt
+        python -m pyan.scripts.pyan $(cat python_files.txt) --uses --no-defines --colored --grouped --dot > reports/module_dependencies.dot || python -m pyan $(cat python_files.txt) --uses --no-defines --colored --grouped --dot > reports/module_dependencies.dot || pyan3 $(cat python_files.txt) --uses --no-defines --colored --grouped --dot > reports/module_dependencies.dot
+
+        # Convert DOT to PNG
         dot -Tpng reports/module_dependencies.dot -o reports/module_dependencies.png
     - name: Upload module graph
       uses: actions/upload-artifact@v4
