@@ -18,12 +18,11 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyan3 graphviz
-    - name: Generate module graph
+        pip install pydeps graphviz networkx matplotlib
+    - name: Generate module graph with pydeps
       run: |
         mkdir -p reports
-        pyan3 $(find . -name "*.py") --uses --no-defines --colored --grouped --annotated --dot > reports/module_dependencies.dot
-        dot -Tpng reports/module_dependencies.dot -o reports/module_dependencies.png
+        pydeps src --max-bacon=10 --cluster --noshow --output-format png --output-file reports/module_dependencies.png
     - name: Upload module graph
       uses: actions/upload-artifact@v4
       with:
