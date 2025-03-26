@@ -16,7 +16,7 @@ jobs:
   code-metrics:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -50,7 +50,7 @@ jobs:
           --user "${{ github.actor }}"
 
     - name: Upload metrics artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: code-metrics-report
         path: metrics_output/
