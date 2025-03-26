@@ -41,13 +41,14 @@ jobs:
         # Run radon cyclomatic complexity
         radon cc . --json > metrics_output/cc.json
 
-        # Generate the report using our new script
-        python code_metrics_report.py \
+        # Generate the report using our script (located in scripts directory)
+        python scripts/code_metrics_report.py \
           --mi-file metrics_output/mi.json \
           --cc-file metrics_output/cc.json \
           --output metrics_output/report.md \
           --output-dir metrics_output \
-          --user "${{ github.actor }}"
+          --date "2025-03-26 17:35:30" \
+          --user "TheMat556"
 
     - name: Upload metrics artifacts
       uses: actions/upload-artifact@v4
