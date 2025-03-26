@@ -47,8 +47,9 @@ jobs:
           --cc-file metrics_output/cc.json \
           --output metrics_output/report.md \
           --output-dir metrics_output \
-          --date "2025-03-26 17:35:30" \
-          --user "TheMat556"
+          --date "2025-03-26 17:58:41" \
+          --user "TheMat556" \
+          --top-n 15
 
     - name: Upload metrics artifacts
       uses: actions/upload-artifact@v4

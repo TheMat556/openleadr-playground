@@ -12,6 +12,10 @@ import sys
 import argparse
 from datetime import datetime
 from collections import Counter, defaultdict
+import matplotlib
+
+# Use Agg backend for headless environments like GitHub Actions
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import base64
@@ -37,60 +41,76 @@ def format_mi_rank(rank):
     return f"{emoji} {rank}"
 
 
-def create_complexity_bar_chart(module_data, output_path="complexity_chart.png"):
+def create_complexity_bar_chart(
+    module_data, output_path="complexity_chart.png", top_n=15
+):
     """Create a bar chart showing top modules by complexity"""
-    # Sort and take top 10 modules
-    sorted_data = sorted(
-        module_data.items(), key=lambda x: x[1]["max_cc"], reverse=True
-    )[:10]
+    try:
+        print(f"Generating complexity chart with {len(module_data)} modules")
 
-    modules = [
-        m[0].split("/")[-1] for m in sorted_data
-    ]  # Just the filename for readability
-    complexities = [m[1]["max_cc"] for m in sorted_data]
+        # Sort and take top n modules
+        sorted_data = sorted(
+            module_data.items(), key=lambda x: x[1]["max_cc"], reverse=True
+        )[:top_n]
 
-    # Create colors based on complexity levels
-    colors = []
-    for cc in complexities:
-        if cc <= 5:
-            colors.append("green")
-        elif cc <= 10:
-            colors.append("yellow")
-        elif cc <= 20:
-            colors.append("orange")
-        else:
-            colors.append("red")
+        if not sorted_data:
+            print("No modules with complexity data found")
+            return None
 
-    plt.figure(figsize=(10, 6))
-    bars = plt.barh(modules, complexities, color=colors)
+        modules = [
+            m[0].split("/")[-1] for m in sorted_data
+        ]  # Just the filename for readability
+        complexities = [m[1]["max_cc"] for m in sorted_data]
 
-    # Add complexity values at the end of each bar
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(
-            width + 0.3,
-            bar.get_y() + bar.get_height() / 2,
-            f"{width:.0f}",
-            ha="left",
-            va="center",
-            fontweight="bold",
-        )
+        print(f"Top modules: {modules}")
+        print(f"Complexities: {complexities}")
 
-    plt.xlabel("Cyclomatic Complexity")
-    plt.title("Top 10 Modules by Complexity")
-    plt.tight_layout()
+        # Create colors based on complexity levels
+        colors = []
+        for cc in complexities:
+            if cc <= 5:
+                colors.append("green")
+            elif cc <= 10:
+                colors.append("yellow")
+            elif cc <= 20:
+                colors.append("orange")
+            else:
+                colors.append("red")
 
-    # Save to file
-    plt.savefig(output_path)
+        # Create the chart - adjust figure height for more modules
+        plt.figure(figsize=(10, 8))
+        bars = plt.barh(modules, complexities, color=colors)
 
-    # Also return as base64 for embedding in Markdown
-    img_buffer = BytesIO()
-    plt.savefig(img_buffer, format="png")
-    img_buffer.seek(0)
-    img_data = base64.b64encode(img_buffer.read()).decode("utf-8")
-    plt.close()
+        # Add complexity values at the end of each bar
+        for bar in bars:
+            width = bar.get_width()
+            plt.text(
+                width + 0.3,
+                bar.get_y() + bar.get_height() / 2,
+                f"{width:.0f}",
+                ha="left",
+                va="center",
+                fontweight="bold",
+            )
 
-    return img_data
+        plt.xlabel("Cyclomatic Complexity")
+        plt.title(f"Top {top_n} Modules by Complexity")
+        plt.tight_layout()
+
+        # Save to file
+        print(f"Saving chart to {output_path}")
+        plt.savefig(output_path)
+        print(f"Chart saved successfully")
+
+        plt.close()
+        return output_path
+
+    except Exception as e:
+        print(f"Error generating chart: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
+        return None
 
 
 def generate_ascii_bar(value, max_value, max_length=40):
@@ -156,6 +176,9 @@ def process_complexity_data(cc_file_path):
 
     except Exception as e:
         print(f"Error processing complexity data: {e}")
+        import traceback
+
+        traceback.print_exc()
         return {}, 0, 0
 
 
@@ -189,7 +212,48 @@ def process_maintainability_data(mi_file_path):
 
     except Exception as e:
         print(f"Error processing maintainability data: {e}")
+        import traceback
+
+        traceback.print_exc()
         return {}, 0
+
+
+def create_text_bar_chart(module_data, top_n=15):
+    """Create a text-based bar chart for GitHub comments"""
+    if not module_data:
+        return "No complexity data available for visualization."
+
+    # Sort and get top n modules by complexity
+    sorted_data = sorted(
+        module_data.items(), key=lambda x: x[1]["max_cc"], reverse=True
+    )[:top_n]
+
+    # Find max complexity for scaling
+    max_cc = max(m[1]["max_cc"] for m in sorted_data) if sorted_data else 0
+
+    chart = f"## Top {top_n} Modules by Complexity\n\n```\n"
+
+    # Create bars
+    for module, metrics in sorted_data:
+        short_name = module.split("/")[-1]  # Just the filename for readability
+        cc = metrics["max_cc"]
+        bar = generate_ascii_bar(cc, max_cc, 40)
+        risk_indicator = ""
+
+        if cc <= 5:
+            risk_indicator = "🟢"
+        elif cc <= 10:
+            risk_indicator = "🟡"
+        elif cc <= 20:
+            risk_indicator = "🟠"
+        else:
+            risk_indicator = "🔴"
+
+        # Format: filename [bar] value risk
+        chart += f"{short_name:<30} {bar} {cc:>3} {risk_indicator}\n"
+
+    chart += "```\n"
+    return chart
 
 
 def main():
@@ -212,6 +276,9 @@ def main():
     parser.add_argument(
         "--user", default="GitHub Actions", help="User who generated the report"
     )
+    parser.add_argument(
+        "--top-n", type=int, default=15, help="Number of top modules to show"
+    )
 
     args = parser.parse_args()
 
@@ -222,18 +289,23 @@ def main():
     module_cc_metrics, avg_complexity, cci = process_complexity_data(args.cc_file)
     module_mi_metrics, mi = process_maintainability_data(args.mi_file)
 
-    # Generate complexity bar chart
+    # Generate complexity chart
     chart_path = os.path.join(args.output_dir, "complexity_chart.png")
 
-    # Only create chart if we have data
-    bar_chart_md = ""
-    if module_cc_metrics:
-        img_data = create_complexity_bar_chart(module_cc_metrics, chart_path)
-        bar_chart_md = f"""
-## Top 10 Modules by Complexity (Visual)
+    # Create a text-based chart that works in GitHub comments
+    text_chart = create_text_bar_chart(module_cc_metrics, args.top_n)
 
-![Complexity Chart](data:image/png;base64,{img_data})
-"""
+    # Try to create image chart for artifacts
+    image_chart_created = False
+    try:
+        image_path = create_complexity_bar_chart(
+            module_cc_metrics, chart_path, args.top_n
+        )
+        image_chart_created = image_path is not None
+        if image_chart_created:
+            print(f"Image chart created at {image_path}")
+    except Exception as e:
+        print(f"Warning: Failed to create image chart: {e}")
 
     # Sort modules by complexity for the table
     sorted_by_cc = sorted(
@@ -243,8 +315,8 @@ def main():
     # Create the complexity table
     cc_table = "| Module | Max CC | Avg CC | Risk | Highest Complexity Function |\n|--------|--------|--------|------|-------------------------|\n"
 
-    # Add top 10 modules to table
-    for module, metrics in sorted_by_cc[:10]:
+    # Add top N modules to table
+    for module, metrics in sorted_by_cc[: args.top_n]:
         short_module = module.split("/")[-1]  # Use just the filename for readability
         cc_table += f"| {short_module} | {metrics['max_cc']} | {metrics['avg_cc']:.1f} | {metrics['risk']} | `{metrics['highest_function']}` |\n"
 
@@ -262,9 +334,9 @@ def main():
 | Cyclomatic Complexity Index | {cci:.2f} | Weighted complexity score (lower is better) |
 | Maintainability Index | {mi:.2f} | Overall maintainability score (higher is better) |
 
-{bar_chart_md}
+{text_chart}
 
-## Top 10 Most Complex Modules
+## Top {args.top_n} Most Complex Modules
 
 {cc_table}
 
