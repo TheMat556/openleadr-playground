@@ -1,4 +1,4 @@
-name: Code Metrics
+name: Code Complexity Metrics
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install radon
+        pip install radon matplotlib numpy
 
     - name: Run code metrics analysis
       run: |
@@ -41,20 +41,19 @@ jobs:
         # Run radon cyclomatic complexity
         radon cc . --json > metrics_output/cc.json
 
-        # Get summary stats
-        radon cc . --average > metrics_output/cc_avg.txt
-        radon cc . --total > metrics_output/cc_total.txt
-
-        # Generate the report using our script
-        python scripts/generate_metrics_report.py \
+        # Generate the report using our new script
+        python code_metrics_report.py \
           --mi-file metrics_output/mi.json \
           --cc-file metrics_output/cc.json \
-          --cc-avg-file metrics_output/cc_avg.txt \
-          --cc-total-file metrics_output/cc_total.txt \
           --output metrics_output/report.md \
-          --date "2025-03-24 14:57:59" \
-          --user "TheMat556" \
-          --show-top 10
+          --output-dir metrics_output \
+          --user "${{ github.actor }}"
+
+    - name: Upload metrics artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-metrics-report
+        path: metrics_output/
 
     - name: Post metrics comment
       if: github.event_name == 'pull_request'
