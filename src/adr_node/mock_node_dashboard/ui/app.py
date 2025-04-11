@@ -1,5 +1,4 @@
-from datetime import datetime, timezone
-
+from datetime import datetime, timezone, timedelta
 from src.adr_node.core.interfaces.irunable import IRunnable
 from src.adr_node.database.interfaces.services.iconsumption_service import (
   IConsumptionService,
@@ -18,6 +17,7 @@ import threading
 from typing import List, Dict, Any
 import logging
 import queue
+import random
 
 
 class EnergyControlPanel(IRunnable):
@@ -62,6 +62,9 @@ class EnergyControlPanel(IRunnable):
     self.chart = ChartComponent()
     self.slider_grid = SliderGrid(num_sliders=num_sliders, max_value=max_slider_value)
     self.interface = self.create_interface()
+
+    # Schedule the periodic task
+    self._schedule_periodic_task()
 
   def update_chart(self, *slider_values: List[int]) -> gr.Plot:
     """
@@ -240,3 +243,30 @@ class EnergyControlPanel(IRunnable):
     except Exception as e:
       self.logger.error(f'Error stopping Threaded Energy Control Panel: {e}')
       raise
+
+  def _adjust_and_save_slider_values(self):
+    """
+    Adjust the slider values by +/- 10% and save them.
+    """
+    try:
+      current_values = self.slider_service.load_values()
+      adjusted_values = [
+        value * (1 + random.uniform(-0.10, 0.10)) for value in current_values
+      ]
+      self.slider_service.save_values(adjusted_values)
+      self.logger.info('Adjusted and saved slider values')
+    except Exception as e:
+      self.logger.error(f'Error adjusting and saving slider values: {e}')
+
+  def _schedule_periodic_task(self):
+    """
+    Schedule the periodic task to run every 24 minutes.
+    """
+    def run_periodic_task():
+      while not self._stop_event.is_set():
+        self._adjust_and_save_slider_values()
+        self._stop_event.wait(24 * 60)  # Wait for 24 minutes
+
+    periodic_thread = threading.Thread(target=run_periodic_task)
+    periodic_thread.daemon = True
+    periodic_thread.start()

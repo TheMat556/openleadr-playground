@@ -249,7 +249,7 @@ class VirtualEndNode(IVirtualEndNode):
             reading_type=enums.READING_TYPE.SUMMED,
             resource_id=BASE_RESOURCE_ID,
             measurement='power',
-            sampling_rate=timedelta(seconds=10),
+            sampling_rate=timedelta(seconds=15),
             callback=self._get_current_consumption,
           )
         ]
