@@ -24,10 +24,10 @@ MQTT_CONFIG_WRITTEN = False
 
 # Validate MQTT environment variables
 required_mqtt_vars = [
-  'MQTT_BROKER_URL',
-  'MQTT_USERNAME',
-  'MQTT_PASSWORD',
-  'MQTT_PORT',
+  'PRIVATE_MQTT_BROKER_URL',
+  'PRIVATE_MQTT_USERNAME',
+  'PRIVATE_MQTT_PASSWORD',
+  'PRIVATE_MQTT_PORT',
 ]
 
 
@@ -64,7 +64,7 @@ class PortRegistry:
 class IPAllocator:
   """Manages IP address allocation within a subnet."""
 
-  def __init__(self, base_ip: str = '172.18.0'):
+  def __init__(self, base_ip: str = '172.30.0'):
     try:
       octets = base_ip.split('.')
       if len(octets) != 3 or not all(
@@ -117,7 +117,7 @@ def generate_node(
   port_registry: PortRegistry,
   ip_allocator: IPAllocator,
   parent_path_prefix: Optional[str] = None,
-  base_port: int = 8080,
+  base_port: int = 8081,
   gradio_port: int = 7862,
   rest_api_port: int = 5000,
   parent_ports: Optional[List[str]] = None,
@@ -185,10 +185,6 @@ def generate_node(
         'PRIVATE_MQTT_USERNAME': os.getenv('PRIVATE_MQTT_USERNAME'),
         'PRIVATE_MQTT_PASSWORD': os.getenv('PRIVATE_MQTT_PASSWORD'),
         'PRIVATE_MQTT_PORT': os.getenv('PRIVATE_MQTT_PORT'),
-        'PRIVATE_MQTT_TOPIC_LOAD_PROFILE': os.getenv('PRIVATE_MQTT_TOPIC_LOAD_PROFILE'),
-        'PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION': os.getenv(
-          'PRIVATE_MQTT_TOPIC_LOAD_CONSUMPTION'
-        ),
       }
     )
 
@@ -317,7 +313,7 @@ def create_docker_compose(layers: int, last_layer_children: int) -> None:
     'networks': {
       'my_network': {
         'driver': 'bridge',
-        'ipam': {'config': [{'subnet': '172.18.0.0/16'}]},
+        'ipam': {'config': [{'subnet': '172.30.0.0/16'}]},
       }
     },
   }

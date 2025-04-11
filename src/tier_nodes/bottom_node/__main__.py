@@ -1,13 +1,3 @@
-"""
-Main entry point for the House OpenADR Node.
-
-This module initializes and runs a bottom node with temperature and energy
-consumption monitoring capabilities.
-
-Created: 2025-02-10 10:27:57
-Author: TheMat556
-"""
-
 import os
 import random
 import time
@@ -67,9 +57,10 @@ def create_mqtt_config() -> MQTTConfig:
       MQTTConfig: Configured MQTT settings
   """
   mqtt_topics = [
-    TopicConfig(topic='bottom/load_profile', topic_type=TopicType.PUBLISH),
-    TopicConfig(topic='bottom/consumption', topic_type=TopicType.SUBSCRIBE),
+    TopicConfig(topic='load_profile', topic_type=TopicType.PUBLISH),
+    TopicConfig(topic='consumption', topic_type=TopicType.SUBSCRIBE),
   ]
+
 
   return MQTTConfig(
     broker=os.getenv('MQTT_BROKER_HOST', 'localhost'),
@@ -91,14 +82,14 @@ def create_reports() -> List[ReportConfig]:
     ReportConfig(
       resource_id='room_temp_001',
       measurement='temperature',
-      sampling_rate=timedelta(seconds=10),
+      sampling_rate=timedelta(seconds=15),
       callback=temperature_callback,
       additional_metadata={'unit': 'celsius', 'location': 'living_room'},
     ),
     ReportConfig(
       resource_id='energy_001',
       measurement='voltage',
-      sampling_rate=timedelta(seconds=10),
+      sampling_rate=timedelta(seconds=15),
       callback=energy_callback,
       additional_metadata={'unit': 'watts'},
     ),
@@ -112,7 +103,9 @@ def main() -> None:
   try:
     # Create configurations
     adr_config = create_adr_config()
-    mqtt_config = create_mqtt_config()
+    mqtt_config = None
+    if os.getenv('MQTT_BROKER_HOST', None) is not None:
+      mqtt_config = create_mqtt_config()
     rest_config = RestApiConfig(
       port=int(os.getenv('API_REST_PORT', '5001')),
     )
@@ -120,7 +113,7 @@ def main() -> None:
     # Create bottom node configuration
     bottom_node_config = BottomNodeConfig(
       adr_config=adr_config,
-      mqtt_config=mqtt_config,
+      mqtt_config=mqtt_config if mqtt_config is not None else None,
       rest_config=rest_config,
     )
 
