@@ -126,7 +126,6 @@ class VirtualEndNode(IVirtualEndNode):
 
     # Get current timestamp
     current_time = datetime.now(timezone.utc)
-    current_timestamp = int(current_time.timestamp())
 
     logging.info(
       f'[{current_time.isoformat()}] Processing OpenADR event #{self._event_counter}'
@@ -152,17 +151,6 @@ class VirtualEndNode(IVirtualEndNode):
     ):
       logging.error('Invalid event_signals format')
       raise ValueError('Invalid event_signals format')
-
-    # Extract signal payload for logging if available
-    signal_payload = None
-    if (
-      _event_signals
-      and isinstance(_event_signals[0], dict)
-      and 'intervals' in _event_signals[0]
-    ):
-      intervals = _event_signals[0].get('intervals', [])
-      if intervals and 'signal_payload' in intervals[0]:
-        signal_payload = intervals[0]['signal_payload']
 
     flattened_intervals = [
       {
