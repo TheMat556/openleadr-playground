@@ -179,16 +179,9 @@ class EnergyControlPanel(IRunnable):
         # Connect sliders: update chart on change, save on release
         for slider in slider_inputs:
           # Update chart immediately when slider changes
-          slider.change(
-            fn=update_chart_only,
-            inputs=slider_inputs,
-            outputs=plot_output
-          )
+          slider.change(fn=update_chart_only, inputs=slider_inputs, outputs=plot_output)
           # Save values when slider is released
-          slider.release(
-            fn=self.slider_service.save_values,
-            inputs=slider_inputs
-          )
+          slider.release(fn=self.slider_service.save_values, inputs=slider_inputs)
 
         with gr.Row():
           # Safer versions of the label functions with error handling
@@ -196,15 +189,15 @@ class EnergyControlPanel(IRunnable):
             try:
               return self.get_current_consumption()
             except Exception as e:
-              self.logger.error(f"Error in get_consumption_safe: {e}")
-              return "N/A"
+              self.logger.error(f'Error in get_consumption_safe: {e}')
+              return 'N/A'
 
           def get_allowed_consumption_safe():
             try:
               return self.get_current_allowed_consumption()
             except Exception as e:
-              self.logger.error(f"Error in get_allowed_consumption_safe: {e}")
-              return "N/A"
+              self.logger.error(f'Error in get_allowed_consumption_safe: {e}')
+              return 'N/A'
 
           gr.Label(
             value=get_consumption_safe,
@@ -290,6 +283,7 @@ class EnergyControlPanel(IRunnable):
     """
     Schedule the periodic task to run every 24 minutes.
     """
+
     def run_periodic_task():
       while not self._stop_event.is_set():
         self._adjust_and_save_slider_values()

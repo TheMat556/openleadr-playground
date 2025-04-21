@@ -89,9 +89,7 @@ class VirtualEndNode(IVirtualEndNode):
     """
     self._open_adr_client.add_handler('on_event', self.on_adr_event)
 
-  def save_event_data(
-    self
-  ) -> None:
+  def save_event_data(self) -> None:
     """
     Save event data to a file named [container_name]_ven.json.
     """
@@ -314,7 +312,7 @@ class VirtualEndNode(IVirtualEndNode):
             resource_id=BASE_RESOURCE_ID,
             measurement='power',
             sampling_rate=timedelta(seconds=10),
-            #sampling_rate=timedelta(seconds=15),
+            # sampling_rate=timedelta(seconds=15),
             callback=self._get_current_consumption,
           )
         ]

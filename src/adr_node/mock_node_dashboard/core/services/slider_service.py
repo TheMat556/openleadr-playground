@@ -73,7 +73,7 @@ class SliderService(ISliderService):
     """
     try:
       self._current_values = values[: self.num_sliders]
-      print("!!!!", self._current_values)
+      print('!!!!', self._current_values)
       self.repository.save(self._current_values)
       self._event_bus.emit(SignalType.LOAD_PROFILE_UPDATED)
     except Exception as e:

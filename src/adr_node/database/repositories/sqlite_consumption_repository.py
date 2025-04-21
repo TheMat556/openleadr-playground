@@ -338,8 +338,8 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         params.extend([window_start, window_end])
 
         # Log the time window details
-        print("TIME WINDOW", time_window_ms)
-        print("UNIX TIME", target_timestamp)
+        print('TIME WINDOW', time_window_ms)
+        print('UNIX TIME', target_timestamp)
         logging.info(
           f'Searching in window: '
           f'start={datetime.fromtimestamp(window_start).strftime("%Y-%m-%d %H:%M:%S")} '
