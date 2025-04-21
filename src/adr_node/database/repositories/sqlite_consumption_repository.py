@@ -338,6 +338,8 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         params.extend([window_start, window_end])
 
         # Log the time window details
+        print("TIME WINDOW", time_window_ms)
+        print("UNIX TIME", target_timestamp)
         logging.info(
           f'Searching in window: '
           f'start={datetime.fromtimestamp(window_start).strftime("%Y-%m-%d %H:%M:%S")} '
@@ -365,7 +367,7 @@ class SQLiteConsumptionRepository(IConsumptionRepository):
         logging.warning(
           f'No consumption points found. '
           f'Target timestamp: {datetime.fromtimestamp(target_timestamp).strftime("%Y-%m-%d %H:%M:%S")}, '
-          f'Window size: {time_window_ms / 1000 if time_window_ms else "None"} seconds'
+          f'Window size: {time_window_ms if time_window_ms else "None"} seconds'
         )
         return []
 

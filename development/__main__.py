@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def device_callback() -> float:
   """Simulate a device callback."""
-  return random.random() * 10
+  return random.random() * 1
 
 
 def create_report_configurations() -> List[ReportConfig]:
@@ -40,6 +40,12 @@ def create_report_configurations() -> List[ReportConfig]:
       sampling_rate=timedelta(seconds=10),
       callback=device_callback,
       additional_metadata={'unit': 'Celsius', 'location': 'Room 101'},
+    ),
+    ReportConfig(
+      resource_id=f'res_{random.randint(100, 999)}',
+      measurement='power',
+      sampling_rate=timedelta(seconds=10),
+      callback=device_callback,
     ),
     ReportConfig(
       resource_id=f'res_{random.randint(100, 999)}',
@@ -134,7 +140,7 @@ def main():
 
   house_2_mqtt_config = MQTTConfig(
     broker=os.getenv('MQTT_BROKER_URL', None),
-    port=int(os.getenv('MQTT_PORT', None)),
+    port=os.getenv('MQTT_PORT', None),
     username=os.getenv('MQTT_USERNAME', None),
     password=os.getenv('MQTT_PASSWORD', None),
     topics=[

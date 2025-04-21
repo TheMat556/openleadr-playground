@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import json
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from typing import Dict, List, Any, Tuple
@@ -55,6 +57,10 @@ class VirtualTopNode(IVirtualTopNode):
       The event bus for handling events.
   _registration_info : Dict[str, str]
       Dictionary to store registration information.
+  _event_counter : int
+      Counter that increments each time before _open_adr_server.add_event is called.
+  _container_name : str
+      Name of the Docker container the application is running in.
   """
 
   def __init__(
@@ -83,6 +89,17 @@ class VirtualTopNode(IVirtualTopNode):
     self._registration_info: Dict[str, str] = {}
     self._init_default_handler()
     init_signal_handlers(self)
+
+    # Initialize counter for add_event calls
+    self._event_counter = 0
+
+    # Get Docker container name
+    try:
+      self._container_name = os.popen('hostname').read().strip()
+      logging.info(f'Running in Docker container: {self._container_name}')
+    except Exception as e:
+      self._container_name = 'unknown_container'
+      logging.error(f'Failed to get Docker container name: {e}')
 
   def _init_default_handler(self) -> None:
     """
@@ -176,10 +193,10 @@ class VirtualTopNode(IVirtualTopNode):
         measurement (str): The measurement type.
     """
     logging.info(
-      f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}'
+      f'Report update received: VEN ID: {ven_id}, Resource: {resource_id}, Measurement: {measurement}, Data: {data[0]}'
     )
 
-    if resource_id == 'base' and measurement == 'power':
+    if resource_id == 'base' and (measurement == 'power' or measurement == 'energy'):
       self.create_consumption_record(ven_id, resource_id, data[0])
 
   def create_consumption_record(
@@ -211,6 +228,27 @@ class VirtualTopNode(IVirtualTopNode):
       self.sqlite_consumption_service.create_consumption_record(consumption_data)
     )
     return consumption_service_result
+
+  def save_event_data(self) -> None:
+    """
+    Save event data to a file named [container_name]_vtn.
+    """
+    filename = f'{self._vtn_id}_vtn.json'
+
+    data = {
+      'event_counter': self._event_counter,
+      'timestamp': int(datetime.now(timezone.utc).timestamp()),
+      '_vtn_id': self._vtn_id,
+    }
+
+    try:
+      # Append to file if it exists, create if it doesn't
+      mode = 'a' if os.path.exists(filename) else 'w'
+      with open(filename, mode) as file:
+        file.write(json.dumps(data) + '\n')
+      logging.info(f'Event data saved to {filename}')
+    except Exception as e:
+      logging.error(f'Failed to save event data to file: {e}')
 
   async def _event_callback(self, ven_id: str, event_id: str, opt_type: str) -> None:
     """
@@ -284,6 +322,12 @@ class VirtualTopNode(IVirtualTopNode):
           interval_with_z = interval.copy()
           interval_with_z['signal_payload'] = z_value
 
+          self._event_counter += 1
+          self.save_event_data()
+
+          logging.info(
+            f'Event #{self._event_counter} added for VEN {ven_id} with z-value: {z_value} at timestamp: {current_time}'
+          )
           self._open_adr_server.add_event(
             ven_id=ven_id,
             signal_type='level',
@@ -291,7 +335,6 @@ class VirtualTopNode(IVirtualTopNode):
             intervals=[interval_with_z],
             callback=self._event_callback,
           )
-          logging.info(f'Event added for VEN {ven_id} with z-value: {z_value}')
         else:
           logging.warning(f'No z-value found for VEN {ven_id}')
 

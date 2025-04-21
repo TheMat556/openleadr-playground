@@ -127,7 +127,7 @@ class EnergyControlPanel(IRunnable):
     try:
       timestamp = int(datetime.now(timezone.utc).timestamp())
       result = self.consumption_service.get_closest_consumption_points(
-        target_timestamp=timestamp
+        target_timestamp=timestamp, time_window_ms=900
       )
       consumption_points = result.data['consumption_points']
       processed_data = self._process_consumption_points(consumption_points)[
@@ -168,23 +168,51 @@ class EnergyControlPanel(IRunnable):
         for slider, value in zip(slider_inputs, initial_values):
           slider.value = value
 
-        plot_output = gr.Plot(
-          value=lambda: self.chart.create_figure(initial_values),
-          every=1,
-        )
+        # Create the plot with the initial figure
+        plot_output = gr.Plot(value=self.chart.create_figure(initial_values))
 
+        # Function to update chart only (don't save here)
+        def update_chart_only(*values):
+          updated_values = list(values)
+          return self.chart.create_figure(updated_values)
+
+        # Connect sliders: update chart on change, save on release
         for slider in slider_inputs:
-          slider.change(fn=self.update_chart, inputs=slider_inputs, outputs=plot_output)
-          slider.release(fn=self.slider_service.save_values, inputs=slider_inputs)
+          # Update chart immediately when slider changes
+          slider.change(
+            fn=update_chart_only,
+            inputs=slider_inputs,
+            outputs=plot_output
+          )
+          # Save values when slider is released
+          slider.release(
+            fn=self.slider_service.save_values,
+            inputs=slider_inputs
+          )
 
         with gr.Row():
+          # Safer versions of the label functions with error handling
+          def get_consumption_safe():
+            try:
+              return self.get_current_consumption()
+            except Exception as e:
+              self.logger.error(f"Error in get_consumption_safe: {e}")
+              return "N/A"
+
+          def get_allowed_consumption_safe():
+            try:
+              return self.get_current_allowed_consumption()
+            except Exception as e:
+              self.logger.error(f"Error in get_allowed_consumption_safe: {e}")
+              return "N/A"
+
           gr.Label(
-            value=lambda: self.get_current_consumption(),
+            value=get_consumption_safe,
             label='Current Consumption',
             every=self.update_interval,
           )
           gr.Label(
-            value=lambda: self.get_current_allowed_consumption(),
+            value=get_allowed_consumption_safe,
             label='Allowed Consumption',
             every=self.update_interval,
           )

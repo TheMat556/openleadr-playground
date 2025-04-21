@@ -132,7 +132,9 @@ class FileSliderRepository(ISliderRepository):
       )
 
       # Save to load profile service
+      print("Saving to load profile service", load_profile_data)
       result = self._load_profile_service.save_load_profile(load_profile_data)
+      print("result", result)
 
       if result['failed'] > 0:
         self.logger.warning(
