@@ -61,7 +61,6 @@ def create_mqtt_config() -> MQTTConfig:
     TopicConfig(topic='consumption', topic_type=TopicType.SUBSCRIBE),
   ]
 
-
   return MQTTConfig(
     broker=os.getenv('MQTT_BROKER_HOST', 'localhost'),
     port=int(os.getenv('MQTT_BROKER_PORT', '1883')),
@@ -88,7 +87,7 @@ def create_reports() -> List[ReportConfig]:
     ),
     ReportConfig(
       resource_id='energy_001',
-      measurement='voltage',
+      measurement='power',
       sampling_rate=timedelta(seconds=15),
       callback=energy_callback,
       additional_metadata={'unit': 'watts'},

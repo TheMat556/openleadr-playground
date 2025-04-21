@@ -24,7 +24,7 @@ class TimeIntervalGenerator(ITimeIntervalGenerator):
 
   INTERVAL_DURATION_MS: int = 900000  # 15 minutes
   INTERVALS_PER_DAY: int = 1
-  GMT_PLUS_ONE = timezone(timedelta(hours=1))
+  GMT_PLUS_ONE = timezone(timedelta(hours=2))
 
   def generate_intervals(self) -> List[Dict[str, Any]]:
     """
@@ -38,7 +38,7 @@ class TimeIntervalGenerator(ITimeIntervalGenerator):
     gmt_plus_one_now = datetime.now(self.GMT_PLUS_ONE)
     second = (gmt_plus_one_now.second // 30) * 30
     start_of_day = gmt_plus_one_now.replace(second=second, microsecond=0)
-    base_timestamp = int(start_of_day.timestamp() * 1000)
+    base_timestamp = int(start_of_day.timestamp())
 
     intervals = np.arange(self.INTERVALS_PER_DAY) * self.INTERVAL_DURATION_MS
 

@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import logging
@@ -161,7 +161,7 @@ class ConsumptionService(IConsumptionService):
       raise ValueError('Timestamp is required')
 
   def get_closest_consumption_points(
-    self, target_timestamp: int, time_window_ms: int = 15 * 60 * 1000
+    self, target_timestamp: int, time_window_ms: int = 15 * 60
   ) -> ConsumptionServiceResult:
     try:
       points = self.repository.find_closest_consumption_points(
@@ -255,8 +255,8 @@ class ConsumptionService(IConsumptionService):
             - unit: measurement unit (kWh)
     """
     try:
-      current_timestamp = int(datetime.utcnow().timestamp())
-      window_ms = 15 * 60 * 1000  # 15 minutes in milliseconds
+      current_timestamp = int(datetime.now(timezone.utc).timestamp())
+      window_ms = 15 * 60
 
       result = self.get_closest_consumption_points(
         target_timestamp=current_timestamp, time_window_ms=window_ms

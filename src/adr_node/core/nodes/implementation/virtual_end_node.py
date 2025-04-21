@@ -1,4 +1,6 @@
 import logging
+import os
+import json
 from datetime import timezone, datetime, timedelta
 from functools import wraps
 from typing import Any, List, Optional, Dict, Callable
@@ -43,6 +45,10 @@ class VirtualEndNode(IVirtualEndNode):
       Flag indicating if the base event is registered.
   _base_consumption : float
       The base consumption value.
+  _event_counter : int
+      Counter that increments each time the on_adr_event method is called.
+  _container_name : str
+      Name of the Docker container the application is running in.
   """
 
   def __init__(
@@ -63,6 +69,17 @@ class VirtualEndNode(IVirtualEndNode):
     self._base_event_registered = False
     self._base_consumption = 0.0
 
+    # Initialize event counter
+    self._event_counter = 0
+
+    # Get Docker container name
+    try:
+      self._container_name = os.popen('hostname').read().strip()
+      logging.info(f'Running in Docker container: {self._container_name}')
+    except Exception as e:
+      self._container_name = 'unknown_container'
+      logging.error(f'Failed to get Docker container name: {e}')
+
   def run(self):
     return self._open_adr_client.run()
 
@@ -70,9 +87,30 @@ class VirtualEndNode(IVirtualEndNode):
     """
     Initialize the default event handler for the OpenADR client.
     """
-    self._open_adr_client.add_handler('on_event', self.tst)
+    self._open_adr_client.add_handler('on_event', self.on_adr_event)
 
-  async def tst(self, event):
+  def save_event_data(self) -> None:
+    """
+    Save event data to a file named [container_name]_ven.json.
+    """
+    filename = f'{self._ven_name}_ven.json'
+
+    data = {
+      'event_counter': self._event_counter,
+      'timestamp': int(datetime.now(timezone.utc).timestamp()),
+      'ven_name': self._ven_name,
+    }
+
+    try:
+      # Append to file if it exists, create if it doesn't
+      mode = 'a' if os.path.exists(filename) else 'w'
+      with open(filename, mode) as file:
+        file.write(json.dumps(data) + '\n')
+      logging.info(f'Event data saved to {filename}')
+    except Exception as e:
+      logging.error(f'Failed to save event data to file: {e}')
+
+  async def on_adr_event(self, event):
     """
     Handle an OpenADR event.
 
@@ -82,7 +120,16 @@ class VirtualEndNode(IVirtualEndNode):
     Returns:
         str: The response to the event.
     """
-    logging.info(f'[{datetime.now(timezone.utc).isoformat()}] Processing OpenADR event')
+    # Increment event counter
+    self._event_counter += 1
+    self.save_event_data()
+
+    # Get current timestamp
+    current_time = datetime.now(timezone.utc)
+
+    logging.info(
+      f'[{current_time.isoformat()}] Processing OpenADR event #{self._event_counter}'
+    )
     required_keys = {
       'event_descriptor',
       'active_period',
@@ -90,6 +137,8 @@ class VirtualEndNode(IVirtualEndNode):
       'targets',
     }
     if not all(key in event for key in required_keys):
+      logging.error(f'Event missing required fields: {required_keys}')
+      # Still save the event data even if it's invalid
       raise KeyError(f'Event missing required fields: {required_keys}')
 
     _event_descriptor = event['event_descriptor']
@@ -100,9 +149,9 @@ class VirtualEndNode(IVirtualEndNode):
     if not isinstance(_event_signals, list) or not all(
       isinstance(signal, dict) for signal in _event_signals
     ):
+      logging.error('Invalid event_signals format')
       raise ValueError('Invalid event_signals format')
 
-    current_time = datetime.now(timezone.utc)
     flattened_intervals = [
       {
         'dtstart': int(current_time.timestamp()),
@@ -117,6 +166,7 @@ class VirtualEndNode(IVirtualEndNode):
     ]
 
     if not flattened_intervals:
+      logging.error('No valid intervals found in event_signals')
       raise ValueError('No valid intervals found in event_signals')
 
     logging.info(
@@ -249,7 +299,8 @@ class VirtualEndNode(IVirtualEndNode):
             reading_type=enums.READING_TYPE.SUMMED,
             resource_id=BASE_RESOURCE_ID,
             measurement='power',
-            sampling_rate=timedelta(seconds=15),
+            sampling_rate=timedelta(seconds=10),
+            # sampling_rate=timedelta(seconds=15),
             callback=self._get_current_consumption,
           )
         ]

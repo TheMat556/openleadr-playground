@@ -105,7 +105,7 @@ class ConsumptionHandler:
         JSON response containing consumption data for the specified VEN
     """
     try:
-      timestamp = int(datetime.now(timezone.utc).timestamp() * 1000)
+      timestamp = int(datetime.now(timezone.utc).timestamp())
       result = self.consumption_service.get_closest_consumption_point(
         timestamp=timestamp, ven_id=ven_id, resource_id=None
       )
