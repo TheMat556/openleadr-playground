@@ -1,0 +1,85 @@
+name: Code Complexity Metrics
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Add permissions needed for commenting
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  code-metrics:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install radon matplotlib numpy
+
+    - name: Run code metrics analysis
+      run: |
+        # Create output directory
+        mkdir -p metrics_output
+
+        # Run radon maintainability index
+        radon mi . --json > metrics_output/mi.json
+
+        # Run radon cyclomatic complexity
+        radon cc . --json > metrics_output/cc.json
+
+        # Generate the report using our script (located in scripts directory)
+        python scripts/code_metrics_report.py \
+          --mi-file metrics_output/mi.json \
+          --cc-file metrics_output/cc.json \
+          --output metrics_output/report.md \
+          --output-dir metrics_output \
+          --date "2025-03-26 17:58:41" \
+          --user "TheMat556" \
+          --top-n 15
+
+    - name: Upload metrics artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-metrics-report
+        path: metrics_output/
+
+    - name: Post metrics comment
+      if: github.event_name == 'pull_request'
+      uses: peter-evans/create-or-update-comment@v2
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        body-file: metrics_output/report.md
+        edit-mode: replace
+
+    - name: Post metrics as commit comment
+      if: github.event_name == 'push'
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+
+          // Read the report from the file
+          const reportContent = fs.readFileSync('metrics_output/report.md', 'utf8');
+
+          // For commit comments, we need to use a different API
+          await github.rest.repos.createCommitComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: context.sha,
+            body: reportContent
+          });
